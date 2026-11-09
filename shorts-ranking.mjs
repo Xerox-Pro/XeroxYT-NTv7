@@ -2,9 +2,9 @@ const RANKING_URL = 'https://shorts-ranking.com/latest.json';
 export function parseRanking(data) {
   if (!data || !Array.isArray(data.items)) throw new Error('ランキングのデータ形式が変わりました。');
   const seen = new Set();
-  const videos = [...data.items].sort((a, b) => (Number(b.views) || 0) - (Number(a.views) || 0)).flatMap(item => {
-    const id = item.video_id;
-    if (!/^[\w-]{11}$/.test(id) || seen.has(id)) return [];
+  const videos = [...data.items].sort((a, b) => (Number(b?.views) || 0) - (Number(a?.views) || 0)).flatMap(item => {
+    const id = item?.video_id;
+    if (typeof id !== 'string' || !/^[\w-]{11}$/.test(id) || seen.has(id)) return [];
     // Only IDs are used to construct playback URLs; arbitrary upstream URLs are ignored.
     seen.add(id);
     return [{ videoId: id, type: 'video', isShort: true, shortSource: 'ranking',

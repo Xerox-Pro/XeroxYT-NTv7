@@ -55,3 +55,8 @@ test('temporary network errors retry on the device, but invalid JSON does not',a
  await assert.rejects(createRankingLoader(async()=>{badCalls++;return new Response('{');},{retryDelays:[0]})());
  assert.equal(badCalls,1);
 });
+
+test('ranking ignores invalid rows without losing valid clips', () => {
+  const { videos } = parseRanking({ items: [null, { video_id: 12345678901 }, { video_id: 'abcdefghijk' }] });
+  assert.deepEqual(videos.map(video => video.videoId), ['abcdefghijk']);
+});

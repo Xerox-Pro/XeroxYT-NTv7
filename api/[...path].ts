@@ -91,8 +91,7 @@ export default async function handler(request: Request) {
         redirect: "manual",
         signal: request.signal,
       }, Math.max(1, Math.min(8000, deadline - Date.now())));
-      if ([408,429,500,502,503,504].includes(response.status)) apiSelector.report(pool[i],headers,false);
-      else if (response.ok) apiSelector.report(pool[i],headers,true);
+      // A route error or a per-user quota does not tell us whether this API is healthy.
       if (
         canRetry(request.method, path, response.status) &&
         i < pool.length - 1
@@ -120,7 +119,6 @@ export default async function handler(request: Request) {
     } catch (error) {
       lastFailure = error instanceof Error ? error.name : 'upstream_error';
       console.warn(JSON.stringify({event:'api_upstream_failure',operation:routeName,method:request.method,upstreamIndex,durationMs:Date.now()-startedAt,reason:lastFailure}));
-      apiSelector.report(pool[i],headers,false);
       if (request.signal.aborted) throw error;
       if (!readonly || /^\/api\/(account|auth)(\/|$)/.test(path)) break;
     }
