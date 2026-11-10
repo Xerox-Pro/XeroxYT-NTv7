@@ -17,6 +17,7 @@ test('shorts can leave for home, search, history, channel and browser back durin
  const dom=new JSDOM('<div id="root"></div>',{url:'https://example.test/'});
  for(const key of ['window','document','HTMLElement','HTMLIFrameElement','Event','MouseEvent','localStorage','sessionStorage']) Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
  globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
  const observers=[];
  globalThis.IntersectionObserver=class{constructor(callback){this.callback=callback;this.nodes=[];observers.push(this)} observe(node){this.nodes.push(node)} disconnect(){this.nodes=[]}};
  const video=(id,source)=>({videoId:id,title:`clip ${id}`,author:'channel',authorAvatar:'https://yt3.ggpht.com/avatar.jpg',isShort:true,shortSource:source,viewCount:20,lengthSeconds:20,publishedText:'',videoThumbnails:[{url:'https://i.ytimg.com/frame.jpg'}]});
@@ -56,19 +57,19 @@ test('shorts can leave for home, search, history, channel and browser back durin
      assert.equal(url.searchParams.get('loop'), '0','the end event is not suppressed by native looping');
      assert.equal(url.searchParams.get('playlist'), url.pathname.split('/').pop());
    }
-   assert.equal(document.querySelector('.shorts-side-actions [aria-label="字幕をオンにする"]'),null,'captions are removed from the side action bar');
-   assert.ok(document.querySelector('[aria-label="その他の設定"]'),'More button exists');
-   await act(async()=>document.querySelector('[aria-label="その他の設定"]').click());
-   const settings=document.querySelector('[aria-label="ショートの再生設定"]');
+   assert.equal(document.querySelector('.shorts-side-actions [aria-label="字幕"]'),null,'captions are removed from the side action bar');
+   assert.ok(document.querySelector('[aria-label="再生設定を開く"]'),'More button exists');
+   await act(async()=>document.querySelector('[aria-label="再生設定を開く"]').click());
+   const settings=document.querySelector('dialog.playback-settings-dialog');
    assert.ok(settings,'More menu is visible');
    assert.equal(document.querySelector('.shorts-scroll').contains(settings),false,'settings are not clipped inside the scrolling area');
-   const autoScrollButton=document.querySelector('[aria-label="自動スクロールをオフにする"]');
+   const autoScrollButton=document.querySelector('[aria-label="自動スクロール"]');
    assert.ok(autoScrollButton,'auto-scroll is in the More menu');
-   assert.equal(autoScrollButton.getAttribute('aria-pressed'),'true','auto-scroll defaults to on');
-   assert.ok(settings.querySelector('[aria-label="字幕をオンにする"]'),'captions setting is available in More menu');
-   await act(async()=>settings.querySelector('[aria-label="字幕をオンにする"]').click());
-   assert.equal(settings.querySelector('[aria-label="字幕をオフにする"]').getAttribute('aria-pressed'),'true');
-   await act(async()=>document.querySelector('[aria-label="設定を閉じる"]').click());
+   assert.equal(autoScrollButton.getAttribute('aria-checked'),'true','auto-scroll defaults to on');
+   assert.ok(settings.querySelector('[aria-label="字幕"]'),'captions setting is available in More menu');
+   await act(async()=>settings.querySelector('[aria-label="字幕"]').click());
+   assert.equal(settings.querySelector('[aria-label="字幕"]').getAttribute('aria-checked'),'true');
+   await act(async()=>document.querySelector('[aria-label="再生設定を閉じる"]').click());
    assert.equal(document.querySelector('.shorts-tap-area'),null);
    assert.equal(document.querySelector('.shorts-actions'),null);
    const frames=[...document.querySelectorAll('iframe')];assert.equal(frames.length,3,'active and next two embeds are prepared');
@@ -90,8 +91,8 @@ test('shorts can leave for home, search, history, channel and browser back durin
     await act(async()=>deliverState(0));
     assert.equal(endedTarget,nextArticle.dataset.shortId,'video completion advances one Short');
     await act(async()=>deliverState(1));
-    await act(async()=>document.querySelector('[aria-label="その他の設定"]').click());
-    await act(async()=>document.querySelector('[aria-label="自動スクロールをオフにする"]').click());
+    await act(async()=>document.querySelector('[aria-label="再生設定を開く"]').click());
+    await act(async()=>document.querySelector('[aria-label="自動スクロール"]').click());
     assert.equal(localStorage.getItem('xerox_shorts_auto_scroll_v1'),'off','choice is persisted');
     endedTarget='';
     await act(async()=>window.dispatchEvent(new dom.window.MessageEvent('message',{source:activeIframe.contentWindow,origin:new URL(activeIframe.src).origin,data:JSON.stringify({event:'onStateChange',info:0})})));

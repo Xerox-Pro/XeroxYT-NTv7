@@ -1,3 +1,5 @@
+import SearchFilters from './components/SearchFilters';
+import {searchFilterParams} from '../search-filters.mjs';
 import {queueIndex,shuffledQueue} from './lib/playlistPlayback.mjs';
 import {loadHomeSnapshot,saveHomeSnapshot} from './lib/homeSnapshot.mjs';
 import {useSiteAccount} from './components/AccountGate';
@@ -110,6 +112,7 @@ export default function MainApp() {
   );
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768 && !window.matchMedia('(orientation: landscape)').matches);
 
+  const searchContinuation=useRef({key:'',next:''});
   const recommendationRequestIdRef = useRef(0);
 
   useEffect(() => {
@@ -144,6 +147,7 @@ export default function MainApp() {
       if (q) {
         setSearchQuery(q);
         setView('search');
+        setPage(1);
         fetchSearch(q, 1, false);
       }
     } else if (path === '/watch') {
@@ -831,27 +835,30 @@ export default function MainApp() {
     setError('');
 
     try {
-      const data = await fetchJSON(`/api/search?q=${encodeURIComponent(q)}&page=${pageNum}`);
+      const filters=searchFilterParams(new URLSearchParams(window.location.search));
+      const continuationKey=q+'?'+filters.toString();
+      if(pageNum===1)searchContinuation.current={key:continuationKey,next:''};
+      if(pageNum>1&&searchContinuation.current.key===continuationKey&&searchContinuation.current.next)filters.set('continuation',searchContinuation.current.next);
+      const data = await fetchJSON(`/api/search?q=${encodeURIComponent(q)}&page=${pageNum}&${filters}`);
       if (requestId !== recommendationRequestIdRef.current) return;
+      searchContinuation.current={key:continuationKey,next:typeof data.continuation==='string'?data.continuation:''};
       const newVideos: Video[] = Array.isArray(data) ? data : (data.videos || []);
       const newChannels: SearchChannel[] = Array.isArray(data) ? [] : (data.channels || []);
 
       updateCache(newVideos);
 
-      if (pageNum === 1) {
-        setSearchChannels(newChannels);
-      }
+      setSearchChannels(previous=>append?[...new Map([...previous,...newChannels].map(channel=>[channel.id,channel])).values()]:newChannels);
 
       if (append) {
         setVideos(prev => {
-          const existingIds = new Set(prev.map(v => v.videoId));
-          const filtered = newVideos.filter((v: Video) => !existingIds.has(v.videoId));
+          const existingIds = new Set(prev.map(v => v.playlistId||v.videoId));
+          const filtered = newVideos.filter((v: Video) => !existingIds.has(v.playlistId||v.videoId));
           return [...prev, ...filtered];
         });
       } else {
         setVideos(newVideos);
       }
-      setHasMore(newVideos.length > 0);
+      setHasMore(typeof data.hasMore==='boolean'?data.hasMore:newVideos.length > 0);
     } catch (err: any) {
       console.error(err);
       if (requestId === recommendationRequestIdRef.current && !append) setError(err.message || 'エラーが発生しました');
@@ -887,7 +894,7 @@ export default function MainApp() {
         fetchSearch(searchQuery, nextPage, true);
       }
     }
-  }, [view, loading, loadingMore, hasMore, page, searchQuery, selectedCategory]);
+  }, [view, loading, loadingMore, hasMore, page, searchQuery, selectedCategory, location.search]);
 
   useEffect(() => {
     window.addEventListener('scroll', handleScroll);
@@ -934,7 +941,7 @@ export default function MainApp() {
     }
     
     const playlistId = videoObj?.playlistId || (videoId && videoCache[videoId] ? (videoCache[videoId] as Video).playlistId : null);
-    navigate(`/watch?v=${videoId}${playlistId ? `&list=${playlistId}` : ''}`);
+    navigate(`/watch?v=${videoId || 'videoseries'}${playlistId ? `&list=${playlistId}` : ''}`);
   };
 
   const handleSelectChannel = (channelIdOrName: string) => {
@@ -1039,7 +1046,8 @@ export default function MainApp() {
     setCurrentPlaylistQueue(queue);setPlaylistQueueIndex(index);updateCache(queue);navigate(`/watch?v=${encodeURIComponent(queue[index].videoId)}`);
   };
 
-  const resultVideos = videos.filter(video => {if(video.isShort)return false;if(view!=='search'||!phoneLayout)return true;if(mobileSearchFilter==='ショート')return false;const watched=watchHistory.some(item=>item.videoId===video.videoId);return mobileSearchFilter==='未視聴'?!watched:mobileSearchFilter==='視聴済み'?watched:true;});
+  const hasSearchFilters=searchFilterParams(searchParams).size>0;
+  const resultVideos = videos.filter(video => {if(video.isShort && !(view==='search'&&searchParams.get('type')==='shorts'))return false;if(view!=='search'||!phoneLayout)return true;if(mobileSearchFilter==='ショート')return false;const watched=watchHistory.some(item=>item.videoId===video.videoId);return mobileSearchFilter==='未視聴'?!watched:mobileSearchFilter==='視聴済み'?watched:true;});
 
   return (
     <div className={`${view === 'search' ? 'is-search-page ' : ''}${view === 'shorts' ? 'is-shorts-page ' : ''}min-h-screen bg-white text-gray-900 flex flex-col font-sans antialiased selection:bg-red-100 selection:text-red-800`}>
@@ -1111,7 +1119,7 @@ export default function MainApp() {
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="w-full"
             >
-              {view==='search'&&searchQuery&&<div className="mobile-search-filters no-scrollbar" aria-label="検索結果の絞り込み">{['すべて','ショート','未視聴','視聴済み','動画'].map(filter=><button type="button" key={filter} aria-pressed={mobileSearchFilter===filter} onClick={()=>setMobileSearchFilter(filter)}>{filter}</button>)}</div>}
+              {view==='search'&&searchQuery&&<div className="mobile-search-filters no-scrollbar" aria-label="検索結果の絞り込み">{['すべて','ショート','未視聴','視聴済み','動画'].map(filter=><button type="button" key={filter} aria-pressed={filter==='ショート'?searchParams.get('type')==='shorts':filter==='動画'?searchParams.get('type')==='video':filter==='すべて'?(!searchParams.get('type')&&mobileSearchFilter==='すべて'):mobileSearchFilter===filter} onClick={()=>{if(filter==='ショート'||filter==='動画'||filter==='すべて'){const next=new URLSearchParams(searchParams);if(filter==='すべて')next.delete('type');else next.set('type',filter==='ショート'?'shorts':'video');navigate('/results?'+next);}else setMobileSearchFilter(filter);}}>{filter}</button>)}</div>}
               {/* カテゴリーバー（ホーム ＆ 検索画面のみ） */}
               {view === 'home' && (
                 <CategoryBar
@@ -1230,6 +1238,7 @@ export default function MainApp() {
                     <h2 className="text-lg font-bold text-gray-900 tracking-tight">
                       "{searchQuery}" の検索結果
                     </h2>
+                    <SearchFilters params={searchParams} onApply={filters=>{filters.set('search_query',searchQuery);navigate('/results?'+filters.toString());}}/>
                   </div>
                 </>
               )}
@@ -1237,7 +1246,7 @@ export default function MainApp() {
               {/* チャンネル結果（YouTube同様に動画と同じ一覧の先頭に統合表示） */}
               {view === 'search' && searchChannels.length > 0 && (
                 <div className="search-channel-results flex flex-col divide-y divide-gray-100 border-b border-gray-200 pb-6 mb-8">
-                  {searchChannels.slice(0, 3).map((channel) => (
+                  {(searchParams.get('type')==='channel'?searchChannels:searchChannels.slice(0,3)).map((channel) => (
                     <SearchChannelCard
                       key={channel.id}
                       channel={channel}
@@ -1247,13 +1256,13 @@ export default function MainApp() {
                 </div>
               )}
 
-              <ShortsShelf
+              {!(view==='search'&&hasSearchFilters)&&<ShortsShelf
                 onVideosLoaded={view==='home' ? data=>setHomeShorts({category:selectedCategory,videos:data}) : undefined}
                 context={view === 'search' ? { source: 'search', q: searchQuery } : { source: 'home', q: selectedCategory === 'すべて' ? undefined : selectedCategory }}
                 onSelect={handleShortSelect}
-              />
+              />}
 
-              {view==='search'&&phoneLayout&&mobileSearchFilter!=='ショート'&&resultVideos.length===0&&<p className="mobile-search-empty">この条件に一致する動画はありません。</p>}
+              {view==='search'&&phoneLayout&&mobileSearchFilter!=='ショート'&&resultVideos.length===0&&searchChannels.length===0&&<p className="mobile-search-empty">この条件に一致する動画はありません。</p>}
               {/* 動画リスト */}
               <div className="mobile-video-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10">
                 {resultVideos.map((video, idx) => (
@@ -1261,7 +1270,7 @@ export default function MainApp() {
                     <VideoCard
                       video={video}
                       preferMaxResolution={view === 'home'}
-                      onClick={() => handleVideoSelect(video.videoId, video)}
+                      onClick={() => video.isShort?handleShortSelect(video,{source:'search',q:searchQuery}):handleVideoSelect(video.videoId,video)}
                       onSelectChannel={handleSelectChannel}
                     />
                     <button

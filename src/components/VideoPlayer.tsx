@@ -1,3 +1,8 @@
+import AmbientBackdrop from './AmbientBackdrop';
+import PlaybackSettings from './PlaybackSettings';
+import {usePlayerPreferences,videoEffectsStyle} from '../lib/playerPreferences';
+import {readPlaybackPosition,savePlaybackPosition} from '../lib/playbackPosition.mjs';
+import {useSleepTimer,consumeEndTimer} from '../hooks/useSleepTimer';
 import PlaylistQueuePanel from './PlaylistQueuePanel';
 import {getDeviceEmbedUrl} from '../lib/deviceEmbed.mjs';
 import RichText from './RichText';
@@ -136,6 +141,7 @@ export default function VideoPlayer({
   playlistTitle='再生リスト',playlistShuffle=false,playlistRepeat='off',playlistPanelOpen=false,onPlaylistPanelToggle,onPlaylistShuffle,onPlaylistRepeat,
   watchHistory = []
 }: VideoPlayerProps) {
+  const playerPreferences=usePlayerPreferences();
   const endedCallback=useRef(onPlaybackEnded);endedCallback.current=onPlaybackEnded;
   const [autoNext, setAutoNext] = useState(() => { try { return localStorage.getItem('xerox_video_auto_next_v1') !== 'off'; } catch { return true; } });
   const autoNextRef = useRef(autoNext); autoNextRef.current = autoNext;
@@ -150,6 +156,7 @@ export default function VideoPlayer({
   // The embedded playlist can move to another video without replacing its iframe.
   const [videoId, setVideoId] = useState(requestedVideoId);
   const currentVideoIdRef = useRef(requestedVideoId);
+  const savedSample=useRef({id:requestedVideoId,time:0,duration:0,received:false});
   const initialVideo = videoId === requestedVideoId ? initialVideoProp : undefined;
   const [videoData, setVideoData] = useState<Video | null>(null);
   const [isFallback, setIsFallback] = useState(false);
@@ -238,6 +245,8 @@ export default function VideoPlayer({
     apiUrl.searchParams.set('playsinline', '1');
     apiUrl.searchParams.set('enablejsapi', '1');
     apiUrl.searchParams.set('origin', window.location.origin);
+    const position=readPlaybackPosition(id);
+    if(position>0)apiUrl.searchParams.set('start',String(position));
     return apiUrl.toString();
   };
 
@@ -359,6 +368,9 @@ export default function VideoPlayer({
   const updatePlayingVideo = useCallback((id: unknown) => {
     if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{11}$/.test(id)) return;
     if (id === currentVideoIdRef.current) return;
+    const previous=savedSample.current;
+    if(previous.received)savePlaybackPosition(previous.id,previous.time,previous.duration);
+    savedSample.current={id,time:0,duration:0,received:false};
     currentVideoIdRef.current = id;
     if (playlistRef.current) setVideoId(id);
     else onVideoSelectRef.current(id);
@@ -423,6 +435,7 @@ export default function VideoPlayer({
     }
   }, []);
 
+  useSleepTimer(()=>{postPlayerCommand('pauseVideo');cancelAutoNextCountdown();});
   const cancelAutoNextCountdown = useCallback(() => {
     if (countdownTimer.current !== null) clearTimeout(countdownTimer.current);
     if (countdownTicker.current !== null) clearInterval(countdownTicker.current);
@@ -464,6 +477,7 @@ export default function VideoPlayer({
   const handlePlaybackEnd = useCallback(() => {
     if (endedHandled.current) return;
     endedHandled.current = true;
+    if (consumeEndTimer()) { postPlayerCommand('pauseVideo'); return; }
     if (repeatModeRef.current === 'one') {
       postPlayerCommand('seekTo', [0, true]);
       postPlayerCommand('playVideo');
@@ -511,6 +525,8 @@ export default function VideoPlayer({
             if(captionsEnabledRef.current){postPlayerCommand('loadModule',['captions']);postPlayerCommand('setOption',['captions','reload',true]);}else{postPlayerCommand('setOption',['captions','track',{}]);postPlayerCommand('unloadModule',['captions']);}
             if (isMutedRef.current) player.mute();
             else player.unMute();
+            const saved=readPlaybackPosition(requestedVideoId);
+            if(saved>0)player.seekTo(saved,true);
             player.playVideo();
             poll = setInterval(() => {
               try {
@@ -522,6 +538,7 @@ export default function VideoPlayer({
                 if (typeof time === 'number' && Number.isFinite(time)) {
                   currentTimeRef.current = time;
                   playerTimeReceivedRef.current = true;
+                  savedSample.current={id:currentVideoIdRef.current,time,duration:player.getDuration?.()||durationRef.current,received:true};
                 }
               } catch { /* Keep the last reported position. */ }
             }, 250);
@@ -548,6 +565,7 @@ export default function VideoPlayer({
           if (typeof data.info.currentTime === 'number') {
             currentTimeRef.current = data.info.currentTime;
             playerTimeReceivedRef.current = true;
+            savedSample.current={id:currentVideoIdRef.current,time:data.info.currentTime,duration:data.info.duration||durationRef.current,received:true};
           }
           if (typeof data.info.duration === 'number' && data.info.duration > 0) {
             durationRef.current = data.info.duration;
@@ -574,6 +592,13 @@ export default function VideoPlayer({
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [updatePlayingVideo]);
+
+  useEffect(() => {
+    const save=()=>{const sample=savedSample.current;if(sample.received)savePlaybackPosition(sample.id,sample.time,sample.duration);};
+    const timer=setInterval(save,4000);
+    window.addEventListener('pagehide',save);document.addEventListener('visibilitychange',save);
+    return()=>{save();clearInterval(timer);window.removeEventListener('pagehide',save);document.removeEventListener('visibilitychange',save);};
+  },[videoId]);
 
   // 動画変更時に duration / currentTime の初期化
   useEffect(() => {
@@ -1203,6 +1228,8 @@ export default function VideoPlayer({
     <div className="persistent-video-content flex-1 w-full max-w-[2400px] mx-auto p-2 sm:p-4 lg:p-6 flex flex-col md:flex-row gap-6 bg-white text-gray-900 min-h-[calc(100vh-3.5rem)]">
       {/* メイン動画プレイヤーセクション */}
       <div className="flex-1 min-w-0 md:flex-[1_1_72%] lg:flex-[1_1_75%] xl:flex-[1_1_78%]">
+        <div className={`ambient-stage ${playerPreferences.ambient&&!isMini?'ambient-enabled':''}`}>
+        {!isMini&&<AmbientBackdrop videoId={videoId} thumbnail={activeVideo.videoThumbnails?.[0]?.url}/>}
         <div
           ref={playerContainerRef}
           tabIndex={0}
@@ -1212,6 +1239,7 @@ export default function VideoPlayer({
             <iframe
               ref={iframeRef}
               src={iframeUrl}
+              style={videoEffectsStyle(playerPreferences)}
               onLoad={handleIframeLoad}
               className="w-full h-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -1274,6 +1302,7 @@ export default function VideoPlayer({
           </AnimatePresence>
         </div>
 
+        </div>
         <div className="mt-4 flex flex-col">
           {/* 実際のライブ配信時のみバッジを表示 */}
           {isLive && (
@@ -1355,6 +1384,7 @@ export default function VideoPlayer({
 
             {/* アクションボタン */}
             <div className="watch-actions flex items-center gap-2 overflow-x-auto no-scrollbar">
+              <PlaybackSettings/>
               <div className="flex items-center bg-gray-100 rounded-full p-0.5 border border-gray-200 shadow-2xs">
                 <motion.button
                   onClick={handleLike}

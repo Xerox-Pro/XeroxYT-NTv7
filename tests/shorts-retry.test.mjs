@@ -23,6 +23,7 @@ for (const seeded of [false, true]) test(seeded ? 'a reopened Short keeps playin
  let requests=0,configRequests=0;
  const previousFetch=globalThis.fetch;
  const video={videoId:'abcdefghijk',title:'retry video',author:'channel',viewCount:0,isShort:true,lengthSeconds:15,publishedText:'',videoThumbnails:[]};
+ if(seeded)localStorage.setItem('xerox_playback_positions_v1_local',JSON.stringify({abcdefghijk:{time:7,duration:30,at:Date.now()}}));
  globalThis.fetch=async url=>{
   const value=String(url);
   if(value.startsWith('/api/shorts?')){
@@ -42,6 +43,9 @@ for (const seeded of [false, true]) test(seeded ? 'a reopened Short keeps playin
   if (seeded) {
    assert.equal(document.querySelector('[role="alert"]'),null,'background discovery must not cover the player');
    assert.ok(document.querySelector('iframe'),'reopened video can play independently');
+   const frame=document.querySelector('iframe');assert.equal(new URL(frame.src).searchParams.get('start'),'7','reload resumes at the saved video position');
+   await act(async()=>window.dispatchEvent(new dom.window.MessageEvent('message',{source:frame.contentWindow,origin:new URL(frame.src).origin,data:JSON.stringify({event:'infoDelivery',info:{currentTime:9,duration:30,playerState:1}})})));
+   window.dispatchEvent(new Event('pagehide'));assert.equal(JSON.parse(localStorage.getItem('xerox_playback_positions_v1_local')).abcdefghijk.time,9,'leaving saves the last player position');
    assert.ok(document.querySelector('.shorts-feed-end button'),'next-page failure has an inline retry');
    await act(async()=>window.dispatchEvent(new Event('online')));
   } else {

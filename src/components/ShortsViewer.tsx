@@ -1,3 +1,8 @@
+import AmbientBackdrop from './AmbientBackdrop';
+import PlaybackSettings from './PlaybackSettings';
+import {usePlayerPreferences,videoEffectsStyle} from '../lib/playerPreferences';
+import {readPlaybackPosition,savePlaybackPosition} from '../lib/playbackPosition.mjs';
+import {useSleepTimer,consumeEndTimer} from '../hooks/useSleepTimer';
 import RichText from './RichText';
 import {useAudioPreference,readMuted} from '../lib/audioPreference';
 import CompactError from './CompactError';
@@ -37,6 +42,8 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
   video: Video; onRecord: (video: Video) => void; onMetadata: (video: Video) => void; onEnded: (id: string) => boolean; autoScroll: boolean; children?: ReactNode; active: boolean; isSelected: () => boolean; captionsEnabled: boolean;
 }) {
   const [muted] = useAudioPreference();
+  const prefs=usePlayerPreferences();
+  const lastPosition=useRef({time:0,duration:0,received:false});
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -46,6 +53,7 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
   const recorded = useRef(false);
   const captionsRef = useRef(captionsEnabled); captionsRef.current = captionsEnabled;
   const command = (func: string, args: unknown[] = []) => { if (frame.current?.contentWindow && url) frame.current.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args }), new URL(url).origin); };
+  useSleepTimer(()=>command('pauseVideo'));
   const syncCaptions = () => {
     if (captionsRef.current) { command('loadModule', ['captions']); command('setOption', ['captions', 'reload', true]); }
     else { command('setOption', ['captions', 'track', {}]); command('unloadModule', ['captions']); }
@@ -81,6 +89,8 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
       parsed.searchParams.set('origin', window.location.origin);
       // Handle repeat ourselves so an ended event can advance when enabled.
       for (const [key, value] of Object.entries({ loop: '0', playlist: video.videoId!, controls: '1', playsinline: '1', autoplay: activeRef.current ? '1' : '0', mute: readMuted() ? '1' : '0', rel: '0', cc_load_policy: captionsRef.current ? '1' : '0' })) parsed.searchParams.set(key, value);
+      const position=readPlaybackPosition(video.videoId);
+      if(position>0)parsed.searchParams.set('start',String(position));
       setUrl(parsed.toString());
     }).catch(reason => { if (!cancelled) setError(reason.message || '動画を読み込めませんでした。'); });
     return () => { cancelled = true; controller.abort(); };
@@ -121,20 +131,28 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
           if (playing) handledEnd = false;
           if (playerState === 0 && !handledEnd && activeRef.current && callbacks.current.isSelected()) {
             handledEnd = true;
+            if (consumeEndTimer()) { command('pauseVideo'); return; }
             if (!callbacks.current.autoScroll || !callbacks.current.onEnded(video.videoId!)) {
               command('seekTo', [0, true]);
               command('playVideo');
             }
           }
         }
+        if (typeof info.currentTime === 'number') lastPosition.current={time:info.currentTime,duration:info.duration||detail.current?.lengthSeconds||0,received:true};
         if (typeof info.currentTime === 'number') tracker.update(info.currentTime, info.duration || detail.current?.lengthSeconds, playing, document.visibilityState !== 'hidden');
       } catch {}
     };
     window.addEventListener('message', receive);
     return () => { window.removeEventListener('message', receive); tracker.finish(callbacks.current.isSelected() ? 'leave' : 'skip'); };
   }, [active, url, video.videoId]);
+  useEffect(()=>{
+    if(!active)return;
+    const save=()=>{const p=lastPosition.current;if(p.received)savePlaybackPosition(video.videoId,p.time,p.duration);};
+    const timer=setInterval(save,4000);window.addEventListener('pagehide',save);document.addEventListener('visibilitychange',save);
+    return()=>{save();clearInterval(timer);window.removeEventListener('pagehide',save);document.removeEventListener('visibilitychange',save);};
+  },[active,video.videoId]);
   return <div className="shorts-frame">
-    {url && <iframe ref={frame} tabIndex={active ? 0 : -1} aria-hidden={!active} src={url} title={video.title} className="shorts-iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" onLoad={() => { frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening' }), new URL(url).origin); command(readMuted() ? 'mute' : 'unMute'); command(activeRef.current ? 'playVideo' : 'pauseVideo'); syncCaptions(); record(); }} />}
+    {url && <iframe ref={frame} tabIndex={active ? 0 : -1} aria-hidden={!active} src={url} title={video.title} className="shorts-iframe" style={videoEffectsStyle(prefs)} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" onLoad={() => { frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening' }), new URL(url).origin); command(readMuted() ? 'mute' : 'unMute'); command(activeRef.current ? 'playVideo' : 'pauseVideo'); syncCaptions(); record(); }} />}
     {!url && !error && <div className="absolute inset-0 grid place-items-center"><Loader2 className="animate-spin" size={28} /></div>}
     {children}
     {error && <div className="shorts-embed-error !z-10 pointer-events-auto touch-auto"><CompactError error={error} onRetry={() => setAttempt(value => value + 1)} retryLabel="再読み込み"/></div>}
@@ -181,7 +199,6 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
   const [attempt, setAttempt] = useState(0);
   const [commentsId, setCommentsId] = useState('');
   const [descriptionId, setDescriptionId] = useState('');
-  const [settingsId, setSettingsId] = useState('');
   const [likes, setLikes] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem('xerox_shorts_likes_v1') || '{}'); } catch { return {}; } });
   const scroll = useRef<HTMLDivElement>(null);
   const pending = useRef(false);
@@ -377,12 +394,17 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
         </div>;
         return <article className="shorts-slide" key={video.videoId} data-short-id={video.videoId} aria-label={info.title}>
           <div className="shorts-player-row">
+          <AmbientBackdrop videoId={video.videoId} thumbnail={video.videoThumbnails?.[0]?.url} active={active}/>
           {prepare ? <ShortEmbed video={video} active={active} captionsEnabled={captionsEnabled} autoScroll={autoScroll} onEnded={advanceOnEnd} isSelected={() => !isShortsLocation(route.current.pathname) || activeRef.current === video.videoId} onRecord={detail => { recordSeenShort(detail.videoId!); onRecord(detail); }} onMetadata={detail => setMetadata(previous => ({ ...previous, [detail.videoId!]: detail }))}>{overlay}</ShortEmbed>
             : <div className="shorts-frame"><img src={video.videoThumbnails[0]?.url} alt="" loading="lazy" className="w-full h-full object-cover" />{overlay}</div>}
           <div className="shorts-side-actions">
             <button aria-label="高評価（この端末に保存）" aria-pressed={!!likes[video.videoId!]} title="この端末に保存・YouTubeには送信されません" onClick={() => { learnInteraction(info, likes[video.videoId!] ? 'unlike' : 'like'); const next = { ...likes, [video.videoId!]: !likes[video.videoId!] }; setLikes(next); try { localStorage.setItem('xerox_shorts_likes_v1', JSON.stringify(next)); } catch {} }}><span><ThumbsUp size={24} fill={likes[video.videoId!] ? 'currentColor' : 'none'} /></span><small>{info.likeCount == null ? '高評価' : formatNumberJP(info.likeCount)}</small></button>
             <button aria-label="コメントを表示" onClick={() => { if (commentsId !== video.videoId) learnInteraction(info, 'comment'); setDescriptionId(''); setCommentsId(commentsId === video.videoId ? '' : video.videoId!); }}><span><MessageCircle size={24} /></span><small>コメント</small></button>
-            <button aria-label="その他の設定" aria-expanded={settingsId === video.videoId} onClick={() => setSettingsId(settingsId === video.videoId ? '' : video.videoId!)}><span><MoreVertical size={25}/></span><small>その他</small></button>
+            <PlaybackSettings short>
+              <button className="playback-toggle" aria-label="音声" role="switch" aria-checked={!muted} onClick={()=>setMuted(!muted)}>音声<span>{muted?'OFF':'ON'}</span></button>
+              <button className="playback-toggle" aria-label="字幕" role="switch" aria-checked={captionsEnabled} onClick={()=>setCaptionsEnabled(value=>!value)}>字幕<span>{captionsEnabled?'ON':'OFF'}</span></button>
+              <button className="playback-toggle" aria-label="自動スクロール" role="switch" aria-checked={autoScroll} onClick={()=>setAutoScroll(value=>!value)}>自動スクロール<span>{autoScroll?'ON':'OFF'}</span></button>
+            </PlaybackSettings>
             <button aria-label="共有" onClick={async()=>{const url=new URL(`/shorts/${video.videoId}`,window.location.origin).href;try{if(navigator.share)await navigator.share({title:info.title,url});else await navigator.clipboard.writeText(url);}catch{}}}><span><Share2 size={25}/></span><small>共有</small></button>
             <button className="shorts-description-action" aria-label="概要欄を表示" onClick={() => { setCommentsId(''); setDescriptionId(descriptionId === video.videoId ? '' : video.videoId!); }}><span><AlignLeft size={24} /></span><small>概要</small></button>
           </div>
@@ -402,29 +424,5 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
       </div>
     </div>
     {error && videos.length === 0 && <div className="shorts-feed-retry" role="alert"><CompactError error={error} onRetry={retryFeed} retryLabel="再読み込み"/></div>}
-    {settingsId === activeId && <>
-      <button type="button" aria-label="設定メニューの外側を閉じる" className="fixed inset-0 z-[9998] cursor-default bg-black/5" onClick={() => setSettingsId('')}/>
-      <div className="fixed right-4 bottom-16 z-[9999] w-[min(19rem,calc(100vw-2rem))] max-h-[calc(100dvh-5rem)] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-3 text-gray-900 shadow-xl" role="group" aria-label="ショートの再生設定">
-        <div className="mb-2 flex items-center justify-between border-b border-gray-100 px-2 pb-2">
-          <strong className="text-sm font-semibold">再生設定</strong>
-          <button type="button" aria-label="設定を閉じる" className="grid h-9 w-9 place-items-center rounded-full bg-gray-100 hover:bg-gray-200" onClick={() => setSettingsId('')}><X size={18}/></button>
-        </div>
-        <button type="button" className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-gray-100" aria-label={muted ? 'ミュート解除' : 'ミュート'} aria-pressed={!muted} onClick={() => setMuted(!muted)}>
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gray-100">{muted ? <VolumeX size={19}/> : <Volume2 size={19}/>}</span>
-          <span className="flex-1 text-sm font-medium">音声</span>
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${muted ? 'bg-gray-100 text-gray-600' : 'bg-gray-900 text-white'}`}>{muted ? 'OFF' : 'ON'}</span>
-        </button>
-        <button type="button" className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-gray-100" aria-label={captionsEnabled ? '字幕をオフにする' : '字幕をオンにする'} aria-pressed={captionsEnabled} onClick={() => setCaptionsEnabled(value => !value)}>
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gray-100"><Captions size={19}/></span>
-          <span className="flex-1 text-sm font-medium">字幕</span>
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${captionsEnabled ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}`}>{captionsEnabled ? 'ON' : 'OFF'}</span>
-        </button>
-        <button type="button" className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-gray-100" aria-label={autoScroll ? '自動スクロールをオフにする' : '自動スクロールをオンにする'} aria-pressed={autoScroll} onClick={() => setAutoScroll(value => !value)}>
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gray-100"><ChevronsDown size={19}/></span>
-          <span className="flex-1 text-sm font-medium">自動スクロール</span>
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${autoScroll ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'}`}>{autoScroll ? 'ON' : 'OFF'}</span>
-        </button>
-      </div>
-    </>}
   </section>;
 }
