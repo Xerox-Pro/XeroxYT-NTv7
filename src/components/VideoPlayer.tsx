@@ -1225,19 +1225,6 @@ export default function VideoPlayer({
             </div>
           )}
 
-          {!isMini && (
-            <button
-              type="button"
-              onClick={(event) => { event.stopPropagation(); onSelectChannel(activeVideo.authorId || activeVideo.author); }}
-              title={`${activeVideo.author}のチャンネルを開く`}
-              aria-label={`${activeVideo.author}のチャンネルを開く`}
-              className="absolute left-3 top-14 z-20 flex max-w-[45%] items-center gap-2 rounded-full border border-white/20 bg-black/65 px-2 py-1.5 text-left text-white shadow-lg backdrop-blur-sm hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-            >
-              <Avatar src={activeVideo.authorAvatar} name={activeVideo.author} channelId={activeVideo.authorId} className="h-7 w-7 text-xs" />
-              <span className="truncate text-xs font-semibold">{activeVideo.author}<small className="ml-1 text-[10px] font-normal text-white/75">チャンネル</small></span>
-            </button>
-          )}
-
           {/* YouTube-like 10-second end screen. Playlist playback is handled separately. */}
           {autoNextCountdown && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/95 p-4 text-white" role="status" aria-live="polite">
