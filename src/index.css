@@ -431,3 +431,7 @@ a, a:visited {
 @media(max-width:767px){.ambient-video-surface{filter:blur(36px) saturate(2.8) brightness(1.2)}.ambient-video-portrait .ambient-video-iframe{transform:scale(1.8)}}
 @media(prefers-reduced-motion:reduce){.ambient-video-surface{transition:none}}
 .ambient-always-on{font-size:11px;font-weight:700;border-radius:99px;background:#18181b;color:#fff;padding:5px 12px}
+/* Draw at the foreground player's ratio, then stretch its colors into the viewport. */
+.ambient-video-concert .ambient-video-surface{inset:0;filter:blur(clamp(65px,9vw,150px)) saturate(2.8) brightness(1.2);overflow:visible}
+.ambient-video-concert .ambient-video-iframe{inset:auto;left:50%;top:50%;width:var(--ambient-source-width);height:var(--ambient-source-height);transform-origin:center;transform:translate(-50%,-50%) scale(var(--ambient-stretch-x),var(--ambient-stretch-y));border:0;border-radius:0;box-shadow:none}
+@media(max-width:767px){.ambient-video-concert .ambient-video-surface{filter:blur(60px) saturate(2.6) brightness(1.2)}}

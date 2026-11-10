@@ -9,6 +9,7 @@ export default function AmbientBackdrop({videoId,thumbnail,active=true}:{videoId
  const prefs=usePlayerPreferences();
  const backdrop=useRef<HTMLDivElement>(null);
  const [screenMask,setScreenMask]=useState('');
+ const [stretch,setStretch]=useState({width:1,height:1,x:1,y:1});
  const [mirror,setMirror]=useState<{url:string;source:HTMLIFrameElement;portrait:boolean}|null>(null);
  const [videoVisible,setVideoVisible]=useState(false);
  const [hidden,setHidden]=useState(()=>document.hidden);
@@ -18,7 +19,7 @@ export default function AmbientBackdrop({videoId,thumbnail,active=true}:{videoId
   const player=backdrop.current?.parentElement?.querySelector<HTMLElement>('[data-ambient-player]');
   if(!player){setScreenMask('');return;}
   let scheduled=0;
-  const measure=()=>{scheduled=0;setScreenMask(ambientScreenMask(player.getBoundingClientRect(),window.innerWidth,window.innerHeight));};
+  const measure=()=>{scheduled=0;const rect=player.getBoundingClientRect();setScreenMask(ambientScreenMask(rect,window.innerWidth,window.innerHeight));const width=Math.max(1,rect.width),height=Math.max(1,rect.height);setStretch(previous=>previous.width===width&&previous.height===height&&previous.x===window.innerWidth/width*1.45&&previous.y===window.innerHeight/height*1.45?previous:{width,height,x:window.innerWidth/width*1.45,y:window.innerHeight/height*1.45});};
   const schedule=()=>{if(!scheduled)scheduled=window.requestAnimationFrame(measure);};
   measure();
   // Capture the route enter transition, which can move a player without resizing it.
@@ -45,7 +46,7 @@ export default function AmbientBackdrop({videoId,thumbnail,active=true}:{videoId
  const intensity=prefs.ambientStrength/100;
  return <>
   <div ref={backdrop} className="ambient-backdrop ambient-video-anchor" aria-hidden="true"/>
-  {intensity>0&&createPortal(<div className={`ambient-concert ambient-video-concert ${hidden?'ambient-concert-paused':''} ${prefs.ambientLive?'':'ambient-concert-static'} ${mirror?.portrait?'ambient-video-portrait':''}`} aria-hidden="true" style={{'--ambient-intensity':intensity,maskImage:screenMask,WebkitMaskImage:screenMask,maskSize:'100% 100%',WebkitMaskSize:'100% 100%',maskRepeat:'no-repeat',WebkitMaskRepeat:'no-repeat',visibility:screenMask?'visible':'hidden'} as CSSProperties}>
+  {intensity>0&&createPortal(<div className={`ambient-concert ambient-video-concert ${hidden?'ambient-concert-paused':''} ${prefs.ambientLive?'':'ambient-concert-static'} ${mirror?.portrait?'ambient-video-portrait':''}`} aria-hidden="true" style={{'--ambient-intensity':intensity,'--ambient-source-width':stretch.width+'px','--ambient-source-height':stretch.height+'px','--ambient-stretch-x':stretch.x,'--ambient-stretch-y':stretch.y,maskImage:screenMask,WebkitMaskImage:screenMask,maskSize:'100% 100%',WebkitMaskSize:'100% 100%',maskRepeat:'no-repeat',WebkitMaskRepeat:'no-repeat',visibility:screenMask?'visible':'hidden'} as CSSProperties}>
    <div className="ambient-concert-wash ambient-video-surface" style={{visibility:videoVisible?'visible':'hidden'}}>
     {mirror&&<AmbientVideo key={mirror.url} url={mirror.url} source={mirror.source} onVisible={setVideoVisible}/>}
    </div>
