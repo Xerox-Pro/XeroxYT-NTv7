@@ -18,7 +18,7 @@ import { ShortsContext, shortsQuery } from './ShortsShelf';
 
 async function fetchShortsPage(url: string, signal: AbortSignal) {
   try {
-    return await fetchJSON(url, { signal });
+    return await fetchJSON(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
   } catch (reason: any) {
     // Retry transient network/upstream failures once without retrying account
     // errors or daily limits. Keep the same URL/session so paging is stable.
@@ -29,7 +29,7 @@ async function fetchShortsPage(url: string, signal: AbortSignal) {
       signal.addEventListener('abort', cancel, { once: true });
       if (signal.aborted) cancel();
     });
-    return fetchJSON(url, { signal });
+    return fetchJSON(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
   }
 }
 
@@ -84,7 +84,20 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
       setUrl(parsed.toString());
     }).catch(reason => { if (!cancelled) setError(reason.message || '動画を読み込めませんでした。'); });
     return () => { cancelled = true; controller.abort(); };
-  }, [video.videoId, video.title, attempt]);
+  }, [video.videoId, attempt]);
+  useEffect(() => {
+    let hiddenAt = document.hidden ? Date.now() : 0;
+    const resume = () => {
+      if (document.hidden || !activeRef.current) return;
+      // Refresh expired player configuration after a long background suspension.
+      if (error || (hiddenAt && Date.now() - hiddenAt >= 15 * 60 * 1000)) setAttempt(value => value + 1);
+      hiddenAt = 0;
+    };
+    const visibility = () => { if (document.hidden) hiddenAt = Date.now(); else resume(); };
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', visibility);
+    return () => { window.removeEventListener('online', resume); document.removeEventListener('visibilitychange', visibility); };
+  }, [error]);
   useEffect(() => {
     if (!url) return;
     const sync = () => { command(active ? 'playVideo' : 'pauseVideo'); if (active) record(); };
@@ -316,6 +329,17 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
     setAttempt(value => value + 1);
   };
   useEffect(() => {
+    const resume = () => {
+      if (!document.hidden && error && !pending.current && isShortsLocation(route.current.pathname)) {
+        pending.current = true;
+        setAttempt(value => value + 1);
+      }
+    };
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
+    return () => { window.removeEventListener('online', resume); document.removeEventListener('visibilitychange', resume); };
+  }, [error]);
+  useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && (commentsId || descriptionId)) { setCommentsId(''); setDescriptionId(''); return; }
       if (!isShortsLocation(route.current.pathname) || commentsId || descriptionId || /INPUT|TEXTAREA|SELECT|BUTTON/.test((event.target as HTMLElement)?.tagName)) return;
@@ -374,9 +398,10 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
         {(loading || !rankingReady) && <p className="flex gap-2"><Loader2 size={18} className="animate-spin" />読み込み中…</p>}
         {!loading && rankingReady && !error && (!channelMode || !videos.length) && <p>{videos.length ? 'ここまでのショートを表示しました。' : '表示できる縦長ショートがありません。'}</p>}
         {!loading && !error && hasMore && (!channelMode || activeId === videos[videos.length - 1]?.videoId) && page < (channelMode ? 100 : MAX_SHORT_PAGES) && (!ranking.length || videos.length < ranking.length * 2) && <button className="underline mt-3" onClick={() => setPage(value => value + 1)}>{channelMode ? '古いショートを読み込む' : '続きを読み込む'}</button>}
+        {error && videos.length > 0 && <div className="mt-3" role="status"><CompactError error="続きのショートを取得できませんでした。" onRetry={retryFeed} retryLabel="再試行"/></div>}
       </div>
     </div>
-    {error && <div className="shorts-feed-retry" role="alert"><CompactError error={error} onRetry={retryFeed} retryLabel="再読み込み"/></div>}
+    {error && videos.length === 0 && <div className="shorts-feed-retry" role="alert"><CompactError error={error} onRetry={retryFeed} retryLabel="再読み込み"/></div>}
     {settingsId === activeId && <>
       <button type="button" aria-label="設定メニューの外側を閉じる" className="fixed inset-0 z-[9998] cursor-default bg-black/5" onClick={() => setSettingsId('')}/>
       <div className="fixed right-4 bottom-16 z-[9999] w-[min(19rem,calc(100vw-2rem))] max-h-[calc(100dvh-5rem)] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-3 text-gray-900 shadow-xl" role="group" aria-label="ショートの再生設定">

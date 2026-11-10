@@ -9,18 +9,18 @@ import {createRoot} from 'react-dom/client';
 import {MemoryRouter} from 'react-router-dom';
 import {JSDOM} from 'jsdom';
 
-test('a failed Shorts feed has a reachable retry button and recovers without reload',async()=>{
+for (const seeded of [false, true]) test(seeded ? 'a reopened Short keeps playing when discovery fails and reconnect recovers' : 'a failed Shorts feed has a reachable retry button and recovers without reload',async()=>{
  const folder=await mkdtemp(path.resolve('node_modules/.shorts-retry-'));
  const output=path.join(folder,'viewer.mjs');
  await build({entryPoints:['src/components/ShortsViewer.tsx'],outfile:output,bundle:true,packages:'external',platform:'node',format:'esm',jsx:'automatic',plugins:[{name:'network-boundary',setup(builder){builder.onLoad({filter:/\/src\/utils\.ts$/},()=>({contents:'export const fetchJSON=async(url,options)=>{const response=await fetch(url,options);if(!response.ok){const error=new Error("upstream failed");error.status=response.status;throw error;}return response.json()};export const formatNumberJP=n=>String(n);',loader:'js'}));}}]});
  const {default:ShortsViewer}=await import(pathToFileURL(output));
- const dom=new JSDOM('<div id="root"></div>',{url:'https://example.test/shorts'});
+ const dom=new JSDOM('<div id="root"></div>',{url:'https://example.test/shorts',pretendToBeVisual:true});
  const properties=['window','document','HTMLElement','HTMLIFrameElement','Event','MouseEvent','localStorage','sessionStorage','IntersectionObserver'];
  const old=new Map(properties.map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
  for(const key of properties.slice(0,-1))Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
  globalThis.IntersectionObserver=class{observe(){}disconnect(){}};
  globalThis.IS_REACT_ACT_ENVIRONMENT=true;
- let requests=0;
+ let requests=0,configRequests=0;
  const previousFetch=globalThis.fetch;
  const video={videoId:'abcdefghijk',title:'retry video',author:'channel',viewCount:0,isShort:true,lengthSeconds:15,publishedText:'',videoThumbnails:[]};
  globalThis.fetch=async url=>{
@@ -30,23 +30,45 @@ test('a failed Shorts feed has a reachable retry button and recovers without rel
    return requests<=2 ? Response.json({error:'offline'},{status:503}) : Response.json({videos:[video],hasMore:false});
   }
   if(value.startsWith('/api/shorts/'))return Response.json(video);
-  if(value.startsWith('https://raw.githubusercontent.com/'))return Response.json({params:'?key=abc'});
+  if(value.startsWith('https://raw.githubusercontent.com/')){configRequests++;return Response.json({params:'?key=abc'+configRequests});}
   throw new Error('Unexpected request '+value);
  };
  const root=createRoot(dom.window.document.getElementById('root'));
  const settle=()=>act(async()=>{await new Promise(resolve=>setTimeout(resolve,20));});
  try{
-  await act(async()=>root.render(React.createElement(MemoryRouter,{initialEntries:['/shorts?source=search&q=test']},React.createElement(ShortsViewer,{context:{source:'search',q:'test'},onRecord:()=>{},onSelectChannel:()=>{}}))));
+  await act(async()=>root.render(React.createElement(MemoryRouter,{initialEntries:['/shorts?source=search&q=test']},React.createElement(ShortsViewer,{initialId:seeded ? video.videoId : undefined,initialVideo:seeded ? video : undefined,context:{source:'search',q:'test'},onRecord:()=>{},onSelectChannel:()=>{}}))));
   await settle();await settle();await act(async()=>{await new Promise(resolve=>setTimeout(resolve,480));});await settle();
   assert.equal(requests,2,'transient errors get one automatic retry');
-  const button=document.querySelector('[role="alert"] button');
-  assert.ok(button,'manual retry remains available');
-  assert.equal(document.querySelector('.shorts-scroll').contains(button),false,'retry is outside scroll-snap area');
-  await act(async()=>button.click());
+  if (seeded) {
+   assert.equal(document.querySelector('[role="alert"]'),null,'background discovery must not cover the player');
+   assert.ok(document.querySelector('iframe'),'reopened video can play independently');
+   assert.ok(document.querySelector('.shorts-feed-end button'),'next-page failure has an inline retry');
+   await act(async()=>window.dispatchEvent(new Event('online')));
+  } else {
+   const button=document.querySelector('[role="alert"] button');
+   assert.ok(button,'manual retry remains available');
+   assert.equal(document.querySelector('.shorts-scroll').contains(button),false,'retry is outside scroll-snap area');
+   await act(async()=>button.click());
+  }
   await settle();await settle();
   assert.equal(requests,3);
   assert.equal(document.querySelector('[role="alert"]'),null);
   assert.equal(document.querySelectorAll('article[data-short-id]').length,1);
+  if (seeded) {
+   const before=configRequests;
+   const now=Date.now;
+   try {
+    Object.defineProperty(document,'hidden',{value:true,configurable:true});
+    await act(async()=>document.dispatchEvent(new Event('visibilitychange')));
+    Date.now=()=>now()+16*60*1000;
+    Object.defineProperty(document,'hidden',{value:false,configurable:true});
+    await act(async()=>document.dispatchEvent(new Event('visibilitychange')));
+    await settle();await settle();
+    assert.equal(configRequests,before+1,'long background suspension refreshes expired player configuration');
+    assert.ok(document.querySelector('iframe').src.includes('key=abc'+configRequests));
+   } finally { Date.now=now; }
+  }
+
  }finally{
   await act(async()=>root.unmount());globalThis.fetch=previousFetch;dom.window.close();
   for(const [key,descriptor] of old){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}
