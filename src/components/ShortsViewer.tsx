@@ -151,7 +151,7 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
     const timer=setInterval(save,4000);window.addEventListener('pagehide',save);document.addEventListener('visibilitychange',save);
     return()=>{save();clearInterval(timer);window.removeEventListener('pagehide',save);document.removeEventListener('visibilitychange',save);};
   },[active,video.videoId]);
-  return <div className="shorts-frame">
+  return <div className="shorts-frame" data-ambient-player="">
     {url && <iframe ref={frame} tabIndex={active ? 0 : -1} aria-hidden={!active} src={url} title={video.title} className="shorts-iframe" style={videoEffectsStyle(prefs)} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" onLoad={() => { frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening' }), new URL(url).origin); command(readMuted() ? 'mute' : 'unMute'); command(activeRef.current ? 'playVideo' : 'pauseVideo'); syncCaptions(); record(); }} />}
     {!url && !error && <div className="absolute inset-0 grid place-items-center"><Loader2 className="animate-spin" size={28} /></div>}
     {children}
@@ -396,7 +396,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
           <div className="shorts-player-row">
           <AmbientBackdrop videoId={video.videoId} thumbnail={video.videoThumbnails?.[0]?.url} active={active}/>
           {prepare ? <ShortEmbed video={video} active={active} captionsEnabled={captionsEnabled} autoScroll={autoScroll} onEnded={advanceOnEnd} isSelected={() => !isShortsLocation(route.current.pathname) || activeRef.current === video.videoId} onRecord={detail => { recordSeenShort(detail.videoId!); onRecord(detail); }} onMetadata={detail => setMetadata(previous => ({ ...previous, [detail.videoId!]: detail }))}>{overlay}</ShortEmbed>
-            : <div className="shorts-frame"><img src={video.videoThumbnails[0]?.url} alt="" loading="lazy" className="w-full h-full object-cover" />{overlay}</div>}
+            : <div className="shorts-frame" data-ambient-player=""><img src={video.videoThumbnails[0]?.url} alt="" loading="lazy" className="w-full h-full object-cover" />{overlay}</div>}
           <div className="shorts-side-actions">
             <button aria-label="高評価（この端末に保存）" aria-pressed={!!likes[video.videoId!]} title="この端末に保存・YouTubeには送信されません" onClick={() => { learnInteraction(info, likes[video.videoId!] ? 'unlike' : 'like'); const next = { ...likes, [video.videoId!]: !likes[video.videoId!] }; setLikes(next); try { localStorage.setItem('xerox_shorts_likes_v1', JSON.stringify(next)); } catch {} }}><span><ThumbsUp size={24} fill={likes[video.videoId!] ? 'currentColor' : 'none'} /></span><small>{info.likeCount == null ? '高評価' : formatNumberJP(info.likeCount)}</small></button>
             <button aria-label="コメントを表示" onClick={() => { if (commentsId !== video.videoId) learnInteraction(info, 'comment'); setDescriptionId(''); setCommentsId(commentsId === video.videoId ? '' : video.videoId!); }}><span><MessageCircle size={24} /></span><small>コメント</small></button>
