@@ -72,7 +72,7 @@ test('shorts can leave for home, search, history, channel and browser back durin
    await act(async()=>document.querySelector('[aria-label="再生設定を閉じる"]').click());
    assert.equal(document.querySelector('.shorts-tap-area'),null);
    assert.equal(document.querySelector('.shorts-actions'),null);
-   const frames=[...document.querySelectorAll('[data-ambient-player] iframe')];assert.equal(frames.length,3,'active and next two embeds are prepared');
+   const frames=[...document.querySelectorAll('.shorts-frame iframe')];assert.equal(frames.length,3,'active and next two embeds are prepared');
    for(const next of frames.slice(1))assert.equal(new URL(next.src).searchParams.get('autoplay'),'0','preloaded videos do not autoplay');
    assert.ok(document.querySelector('[aria-label="コメントを表示"]'));assert.ok(document.querySelector('[aria-label="概要欄を表示"]'));
    assert.ok(document.querySelector('[aria-label="高評価（この端末に保存）"]'));

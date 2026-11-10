@@ -1,4 +1,3 @@
-import AmbientBackdrop from './AmbientBackdrop';
 import PlaybackSettings from './PlaybackSettings';
 import {usePlayerPreferences,videoEffectsStyle} from '../lib/playerPreferences';
 import {readPlaybackPosition,savePlaybackPosition} from '../lib/playbackPosition.mjs';
@@ -1228,11 +1227,8 @@ export default function VideoPlayer({
     <div className="persistent-video-content flex-1 w-full max-w-[2400px] mx-auto p-2 sm:p-4 lg:p-6 flex flex-col md:flex-row gap-6 bg-white text-gray-900 min-h-[calc(100vh-3.5rem)]">
       {/* メイン動画プレイヤーセクション */}
       <div className="flex-1 min-w-0 md:flex-[1_1_72%] lg:flex-[1_1_75%] xl:flex-[1_1_78%]">
-        <div className={`ambient-stage ${playerPreferences.ambient&&!isMini?'ambient-enabled':''}`}>
-        {!isMini&&<AmbientBackdrop videoId={videoId} thumbnail={activeVideo.videoThumbnails?.[0]?.url}/>}
         <div
           ref={playerContainerRef}
-          data-ambient-player=""
           tabIndex={0}
           className="w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-xl border border-gray-200 relative max-h-[85vh] group outline-hidden focus:ring-2 focus:ring-blue-500/20"
         >
@@ -1303,7 +1299,6 @@ export default function VideoPlayer({
           </AnimatePresence>
         </div>
 
-        </div>
         <div className="mt-4 flex flex-col">
           {/* 実際のライブ配信時のみバッジを表示 */}
           {isLive && (

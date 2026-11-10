@@ -358,12 +358,7 @@ a, a:visited {
 .playlist-auth-section{margin-top:38px}.playlist-auth-section>h2{font-size:20px;font-weight:700;margin-bottom:20px}.playlist-auth-row{width:100%;padding:10px 0}
 
 /* Shared player appearance, kept outside the clipped embedded player. */
-.ambient-stage{position:relative;isolation:isolate;border-radius:18px}
-.ambient-backdrop{position:absolute;inset:-26px -24px;z-index:-1;pointer-events:none;overflow:hidden;border-radius:42px;filter:blur(32px) saturate(1.6);transition:opacity .35s ease;contain:paint}
-.ambient-backdrop img{width:100%;height:100%;object-fit:cover;transform:scale(1.08)}
-.ambient-stage.ambient-enabled{margin-top:12px;margin-bottom:28px}
 .shorts-player-row{isolation:isolate;position:relative}
-.shorts-player-row>.ambient-backdrop{inset:-36px -50px;filter:blur(40px) saturate(1.5);z-index:-1}
 .shorts-player-row>.shorts-frame{z-index:0}
 .playback-settings-trigger{flex:none;display:grid;place-items:center;width:36px;height:36px;background:#f3f4f6;color:#222;border:1px solid #e5e7eb;border-radius:50%}
 .playback-settings-trigger:hover{background:#e5e7eb}
@@ -388,8 +383,8 @@ a, a:visited {
 .sleep-status{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f4f4f5;border-radius:10px;font-size:12px;margin:12px 0}.sleep-status button{text-decoration:underline}
 .playback-settings-dialog footer{padding:12px 24px;text-align:center;color:#a1a1aa;font-size:10px;border-top:1px solid #eee;flex:none}
 .playback-settings-dialog button:focus-visible,.playback-settings-dialog input:focus-visible,.playback-settings-trigger:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
-@media(max-width:767px){.shorts-player-row>.ambient-backdrop{inset:0;z-index:0;filter:blur(25px) saturate(1.6)}.shorts-player-row>.shorts-frame{background:transparent}.shorts-player-row>.shorts-frame .shorts-iframe{z-index:1}.shorts-player-row>.shorts-frame{isolation:isolate}.playback-settings-dialog{inset:auto 0 0;margin:0;width:100%;max-width:100%;max-height:85dvh;border-radius:24px 24px 0 0;padding-bottom:env(safe-area-inset-bottom)}}
-@media(prefers-reduced-motion:reduce){.ambient-backdrop,.toggle-track,.toggle-track i{transition:none}}
+@media(max-width:767px){.playback-settings-dialog{inset:auto 0 0;margin:0;width:100%;max-width:100%;max-height:85dvh;border-radius:24px 24px 0 0;padding-bottom:env(safe-area-inset-bottom)}}
+@media(prefers-reduced-motion:reduce){.toggle-track,.toggle-track i{transition:none}}
 .search-results-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .search-filter-control{position:relative;flex:none;z-index:15}
 .search-filter-trigger{display:flex;align-items:center;gap:7px;min-height:40px;padding:8px 14px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:99px;font-size:12px}
@@ -399,39 +394,5 @@ a, a:visited {
 .search-filter-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:18px}.search-filter-grid legend{font-size:12px;font-weight:700;margin-bottom:12px}.search-filter-grid label{display:flex;align-items:center;gap:7px;min-height:36px;font-size:12px;line-height:1.6;cursor:pointer}.search-filter-grid input{accent-color:#18181b;flex:none}
 .search-filter-panel footer{position:sticky;bottom:-22px;background:white;padding:16px 0 4px;display:flex;justify-content:space-between;align-items:center;margin-top:12px;border-top:1px solid #eee;font-size:12px}.search-filter-panel footer button:last-child{display:flex;align-items:center;gap:6px;background:#18181b;color:white;padding:10px 22px;border-radius:99px}
 @media(max-width:640px){.search-filter-panel{position:fixed;left:12px;right:12px;top:130px;width:auto;padding:18px;max-height:calc(100dvh - 220px)}.search-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}.search-feature-options{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.search-results-heading h2{font-size:15px}}
-@media(max-width:767px){.shorts-player-row>.shorts-frame{width:min(100%,calc((100dvh - 62px - env(safe-area-inset-bottom)) * .5625));height:auto;aspect-ratio:9/16;max-height:100%;flex:none;border-radius:10px}.shorts-player-row>.ambient-backdrop{z-index:-1}.shorts-player-row>.shorts-frame{background:#080808}}
+@media(max-width:767px){.shorts-player-row>.shorts-frame{background:#080808}}
 .effect-presets button[aria-pressed=true]{background:#18181b;color:white;border-color:#18181b}
-.mini-player-body .ambient-stage>div:not(.ambient-backdrop){width:100%;height:100%;max-height:none;aspect-ratio:auto;border:0;border-radius:0}
-
-/* Full viewport lighting: broad color washes and moving beams, no strobe. */
-.ambient-concert{position:fixed;inset:0;z-index:40;pointer-events:none!important;overflow:hidden;contain:strict;opacity:var(--ambient-intensity,.9);isolation:isolate}
-.ambient-concert *{pointer-events:none!important}
-.ambient-concert-wash{position:absolute;inset:-18%;filter:blur(70px) saturate(3.2);opacity:.18;animation:ambient-concert-wash 2.8s ease-in-out infinite alternate}
-.ambient-concert img{display:block;width:100%;height:100%;object-fit:cover;user-select:none}
-.ambient-concert-beam{position:absolute;top:-45%;width:80%;height:190%;filter:blur(48px) saturate(3.6) brightness(1.25);opacity:.26;mask-image:linear-gradient(90deg,transparent,#000 42%,#000 58%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 42%,#000 58%,transparent);transform-origin:50% 0%;animation:ambient-concert-sweep 7s ease-in-out infinite alternate}
-.ambient-concert-beam-left{left:-25%;animation-delay:-2.2s}
-.ambient-concert-beam-right{right:-25%;animation-name:ambient-concert-sweep-right;animation-duration:8.5s;animation-delay:-5s}
-.ambient-concert-halo{position:absolute;inset:0;box-shadow:inset 0 0 10vw 2vw #a650ff38,inset 0 0 4vw #39caff38;animation:ambient-concert-halo 1.8s ease-in-out infinite alternate;opacity:.6}
-.ambient-backdrop-live{filter:blur(42px) saturate(2.5)!important;inset:-40px -35px}
-.ambient-concert-paused *{animation-play-state:paused!important}
-@keyframes ambient-concert-wash{0%{transform:scale(1.05) translate(-5%,2%);opacity:.09}55%{opacity:.24}100%{transform:scale(1.18) translate(5%,-2%);opacity:.16}}
-@keyframes ambient-concert-sweep{0%{transform:rotate(-32deg) translateX(-12%);opacity:.12}45%{opacity:.32}100%{transform:rotate(28deg) translateX(12%);opacity:.2}}
-@keyframes ambient-concert-sweep-right{0%{transform:rotate(35deg) translateX(15%);opacity:.28}65%{opacity:.12}100%{transform:rotate(-30deg) translateX(-10%);opacity:.3}}
-@keyframes ambient-concert-halo{from{opacity:.25}to{opacity:.85}}
-@media(max-width:767px){.ambient-concert-wash{filter:blur(44px) saturate(3)}.ambient-concert-beam{filter:blur(32px) saturate(3.4) brightness(1.2);width:110%}.ambient-concert-beam-left{left:-50%}.ambient-concert-beam-right{right:-50%}}
-@media(prefers-reduced-motion:reduce){.ambient-concert *{animation:none!important}.ambient-concert-wash{opacity:.12}.ambient-concert-beam-left{transform:rotate(-22deg);opacity:.12}.ambient-concert-beam-right{transform:rotate(22deg);opacity:.12}.ambient-concert-halo{opacity:.35}}
-.ambient-concert-static *{animation:none!important}.ambient-concert-static .ambient-concert-wash{opacity:.2}.ambient-concert-static .ambient-concert-beam-left{transform:rotate(-24deg);opacity:.23}.ambient-concert-static .ambient-concert-beam-right{transform:rotate(24deg);opacity:.23}.ambient-concert-static .ambient-concert-halo{opacity:.65}
-/* One live video mirror colors the entire interface, including the top bar. */
-.ambient-video-concert{z-index:60}
-.ambient-video-anchor{visibility:hidden;pointer-events:none}
-.ambient-video-surface{inset:-20%;opacity:.4;filter:blur(65px) saturate(3) brightness(1.25);transition:opacity .4s}
-.ambient-video-iframe{position:absolute;inset:0;width:100%;height:100%;border:0;transform:scale(1.7);pointer-events:none!important}
-.ambient-video-portrait .ambient-video-iframe{transform:scale(3.6)}
-.ambient-concert-static .ambient-video-surface{opacity:.4}
-@media(max-width:767px){.ambient-video-surface{filter:blur(36px) saturate(2.8) brightness(1.2)}.ambient-video-portrait .ambient-video-iframe{transform:scale(1.8)}}
-@media(prefers-reduced-motion:reduce){.ambient-video-surface{transition:none}}
-.ambient-always-on{font-size:11px;font-weight:700;border-radius:99px;background:#18181b;color:#fff;padding:5px 12px}
-/* Draw at the foreground player's ratio, then stretch its colors into the viewport. */
-.ambient-video-concert .ambient-video-surface{inset:0;filter:blur(clamp(65px,9vw,150px)) saturate(2.8) brightness(1.2);overflow:visible}
-.ambient-video-concert .ambient-video-iframe{inset:auto;left:50%;top:50%;width:var(--ambient-source-width);height:var(--ambient-source-height);transform-origin:center;transform:translate(-50%,-50%) scale(var(--ambient-stretch-x),var(--ambient-stretch-y));border:0;border-radius:0;box-shadow:none}
-@media(max-width:767px){.ambient-video-concert .ambient-video-surface{filter:blur(60px) saturate(2.6) brightness(1.2)}}
