@@ -194,6 +194,13 @@ export default function VideoPlayer({
   };
 
   const activeVideo: Video = videoData?.videoId === videoId ? videoData : fallbackVideo;
+  useEffect(() => {
+    if (!isMini) return;
+    const ratio = activeVideo.isShort ? 9 / 16
+      : activeVideo.width && activeVideo.height ? activeVideo.width / activeVideo.height : 16 / 9;
+    const timer = window.setTimeout(() => window.dispatchEvent(new CustomEvent('xerox-mini-player-aspect-change', { detail: ratio })), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeVideo.width, activeVideo.height, activeVideo.isShort, isMini]);
 
   const handleLike = () => {
     learnInteraction(activeVideo, isLiked ? 'unlike' : 'like');
@@ -347,11 +354,14 @@ export default function VideoPlayer({
   const apiPlayerRef = useRef<any>(null);
   const playlistRef = useRef(playlistId);
   playlistRef.current = playlistId;
+  const onVideoSelectRef = useRef(onVideoSelect);
+  onVideoSelectRef.current = onVideoSelect;
   const updatePlayingVideo = useCallback((id: unknown) => {
-    if (!playlistRef.current || typeof id !== 'string' || !/^[a-zA-Z0-9_-]{11}$/.test(id)) return;
+    if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{11}$/.test(id)) return;
     if (id === currentVideoIdRef.current) return;
     currentVideoIdRef.current = id;
-    setVideoId(id);
+    if (playlistRef.current) setVideoId(id);
+    else onVideoSelectRef.current(id);
   }, []);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -379,7 +389,7 @@ export default function VideoPlayer({
   const [hud, setHud] = useState<HudState | null>(null);
   const hudTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const triggerHud = useCallback((icon: React.ReactNode, label: string, subLabel?: string, progress?: number) => {
+  const triggerHud = useCallback((icon: React.ReactNode, label: string, subLabel?: string, progress?: number, duration = 950) => {
     if (hudTimerRef.current) {
       clearTimeout(hudTimerRef.current);
     }
@@ -392,7 +402,7 @@ export default function VideoPlayer({
     });
     hudTimerRef.current = setTimeout(() => {
       setHud(null);
-    }, 950);
+    }, duration);
   }, []);
 
   // IFrame への postMessage コマンド送信
@@ -1215,6 +1225,19 @@ export default function VideoPlayer({
             </div>
           )}
 
+          {!isMini && (
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); onSelectChannel(activeVideo.authorId || activeVideo.author); }}
+              title={`${activeVideo.author}のチャンネルを開く`}
+              aria-label={`${activeVideo.author}のチャンネルを開く`}
+              className="absolute left-3 top-14 z-20 flex max-w-[45%] items-center gap-2 rounded-full border border-white/20 bg-black/65 px-2 py-1.5 text-left text-white shadow-lg backdrop-blur-sm hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+            >
+              <Avatar src={activeVideo.authorAvatar} name={activeVideo.author} channelId={activeVideo.authorId} className="h-7 w-7 text-xs" />
+              <span className="truncate text-xs font-semibold">{activeVideo.author}<small className="ml-1 text-[10px] font-normal text-white/75">チャンネル</small></span>
+            </button>
+          )}
+
           {/* YouTube-like 10-second end screen. Playlist playback is handled separately. */}
           {autoNextCountdown && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/95 p-4 text-white" role="status" aria-live="polite">
@@ -1242,7 +1265,7 @@ export default function VideoPlayer({
                 initial={{ opacity: 0, scale: 0.85, y: -8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
-                className="absolute top-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center gap-1.5 px-4 py-2.5 bg-black/85 backdrop-blur-md text-white rounded-2xl shadow-2xl border border-white/15 select-none min-w-[130px]"
+                className="absolute top-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex max-w-[min(92vw,420px)] flex-col items-center gap-1.5 px-4 py-2.5 bg-black/85 backdrop-blur-md text-white rounded-2xl shadow-2xl border border-white/15 select-none min-w-[130px] text-center"
               >
                 <div className="flex items-center gap-2">
                   <span className="text-white drop-shadow-xs">{hud.icon}</span>
@@ -1345,7 +1368,6 @@ export default function VideoPlayer({
 
             {/* アクションボタン */}
             <div className="watch-actions flex items-center gap-2 overflow-x-auto no-scrollbar">
-              <button type="button" aria-label={captionsEnabled?'字幕をオフにする':'字幕をオンにする'} aria-pressed={captionsEnabled} title={captionsEnabled?'字幕オン':'字幕オフ'} onClick={()=>setCaptionsEnabled(value=>!value)} className={`shrink-0 grid place-items-center rounded-full border p-2 ${captionsEnabled?'bg-gray-900 text-white border-gray-900':'bg-gray-100 text-gray-800 border-gray-200'}`}><Captions size={18}/></button>
               <div className="flex items-center bg-gray-100 rounded-full p-0.5 border border-gray-200 shadow-2xs">
                 <motion.button
                   onClick={handleLike}
@@ -1439,6 +1461,7 @@ export default function VideoPlayer({
                   const muted = !isMutedRef.current;
                   isMutedRef.current = muted; setIsMuted(muted);
                   postPlayerCommand(muted ? 'mute' : 'unMute');
+                  if (!muted) triggerHud(<Volume2 size={22} />, '音声をオンにしました', '音が出ない場合は、動画の別の場所をタップしてください。', undefined, 3000);
                   if (!muted && volumeRef.current === 0) {
                     volumeRef.current = 100;
                     postPlayerCommand('setVolume', [100]);
@@ -1452,6 +1475,16 @@ export default function VideoPlayer({
                 {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
 
               </motion.button>
+              <button
+                type="button"
+                aria-label={captionsEnabled ? '字幕をオフにする' : '字幕をオンにする'}
+                aria-pressed={captionsEnabled}
+                title={captionsEnabled ? '字幕オン' : '字幕オフ'}
+                onClick={() => setCaptionsEnabled(value => !value)}
+                className={captionsEnabled ? "shrink-0 grid place-items-center rounded-full border p-2 bg-gray-900 text-white border-gray-900" : "shrink-0 grid place-items-center rounded-full border p-2 bg-gray-100 text-gray-800 border-gray-200"}
+              >
+                <Captions size={18} />
+              </button>
 
               {/* キーボードショートカットヘルプ表示ボタン */}
               <motion.button
