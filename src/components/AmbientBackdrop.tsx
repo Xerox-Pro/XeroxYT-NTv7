@@ -1,14 +1,16 @@
 import {useEffect,useLayoutEffect,useRef,useState,type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
 import {usePlayerPreferences} from '../lib/playerPreferences';
+import AmbientVideo from './AmbientVideo';
+import {ambientVideoUrl} from '../lib/ambientVideo.mjs';
 import {ambientScreenMask} from '../lib/ambientMask.mjs';
-// Public video images supply the palette; this animation does not analyze audio.
+// A single muted mirror supplies live video colors without reading cross-origin pixels.
 export default function AmbientBackdrop({videoId,thumbnail,active=true}:{videoId?:string;thumbnail?:string;active?:boolean}){
  const prefs=usePlayerPreferences();
  const backdrop=useRef<HTMLDivElement>(null);
  const [screenMask,setScreenMask]=useState('');
- const source=thumbnail|| (videoId?`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`:'');
- const [failed,setFailed]=useState('');
+ const [mirror,setMirror]=useState<{url:string;source:HTMLIFrameElement;portrait:boolean}|null>(null);
+ const [videoVisible,setVideoVisible]=useState(false);
  const [hidden,setHidden]=useState(()=>document.hidden);
  useEffect(()=>{if(!active||!prefs.ambient)return;const sync=()=>setHidden(document.hidden);sync();document.addEventListener('visibilitychange',sync);return()=>document.removeEventListener('visibilitychange',sync);},[active,prefs.ambient]);
  useLayoutEffect(()=>{
@@ -27,16 +29,26 @@ export default function AmbientBackdrop({videoId,thumbnail,active=true}:{videoId
   window.visualViewport?.addEventListener('resize',schedule);window.visualViewport?.addEventListener('scroll',schedule);
   document.addEventListener('fullscreenchange',schedule);
   return()=>{settle.forEach(window.clearTimeout);if(scheduled)window.cancelAnimationFrame(scheduled);observer?.disconnect();window.removeEventListener('resize',schedule);window.removeEventListener('scroll',schedule,true);window.visualViewport?.removeEventListener('resize',schedule);window.visualViewport?.removeEventListener('scroll',schedule);document.removeEventListener('fullscreenchange',schedule);};
- },[active,prefs.ambient,source,failed]);
- if(!prefs.ambient||!active||!source||failed===source)return null;
+ },[active,prefs.ambient,videoId]);
+ useEffect(()=>{
+  if(!active||!prefs.ambient||prefs.ambientStrength===0){setMirror(null);return;}
+  const root=backdrop.current?.parentElement;if(!root)return;
+  const find=()=>{
+   const source=root.querySelector<HTMLIFrameElement>('[data-ambient-player] iframe');
+   const url=source?ambientVideoUrl(source.src,videoId,window.location.origin):'';
+   setMirror(previous=>previous?.source===source&&previous?.url===url?previous:url&&source?{url,source,portrait:root.classList.contains('shorts-player-row')}:null);
+  };
+  find();const observer=new window.MutationObserver(find);observer.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['src']});
+  return()=>observer.disconnect();
+ },[active,prefs.ambient,prefs.ambientStrength,videoId]);
+ if(!prefs.ambient||!active)return null;
  const intensity=prefs.ambientStrength/100;
  return <>
-  <div ref={backdrop} className="ambient-backdrop ambient-backdrop-live" aria-hidden="true" style={{opacity:intensity}}><img key={source} src={source} alt="" draggable={false} onError={()=>setFailed(source)}/></div>
-  {intensity>0&&createPortal(<div className={`ambient-concert ${hidden?'ambient-concert-paused':''} ${prefs.ambientLive?'':'ambient-concert-static'}`} aria-hidden="true" style={{'--ambient-intensity':intensity,maskImage:screenMask,WebkitMaskImage:screenMask,maskSize:'100% 100%',WebkitMaskSize:'100% 100%',maskRepeat:'no-repeat',WebkitMaskRepeat:'no-repeat',visibility:screenMask?'visible':'hidden'} as CSSProperties}>
-   <div className="ambient-concert-wash"><img src={source} alt="" draggable={false}/></div>
-   <div className="ambient-concert-beam ambient-concert-beam-left"><img src={source} alt="" draggable={false}/></div>
-   <div className="ambient-concert-beam ambient-concert-beam-right"><img src={source} alt="" draggable={false}/></div>
-   <div className="ambient-concert-halo"/>
+  <div ref={backdrop} className="ambient-backdrop ambient-video-anchor" aria-hidden="true"/>
+  {intensity>0&&createPortal(<div className={`ambient-concert ambient-video-concert ${hidden?'ambient-concert-paused':''} ${prefs.ambientLive?'':'ambient-concert-static'} ${mirror?.portrait?'ambient-video-portrait':''}`} aria-hidden="true" style={{'--ambient-intensity':intensity,maskImage:screenMask,WebkitMaskImage:screenMask,maskSize:'100% 100%',WebkitMaskSize:'100% 100%',maskRepeat:'no-repeat',WebkitMaskRepeat:'no-repeat',visibility:screenMask?'visible':'hidden'} as CSSProperties}>
+   <div className="ambient-concert-wash ambient-video-surface" style={{visibility:videoVisible?'visible':'hidden'}}>
+    {mirror&&<AmbientVideo key={mirror.url} url={mirror.url} source={mirror.source} onVisible={setVideoVisible}/>}
+   </div>
   </div>,document.body)}
  </>;
 }
