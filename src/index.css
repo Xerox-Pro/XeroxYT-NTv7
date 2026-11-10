@@ -402,3 +402,22 @@ a, a:visited {
 @media(max-width:767px){.shorts-player-row>.shorts-frame{width:min(100%,calc((100dvh - 62px - env(safe-area-inset-bottom)) * .5625));height:auto;aspect-ratio:9/16;max-height:100%;flex:none;border-radius:10px}.shorts-player-row>.ambient-backdrop{z-index:-1}.shorts-player-row>.shorts-frame{background:#080808}}
 .effect-presets button[aria-pressed=true]{background:#18181b;color:white;border-color:#18181b}
 .mini-player-body .ambient-stage>div:not(.ambient-backdrop){width:100%;height:100%;max-height:none;aspect-ratio:auto;border:0;border-radius:0}
+
+/* Full viewport lighting: broad color washes and moving beams, no strobe. */
+.ambient-concert{position:fixed;inset:0;z-index:40;pointer-events:none!important;overflow:hidden;contain:strict;opacity:var(--ambient-intensity,.9);isolation:isolate}
+.ambient-concert *{pointer-events:none!important}
+.ambient-concert-wash{position:absolute;inset:-18%;filter:blur(70px) saturate(3.2);opacity:.18;animation:ambient-concert-wash 2.8s ease-in-out infinite alternate}
+.ambient-concert img{display:block;width:100%;height:100%;object-fit:cover;user-select:none}
+.ambient-concert-beam{position:absolute;top:-45%;width:80%;height:190%;filter:blur(48px) saturate(3.6) brightness(1.25);opacity:.26;mask-image:linear-gradient(90deg,transparent,#000 42%,#000 58%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 42%,#000 58%,transparent);transform-origin:50% 0%;animation:ambient-concert-sweep 7s ease-in-out infinite alternate}
+.ambient-concert-beam-left{left:-25%;animation-delay:-2.2s}
+.ambient-concert-beam-right{right:-25%;animation-name:ambient-concert-sweep-right;animation-duration:8.5s;animation-delay:-5s}
+.ambient-concert-halo{position:absolute;inset:0;box-shadow:inset 0 0 10vw 2vw #a650ff38,inset 0 0 4vw #39caff38;animation:ambient-concert-halo 1.8s ease-in-out infinite alternate;opacity:.6}
+.ambient-backdrop-live{filter:blur(42px) saturate(2.5)!important;inset:-40px -35px}
+.ambient-concert-paused *{animation-play-state:paused!important}
+@keyframes ambient-concert-wash{0%{transform:scale(1.05) translate(-5%,2%);opacity:.09}55%{opacity:.24}100%{transform:scale(1.18) translate(5%,-2%);opacity:.16}}
+@keyframes ambient-concert-sweep{0%{transform:rotate(-32deg) translateX(-12%);opacity:.12}45%{opacity:.32}100%{transform:rotate(28deg) translateX(12%);opacity:.2}}
+@keyframes ambient-concert-sweep-right{0%{transform:rotate(35deg) translateX(15%);opacity:.28}65%{opacity:.12}100%{transform:rotate(-30deg) translateX(-10%);opacity:.3}}
+@keyframes ambient-concert-halo{from{opacity:.25}to{opacity:.85}}
+@media(max-width:767px){.ambient-concert-wash{filter:blur(44px) saturate(3)}.ambient-concert-beam{filter:blur(32px) saturate(3.4) brightness(1.2);width:110%}.ambient-concert-beam-left{left:-50%}.ambient-concert-beam-right{right:-50%}}
+@media(prefers-reduced-motion:reduce){.ambient-concert *{animation:none!important}.ambient-concert-wash{opacity:.12}.ambient-concert-beam-left{transform:rotate(-22deg);opacity:.12}.ambient-concert-beam-right{transform:rotate(22deg);opacity:.12}.ambient-concert-halo{opacity:.35}}
+.ambient-concert-static *{animation:none!important}.ambient-concert-static .ambient-concert-wash{opacity:.2}.ambient-concert-static .ambient-concert-beam-left{transform:rotate(-24deg);opacity:.23}.ambient-concert-static .ambient-concert-beam-right{transform:rotate(24deg);opacity:.23}.ambient-concert-static .ambient-concert-halo{opacity:.65}

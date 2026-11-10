@@ -7,10 +7,11 @@ test('appearance defaults on, settings persist and affect existing players, and 
  function Probe(){ui.useSleepTimer(()=>stops++);const p=ui.usePlayerPreferences();return React.createElement('iframe',{title:'unchanged player',style:ui.videoEffectsStyle(p)});}
  try{
   await act(async()=>root.render(React.createElement(React.Fragment,null,React.createElement(ui.Ambient,{videoId:'abcdefghijk'}),React.createElement(Probe),React.createElement(Probe),React.createElement(ui.Settings),React.createElement(ui.Filters,{params:new URLSearchParams(),onApply:p=>result=p}))));
-  assert.ok(document.querySelector('.ambient-backdrop'),'ambient is on by default');const frame=document.querySelector('iframe');
+  assert.ok(document.querySelector('.ambient-backdrop'),'ambient is on by default');assert.ok(document.querySelector('.ambient-concert-static'),'full viewport lighting is static by default');const frame=document.querySelector('iframe');
   await act(async()=>document.querySelector('[aria-label="再生設定を開く"]').click());assert.ok(document.querySelector('dialog[open]'));const ambient=[...document.querySelectorAll('[role="switch"]')].find(n=>n.textContent.includes('アンビエント'));
   await act(async()=>ambient.click());assert.equal(document.querySelector('.ambient-backdrop'),null);assert.equal(JSON.parse(localStorage.getItem('xerox_player_preferences_v1')).ambient,false);
   await act(async()=>ambient.click());assert.ok(document.querySelector('.ambient-backdrop'));
+  const animation=[...document.querySelectorAll('[role="switch"]')].find(n=>n.textContent.includes('ライブ照明アニメーション'));assert.equal(animation.getAttribute('aria-checked'),'false');await act(async()=>animation.click());assert.equal(document.querySelector('.ambient-concert-static'),null,'animation runs only after explicit opt-in');await act(async()=>animation.click());assert.ok(document.querySelector('.ambient-concert-static'));
   await act(async()=>[...document.querySelectorAll('button')].find(n=>n.textContent==='シネマ').click());assert.match(frame.style.filter,/contrast\(115%\)/);assert.equal(document.querySelector('iframe'),frame,'effects do not restart playback');
   await act(async()=>[...document.querySelectorAll('button')].find(n=>n.textContent==='30分').click());assert.ok(ui.readPlayerPreferences().sleepUntil>Date.now());assert.match(document.querySelector('.sleep-status').textContent,/30分/);
   await act(async()=>ui.updatePlayerPreferences({sleepUntil:Date.now()-1}));assert.equal(stops,2,'timer expiry pauses every mounted player, including a preloaded embed');
