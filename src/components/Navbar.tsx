@@ -14,15 +14,20 @@ interface NavbarProps {
   onHome: () => void;
   toggleSidebar: () => void;
   initialSearchQuery: string;
+  onGoogleLogin?:()=>void;
+  googleLinked?:boolean;
 }
 
 export default function Navbar({ 
   onSearch, 
   onHome, 
   toggleSidebar, 
-  initialSearchQuery
+  initialSearchQuery,
+  onGoogleLogin,
+  googleLinked=false
 }: NavbarProps) {
   const navigate = useNavigate();
+  const googleButton=(compact=false)=><button type="button" className={compact?'navbar-google-mobile':'navbar-google-login'} aria-label={googleLinked?'Googleアカウントの連携を管理':'Googleアカウントにログイン'} title={googleLinked?'Googleアカウントの連携を管理':'Googleアカウントにログイン'} onClick={()=>onGoogleLogin?onGoogleLogin():navigate('/feed/library')}><span aria-hidden="true" className="font-bold text-blue-600">G</span>{!compact&&<span>{googleLinked?'Google連携済み':'Googleでログイン'}</span>}</button>;
   const account = useSiteAccount();
   const profile = useDeviceProfile();
   const location = useLocation();
@@ -680,11 +685,13 @@ export default function Navbar({
         >
           <Mic size={18} />
         </motion.button>
+        {googleButton()}
       </div>
 
       {/* 右側 */}
       <div className="navbar-actions flex items-center gap-2 sm:gap-3 shrink-0">
         <button className="mobile-search-toggle" aria-label="検索を開く" onClick={()=>{setMobileSearch(true);requestAnimationFrame(()=>inputRef.current?.focus());}}><Search size={24}/></button>
+        {googleButton(true)}
         <span className="navbar-install"><PWAInstallButton /></span>
 
         {account && <button className="navbar-account" aria-label="マイページを開く" title={profile.name} onClick={()=>navigate('/feed/library')}>{profile.avatar ? <img src={profile.avatar} alt=""/> : <User size={22}/>}</button>}

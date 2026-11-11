@@ -1034,6 +1034,8 @@ export default function MainApp() {
       <div className="w-full shrink-0 sticky top-0 z-50 bg-white">
         <Navbar
           onSearch={handleSearch}
+          googleLinked={!!userInfo}
+          onGoogleLogin={()=>{navigate('/feed/library');if(!userInfo&&!isPolling)void handleLogin();}}
           onHome={handleGoHome}
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           initialSearchQuery={searchQuery}
