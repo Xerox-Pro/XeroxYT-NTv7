@@ -71,13 +71,9 @@ export default async function handler(request: Request) {
   if (!headers.has('Origin')) headers.set('Origin', url.origin);
   if (process.env.API_SHARED_SECRET) headers.set('Authorization','Bearer '+process.env.API_SHARED_SECRET);
   const configuredPool = pool;
-  pool = await apiSelector.plan(pool, headers);
-  // Private YouTube traffic stays behind this same-origin gateway. Prefer the
-  // Cloudflare backend even if the health cache lists another healthy peer first.
-  if (/^\/api\/(auth|user)(\/|$)/.test(path)) {
-    pool = [...pool.filter(origin => new URL(origin).hostname.endsWith('.workers.dev')),
-      ...pool.filter(origin => !new URL(origin).hostname.endsWith('.workers.dev'))];
-  }
+  const cloudflareOnly=/^\/api\/(auth|user)(\/|$)/.test(path)||path==='/api/account/cloudflare-session';
+  if(cloudflareOnly)pool=pool.filter(origin=>new URL(origin).hostname.endsWith('.workers.dev'));
+  else pool=await apiSelector.plan(pool,headers);
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
   const readonly = ["GET", "HEAD"].includes(request.method);
   const body = readonly ? undefined : await request.arrayBuffer();
