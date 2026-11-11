@@ -1,3 +1,4 @@
+import CompactError from './CompactError';
 import {useDeviceProfile} from '../lib/deviceProfile';
 import {useYouTubeLinked} from '../lib/youtubeConnection';
 import PlaybackSettings from './PlaybackSettings';
@@ -21,7 +22,7 @@ import {
   ChevronDown, ChevronUp, MessageSquare, Send, Plus,
   ListMusic, Radio, Users, DollarSign, Sparkles, History, Smile, RotateCw, X, Bell,
   Captions, Play, Pause, RotateCcw, Volume2, VolumeX, Maximize2, Minimize2, Gauge, SkipForward, FastForward, Keyboard,
-  AlertTriangle
+  AlertTriangle, PictureInPicture2
 } from 'lucide-react';
 import Avatar from './Avatar';
 import LiveChat from './LiveChat';
@@ -112,6 +113,7 @@ interface VideoPlayerProps {
   key?: React.Key;
   videoId: string;
   isMini?: boolean;
+  onRequestPip?:()=>void;
   playlistId?: string;
   initialVideo?: Video | ShortVideo;
   onVideoSelect: (id: string, video?: Video) => void;
@@ -129,6 +131,7 @@ interface VideoPlayerProps {
 export default function VideoPlayer({
   videoId: requestedVideoId,
   isMini = false,
+  onRequestPip,
   playlistId,
   initialVideo: initialVideoProp,
   onVideoSelect,
@@ -311,9 +314,16 @@ export default function VideoPlayer({
   const [loadingComments, setLoadingComments] = useState(false);
   const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [newComment, setNewComment] = useState('');
+  const [commentsOverlay,setCommentsOverlay]=useState(()=>window.innerWidth<1024);
+  useEffect(()=>{const resize=()=>setCommentsOverlay(window.innerWidth<1024);window.addEventListener('resize',resize);return()=>window.removeEventListener('resize',resize);},[]);
+  const commentsVisible=!isMini&&(!commentsOverlay||mobileCommentsOpen);
+  const commentsVisibleRef=useRef(commentsVisible);commentsVisibleRef.current=commentsVisible;
+  const commentsSectionRef=useRef<HTMLDivElement>(null);
+  const [commentsError,setCommentsError]=useState('');
   const commentsEndRef = useRef<HTMLDivElement>(null);
-  const commentPageBusy=useRef(false);
+  const commentPageRequest=useRef<{controller:AbortController;context:string}|null>(null);
   const commentContext=useRef('');commentContext.current=videoId+'|'+commentSort;
+  useEffect(()=>{commentPageRequest.current?.controller.abort();commentPageRequest.current=null;setLoadingMoreComments(false);return()=>{commentPageRequest.current?.controller.abort();commentPageRequest.current=null;};},[videoId,commentSort]);
 
   // Related videos state with pagination
   const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
@@ -841,7 +851,7 @@ export default function VideoPlayer({
   // Fetch video metadata & initial comments
   useEffect(() => {
     let cancelled = false;
-    setComments([]);
+    setComments([]);setCommentsError('');
     setCommentPage(1);
     setCommentSort('top');
     setHasMoreComments(false);
@@ -943,7 +953,7 @@ export default function VideoPlayer({
           localAI.processMetadataAnalysis(videoId, newComments, activeVideo.recommendedVideos);
         }
       } catch (err) {
-        console.error("Failed to load comments", err);
+        if(!cancelled)setCommentsError('コメントを取得できませんでした。');
       } finally {
         if (!cancelled) setLoadingComments(false);
       }
@@ -956,51 +966,33 @@ export default function VideoPlayer({
   }, [videoId]);
 
   // コメント並び替えの切り替え (人気順・新しい順)
-  const handleCommentSortChange = async (sort: 'top' | 'newest') => {
-    if (sort === commentSort || loadingComments || loadingMoreComments) return;
-    setCommentSort(sort);
-    setLoadingComments(true);
+  const handleCommentSortChange = async (sort: 'top' | 'newest', retry=false) => {
+    if ((!retry&&sort === commentSort) || loadingComments || loadingMoreComments) return;
+    const context=videoId+'|'+sort;commentContext.current=context;
+    setCommentSort(sort);setComments([]);setCommentPage(1);setHasMoreComments(false);setLoadingComments(true);setCommentsError('');
     try {
-      const res = await fetchJSON(`/api/video/${videoId}/comments?limit=20&sort=${sort}&page=1`);
-      const newItems: Comment[] = Array.isArray(res) ? res : res.comments || [];
-      setComments(newItems);
-      setCommentPage(1);
-      setHasMoreComments(res.hasMore !== undefined ? res.hasMore : newItems.length > 0);
-    } catch (err) {
-      console.error('Failed to change comment sort', err);
-    } finally {
-      setLoadingComments(false);
-    }
+      const res=await fetchJSON(`/api/video/${videoId}/comments?limit=20&sort=${sort}&page=1`);
+      if(context!==commentContext.current)return;
+      const items:Comment[]=Array.isArray(res)?res:res.comments||[];
+      setComments(items);setCommentPage(1);setHasMoreComments(res.hasMore!==undefined?res.hasMore:items.length>0);
+    }catch{if(context===commentContext.current)setCommentsError('コメントを取得できませんでした。');}
+    finally{if(context===commentContext.current)setLoadingComments(false);}
   };
 
-  // コメントの次ページ自動取得 (無限スクロール)
   const loadMoreComments = useCallback(async () => {
-    if (commentPageBusy.current || loadingComments || loadingMoreComments || !hasMoreComments || !videoId) return;
-    commentPageBusy.current=true;const context=commentContext.current;
-    setLoadingMoreComments(true);
-    try {
-      const nextPage = commentPage + 1;
-      const res = await fetchJSON(`/api/video/${videoId}/comments?limit=20&sort=${commentSort}&page=${nextPage}`);
-      if(context!==commentContext.current)return;
-      const newItems: Comment[] = Array.isArray(res) ? res : res.comments || [];
-      if (newItems.length > 0) {
-        setComments((prev) => {
-          const existingIds = new Set(prev.map(c => c.id));
-          const filtered = newItems.filter(c => !existingIds.has(c.id));
-          return [...prev, ...filtered];
-        });
-        setCommentPage(nextPage);
-        setHasMoreComments(res.hasMore !== undefined ? res.hasMore : true);
-      } else {
-        setHasMoreComments(false);
-      }
-    } catch (err) {
-      console.error('Failed to load more comments', err);
-      setHasMoreComments(false);
-    } finally {
-      commentPageBusy.current=false;setLoadingMoreComments(false);
-    }
-  }, [loadingComments, loadingMoreComments, hasMoreComments, videoId, commentPage, commentSort]);
+    if(!commentsVisibleRef.current||commentPageRequest.current||loadingComments||loadingMoreComments||!hasMoreComments||!videoId)return;
+    const request={controller:new AbortController(),context:commentContext.current};commentPageRequest.current=request;
+    setLoadingMoreComments(true);setCommentsError('');
+    try{
+      const nextPage=commentPage+1;
+      const res=await fetchJSON(`/api/video/${videoId}/comments?limit=20&sort=${commentSort}&page=${nextPage}`,{signal:request.controller.signal});
+      if(request.controller.signal.aborted||request.context!==commentContext.current)return;
+      const items:Comment[]=Array.isArray(res)?res:res.comments||[];
+      setComments(previous=>{const seen=new Set(previous.map(c=>c.id));return [...previous,...items.filter(c=>!seen.has(c.id)&&(seen.add(c.id),true))];});
+      setCommentPage(nextPage);setHasMoreComments(res.hasMore!==undefined?res.hasMore:items.length>0);
+    }catch{if(!request.controller.signal.aborted&&request.context===commentContext.current)setCommentsError('続きのコメントを取得できませんでした。');}
+    finally{if(commentPageRequest.current===request){commentPageRequest.current=null;setLoadingMoreComments(false);}}
+  },[loadingComments,loadingMoreComments,hasMoreComments,videoId,commentPage,commentSort]);
 
   // 関連動画の次ページ自動取得 (無限スクロール)
   const loadMoreRelated = useCallback(async () => {
@@ -1029,31 +1021,22 @@ export default function VideoPlayer({
     }
   }, [loadingMoreRelated, hasMoreRelated, videoId, relatedPage, relatedFilter]);
 
-  // コメントの自動無限スクロール監視 (IntersectionObserver & スクロールフォールバック)
-  useEffect(() => {
-    const target = commentsEndRef.current;
-    if (!target || !hasMoreComments || loadingComments || loadingMoreComments) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        loadMoreComments();
-      }
-    }, { rootMargin: '0px',threshold:1 });
+  // Hidden overlays and mini players must never trigger comment pagination.
+  useEffect(()=>{
+    const target=commentsEndRef.current;
+    if(!commentsVisible||!target||!hasMoreComments||loadingComments||loadingMoreComments||commentsError)return;
+    const root=commentsOverlay?commentsSectionRef.current:null;
+    const observer=new IntersectionObserver(entries=>{if(commentsVisibleRef.current&&entries.some(entry=>entry.isIntersecting))void loadMoreComments();},{root,rootMargin:'0px',threshold:1});
     observer.observe(target);
-
-    const handleWindowScroll = () => {
-      if (!commentsEndRef.current || !hasMoreComments || loadingComments || loadingMoreComments) return;
-      const rect = commentsEndRef.current.getBoundingClientRect();
-      if (rect.top <= window.innerHeight && rect.bottom >= 0) {
-        loadMoreComments();
-      }
+    const scrollTarget=root||window;
+    const scroll=()=>{
+      if(!commentsVisibleRef.current||!target.getClientRects().length)return;
+      const rect=target.getBoundingClientRect(),bounds=root?.getBoundingClientRect();
+      if(rect.height>0&&rect.top<=(bounds?.bottom??window.innerHeight)&&rect.bottom>=(bounds?.top??0))void loadMoreComments();
     };
-    window.addEventListener('scroll', handleWindowScroll, { passive: true });
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('scroll', handleWindowScroll);
-    };
-  }, [loadMoreComments, hasMoreComments, loadingComments, loadingMoreComments]);
+    scrollTarget.addEventListener('scroll',scroll,{passive:true});
+    return()=>{observer.disconnect();scrollTarget.removeEventListener('scroll',scroll);};
+  },[commentsVisible,commentsOverlay,loadMoreComments,hasMoreComments,loadingComments,loadingMoreComments,commentsError]);
 
   // 関連動画の自動無限スクロール監視 (IntersectionObserver & スクロールフォールバック)
   useEffect(() => {
@@ -1386,6 +1369,7 @@ export default function VideoPlayer({
                 </motion.button>
               </div>
 
+              {onRequestPip&&<button type="button" aria-label="画面内PiPで再生" title="動画を小窓にしてサイト内を閲覧" onClick={onRequestPip} className="p-2 rounded-full bg-gray-100 hover:bg-gray-200"><PictureInPicture2 size={19}/></button>}
               {/* 通常動画の自動再生は高評価などと同じ操作列に置く。 */}
               {!playlistId && !playlistQueue.length && !isMini && (
                 <motion.button
@@ -1512,7 +1496,7 @@ export default function VideoPlayer({
             <span>{loadingComments ? '読み込み中…' : comments[0]?.text || 'コメントを表示'}</span>
           </button>
           {mobileCommentsOpen && <button className="mobile-comments-backdrop" aria-label="コメントを閉じる" onClick={() => setMobileCommentsOpen(false)} />}
-          <div className={`video-comments-section mt-8 pt-6 border-t border-gray-200 ${mobileCommentsOpen ? 'mobile-comments-open' : ''}`}>
+          <div ref={commentsSectionRef} aria-hidden={!commentsVisible} className={`video-comments-section mt-8 pt-6 border-t border-gray-200 ${mobileCommentsOpen ? 'mobile-comments-open' : ''}`}>
             <button className="mobile-comments-close" onClick={() => setMobileCommentsOpen(false)} aria-label="コメントを閉じる">×</button>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
               <div className="flex items-center gap-2">
@@ -1582,6 +1566,7 @@ export default function VideoPlayer({
             {youtubeActionError&&<p role="status" className="text-sm mb-4">{youtubeActionError}</p>}
             {!youtubeLinked&&<p className="text-sm mb-4">YouTubeへの投稿にはマイページからGoogleアカウントを連携してください。</p>}
 
+            {commentsError&&<div role="alert" className="mb-4"><CompactError error={commentsError} onRetry={()=>comments.length?void loadMoreComments():void handleCommentSortChange(commentSort,true)}/></div>}
             {/* コメント一覧 */}
             {loadingComments ? (
               <div className="flex items-center gap-2 py-6 text-gray-500 justify-center">
@@ -1589,7 +1574,7 @@ export default function VideoPlayer({
                 <span className="text-xs font-medium">コメントを読み込み中...</span>
               </div>
             ) : comments.length === 0 ? (
-              <p className="text-sm text-gray-500 py-4 text-center">まだコメントはありません。最初のコメントを投稿してみましょう！</p>
+              <p className="text-sm text-gray-500 py-4 text-center">{commentsError?'コメントを読み込めませんでした。':'まだコメントはありません。最初のコメントを投稿してみましょう！'}</p>
             ) : (
               <div className="flex flex-col gap-5">
                 {comments.map((comment) => (

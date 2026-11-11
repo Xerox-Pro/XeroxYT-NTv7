@@ -23,8 +23,6 @@ export default function FloatingPlayerFrame({mini,children,onRestore,onClose}:{m
  const [box,setBox]=useState(()=>initialBox(aspectRef.current));const boxRef=useRef(box);boxRef.current=box;
  const [playing,setPlaying]=useState(true);
  const [pipError,setPipError]=useState('');
- const pipWindow=useRef<Window|null>(null);
- const pipSource=useRef<HTMLIFrameElement|null>(null);
  const sectionRef=useRef<HTMLElement>(null);
  const points=useRef(new Map<number,Point>());
  const gesture=useRef<{mode:'move'|'resize'|'pinch';box:Box;point:Point;distance:number}|null>(null);
@@ -32,30 +30,11 @@ export default function FloatingPlayerFrame({mini,children,onRestore,onClose}:{m
  const update=(next:Box,persist=false)=>{let fitted=fitMiniPlayer(next,window.innerWidth,window.innerHeight,aspectRef.current);
  if(persist&&readPlayerPreferences().miniSnap){const gap=24;if(Math.abs(fitted.x)<gap)fitted.x=8;if(Math.abs(window.innerWidth-fitted.x-fitted.width)<gap)fitted.x=window.innerWidth-fitted.width-8;if(Math.abs(fitted.y)<gap)fitted.y=8;if(Math.abs(window.innerHeight-fitted.y-fitted.height)<gap)fitted.y=window.innerHeight-fitted.height-8;}boxRef.current=fitted;setBox(fitted);if(persist)try{localStorage.setItem(key,JSON.stringify({...fitted,aspectRatio:aspectRef.current}));}catch{}};
  useEffect(()=>{const resize=()=>update(boxRef.current);const state=(e:Event)=>setPlaying(Boolean((e as CustomEvent).detail));const aspect=(e:Event)=>{const ratio=Number((e as CustomEvent).detail);if(!Number.isFinite(ratio)||ratio<.2||ratio>5)return;aspectRef.current=ratio;setAspectRatio(ratio);update({...boxRef.current,height:boxRef.current.width/ratio});};window.addEventListener('resize',resize);window.addEventListener('xerox-mini-play-state',state);window.addEventListener('xerox-mini-player-aspect-change',aspect);return()=>{window.removeEventListener('resize',resize);window.removeEventListener('xerox-mini-play-state',state);window.removeEventListener('xerox-mini-player-aspect-change',aspect);};},[]);
- useEffect(()=>{if(!mini){points.current.clear();gesture.current=null;pipWindow.current?.close();}},[mini]);
- useEffect(()=>()=>{pipWindow.current?.close();},[]);
- const openPip=async()=>{
-  setPipError('');
-  const api=(window as Window & {documentPictureInPicture?:{requestWindow(options:{width:number;height:number}):Promise<Window>}}).documentPictureInPicture;
-  if(!api){setPipError('このブラウザは別ウィンドウPiPに対応していません。');return;}
-  const source=sectionRef.current?.querySelector<HTMLIFrameElement>('.mini-player-body iframe');
-  if(!source?.src){setPipError('再生中の動画が見つかりません。');return;}
-  try{
-   // Document PiP permits a cross-origin iframe, unlike the video-only PiP API.
-   const pip=await api.requestWindow({width:Math.round(boxRef.current.width),height:Math.round(boxRef.current.height)});
-   pipWindow.current=pip;pipSource.current=source;
-   pip.document.body.style.cssText='margin:0;background:#000;overflow:hidden';
-   const frame=pip.document.createElement('iframe');
-   frame.title='XeroxYT PiP';frame.src=source.src;frame.allow='autoplay; encrypted-media; fullscreen; picture-in-picture';
-   frame.style.cssText='display:block;border:0;width:100vw;height:100vh';
-   pip.document.body.append(frame);
-   source.contentWindow?.postMessage(JSON.stringify({event:'command',func:'pauseVideo',args:[]}),new URL(source.src).origin);
-   pip.addEventListener('pagehide',()=>{
-    pipWindow.current=null;
-    if(playing&&pipSource.current===source&&source.isConnected){source.contentWindow?.postMessage(JSON.stringify({event:'command',func:'playVideo',args:[]}),new URL(source.src).origin);}
-    pipSource.current=null;
-   },{once:true});
-  }catch{setPipError('PiPを開けませんでした。ブラウザの許可や対応状況を確認してください。');}
+ useEffect(()=>{if(!mini){points.current.clear();gesture.current=null;setPipError('');}},[mini]);
+ const openPip=()=>{
+  // Keep the live iframe mounted: browser PiP cannot control this cross-origin player.
+  update({...boxRef.current,x:window.innerWidth-boxRef.current.width-16,y:window.innerHeight-boxRef.current.height-96},true);
+  setPipError('画面内PiPで再生中です。ドラッグで移動・右下でサイズ変更できます。');
  };
  const rebase=(mode:'move'|'resize'|'pinch')=>{const p=[...points.current.values()];if(!p.length){gesture.current=null;return;}gesture.current={mode,box:boxRef.current,point:p.length>1?{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2}:p[0],distance:p.length>1?Math.hypot(p[1].x-p[0].x,p[1].y-p[0].y):0};};
  const start=(e:PointerEvent<HTMLElement>,mode:'move'|'resize')=>{if(e.button!==0)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);points.current.set(e.pointerId,{x:e.clientX,y:e.clientY});if(points.current.size===1)moved.current=false;if(points.current.size>1){moved.current=true;rebase('pinch');}else rebase(mode);};
@@ -68,7 +47,7 @@ export default function FloatingPlayerFrame({mini,children,onRestore,onClose}:{m
    <div className="mini-player-gesture" role="button" tabIndex={0} aria-label="ドラッグで移動、2本指で拡大縮小、ダブルタップで動画に戻る" onPointerDown={e=>start(e,'move')} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end} onKeyDown={e=>{if(e.key==='Enter'){onRestore();return;}keyboard(e);}}/>
    <div className="mini-player-overlay-controls">
     <button type="button" className="mini-player-pause" aria-label={playing?'一時停止':'再生'} onClick={()=>window.dispatchEvent(new CustomEvent('xerox-mini-toggle-play'))}>{playing?<Pause size={20} fill="currentColor"/>:<Play size={20} fill="currentColor"/>}</button>
-    <button type="button" aria-label="別ウィンドウPiPを開く" title="対応ブラウザでは画面外でも動画を表示" onClick={openPip}><PictureInPicture2 size={19}/></button>
+    <button type="button" aria-label="画面内PiPを使う" title="同じ動画を画面内の小窓で再生" onClick={openPip}><PictureInPicture2 size={19}/></button>
     <button type="button" className="mini-player-restore" aria-label="動画ページに戻る" onClick={onRestore}><Maximize2 size={17}/></button>
     <button type="button" aria-label="ミニプレイヤーを閉じて再生を終了" onClick={onClose}><X size={22}/></button>
    </div>

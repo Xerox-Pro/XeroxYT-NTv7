@@ -1071,6 +1071,7 @@ export default function MainApp() {
                 key={currentVideoId}
                 videoId={currentVideoId}
                 isMini={view !== 'video'}
+                onRequestPip={()=>navigate('/')}
                 playlistQueue={currentPlaylistQueue}
                 playlistQueueIndex={playlistQueueIndex}
                 onQueueSelect={handleQueueSelect}
