@@ -81,7 +81,7 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
     fetchJSON(`/api/shorts/${video.videoId}?title=${encodeURIComponent(video.title.slice(0, 160))}&details=2`, {signal:controller.signal}).then(metadata=>{
       if(!cancelled&&metadata){detail.current=metadata;callbacks.current.onMetadata(metadata);}
     }).catch(()=>{});
-    getShortEmbedUrl(video.videoId,controller.signal).then(rawUrl=>{
+    getShortEmbedUrl(video.videoId,controller.signal,attempt>0).then(rawUrl=>{
       if(cancelled)return;
       const parsed = new URL(rawUrl);
       if (parsed.protocol !== 'https:' || !['www.youtubeeducation.com', 'www.youtube.com', 'www.youtube-nocookie.com'].includes(parsed.hostname)) throw new Error('埋め込みURLが正しくありません。');
@@ -123,6 +123,7 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
       if (event.source !== frame.current?.contentWindow || event.origin !== new URL(url).origin) return;
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if(data?.event==='onError'){const code=Number(data.info);if(![100,101,150].includes(code)&&attempt<2){setAttempt(value=>value+1);}else setError([100,101,150].includes(code)?'この動画は埋め込み再生できません。次の動画へ進んでください。':'動画を再生できませんでした。再読み込みしてください。');return;}
         if (!['infoDelivery', 'initialDelivery', 'onStateChange'].includes(data?.event)) return;
         const info = data.info && typeof data.info === 'object' ? data.info : {};
         const playerState = data.event === 'onStateChange' && typeof data.info === 'number' ? data.info : info.playerState;
@@ -155,7 +156,7 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
     {url && <iframe ref={frame} tabIndex={active ? 0 : -1} aria-hidden={!active} src={url} title={video.title} className="shorts-iframe" style={videoEffectsStyle(prefs)} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" onLoad={() => { frame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening' }), new URL(url).origin); command(readMuted() ? 'mute' : 'unMute'); command(activeRef.current ? 'playVideo' : 'pauseVideo'); syncCaptions(); record(); }} />}
     {!url && !error && <div className="absolute inset-0 grid place-items-center"><Loader2 className="animate-spin" size={28} /></div>}
     {children}
-    {error && <div className="shorts-embed-error !z-10 pointer-events-auto touch-auto"><CompactError error={error} onRetry={() => setAttempt(value => value + 1)} retryLabel="再読み込み"/></div>}
+    {error && <div className="shorts-embed-error !z-10 pointer-events-auto touch-auto"><CompactError error={error} onRetry={() => setAttempt(value => value + 1)} retryLabel="再読み込み"/><button className="mt-3 underline" onClick={()=>callbacks.current.onEnded(video.videoId!)}>次の動画へ</button></div>}
   </div>;
 }
 

@@ -1,3 +1,4 @@
+import ChannelLoading from './ChannelLoading';
 import {useYouTubeLinked} from '../lib/youtubeConnection';
 import {sortSubscriptions} from '../lib/subscriptionOrder.mjs';
 import {fetchSubscriptionPage} from '../lib/subscriptionFeed.mjs';
@@ -53,8 +54,8 @@ export default function SubscriptionsFeed({
     try {
       if(pageNum===1)personalCursor.current='';
       const result = youtubeLinked&&selectedChannelId==='all'?await fetchJSON('/api/user/feed/subscriptions?continuation='+encodeURIComponent(personalCursor.current)):await fetchSubscriptionPage(subscriptions, selectedChannelId, pageNum, fetchJSON);
-      if(youtubeLinked&&selectedChannelId==='all')personalCursor.current=result.continuation||'';
       if (version !== requestVersion.current) return;
+      if(youtubeLinked&&selectedChannelId==='all')personalCursor.current=result.continuation||'';
       const data: Video[] = result.videos;
 
       if (append) {
@@ -64,7 +65,7 @@ export default function SubscriptionsFeed({
           return sortSubscriptions([...prev, ...newVideos]);
         });
       } else {
-        setFeedVideos(data || []);
+        setFeedVideos(sortSubscriptions(data || []));
       }
 
       setHasMore(result.hasMore);
@@ -115,7 +116,8 @@ export default function SubscriptionsFeed({
     return () => window.removeEventListener('scroll', handleScroll);
   }, [loading, loadingMore, hasMore, loadMore]);
 
-  if (subscriptions.length === 0) {
+  if (loading&&!feedVideos.length)return <ChannelLoading subscriptions/>;
+  if (subscriptions.length === 0&&!youtubeLinked) {
     return (
       <div className="flex-1 max-w-5xl mx-auto px-4 py-24 flex flex-col items-center justify-center text-center select-none">
         <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-4 border border-red-100">

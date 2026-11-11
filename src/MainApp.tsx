@@ -80,6 +80,10 @@ export default function MainApp() {
   const [youtubeActionError,setYoutubeActionError]=useState('');
   useEffect(()=>{const show=(event:Event)=>setYoutubeActionError(String((event as CustomEvent).detail||''));window.addEventListener('xerox-youtube-action-error',show);return()=>window.removeEventListener('xerox-youtube-action-error',show);},[]);
   const personalHomeCursor=useRef('');
+  const [activeMix,setActiveMix]=useState<{id:string;cursor:string;linked:boolean}|null>(null);
+  const mixLoading=useRef(false);
+  const activeMixRef=useRef(activeMix);activeMixRef.current=activeMix;
+  const [mixBusy,setMixBusy]=useState(false);
   
   // Cache for static video/channel data
   const [videoCache, setVideoCache] = useState<Record<string, Video | ShortVideo>>(() => {
@@ -587,7 +591,7 @@ export default function MainApp() {
     let cancelled=false;youtubeGeneration.current++;
     setGoogleStatusReady(false);localStorage.removeItem('xerox_youtube_credentials');
     fetchJSON('/api/auth/status').then(status=>{if(cancelled)return;if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else{localStorage.removeItem('xerox_youtube_linked');setUserInfo(null);}setGoogleStatusReady(true);}).catch(()=>{if(!cancelled){setAuthError('Google連携の状態を確認できませんでした。再読み込みしてください。');setError('連携状態を確認できないため、おすすめの読み込みを停止しています。再読み込みしてください。');setLoading(false);}});
-    return()=>{cancelled=true;};
+    return()=>{cancelled=true;youtubeGeneration.current++;};
   },[siteAccount?.username]);
   useEffect(()=>{if(userInfo)void fetchYoutubeAuthData();setHomeShorts({category:'',videos:[]});setSelectedCategory('すべて');setPage(1);if(googleStatusReady&&location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo,googleStatusReady]);
   const cancelGoogleLink=async()=>{isPollingRef.current=false;setIsPolling(false);setAuthFlow(null);setAuthError(null);try{await fetchJSON('/api/auth/cancel',{method:'POST'});}catch(error:any){setAuthError(error.message);}};
@@ -630,7 +634,7 @@ export default function MainApp() {
       setLoadingMore(true);
     } else {
       setLoading(true);
-      setVideos([]);
+      setVideos([]);setHomeShorts({category:'',videos:[]});
     }
     setError('');
 
@@ -686,18 +690,18 @@ export default function MainApp() {
       // Remove duplicates
       const uniqueMap = new Map();
       combinedData.forEach(v => {
-        if (v && v.videoId && !uniqueMap.has(v.videoId)) {
-          uniqueMap.set(v.videoId, v);
+        if (v && (v.playlistId||v.videoId) && !uniqueMap.has(v.playlistId||v.videoId)) {
+          uniqueMap.set(v.playlistId||v.videoId, v);
         }
       });
-      let finalData = userInfo?Array.from(uniqueMap.values()):prioritizeUnshown(Array.from(uniqueMap.values()));
+      let finalData = shuffledQueue(userInfo?Array.from(uniqueMap.values()):prioritizeUnshown(Array.from(uniqueMap.values())));
       if(!userInfo&&!append&&!finalData.length)finalData=loadHomeSnapshot('すべて',homeSnapshotScope);
 
-      saveHomeSnapshot('すべて',finalData,homeSnapshotScope,append);
+      if(!userInfo)saveHomeSnapshot('すべて',finalData,homeSnapshotScope,append);
       if (append) {
         setVideos(prev => {
-          const existingIds = new Set(prev.map(v => v.videoId));
-          const newVideos = finalData.filter((v: Video) => v && v.videoId && !existingIds.has(v.videoId));
+          const existingIds = new Set(prev.map(v => v.playlistId||v.videoId));
+          const newVideos = finalData.filter((v: Video) => v && (v.playlistId||v.videoId) && !existingIds.has(v.playlistId||v.videoId));
           return [...prev, ...newVideos];
         });
       } else {
@@ -862,8 +866,9 @@ export default function MainApp() {
     navigate(`/shorts/${video.videoId}?${shortsQuery(context)}`);
   };
 
-  const handleVideoSelect = (videoId: string, videoObj?: Video) => {
-    setCurrentPlaylistQueue([]);setPlaylistQueueIndex(-1);
+  const handleVideoSelect = async (videoId: string, videoObj?: Video) => {
+    if(videoObj?.playlistId?.startsWith('RD')){try{const mix=await fetchJSON(`${userInfo?'/api/user/mix/':'/api/mix/'}${encodeURIComponent(videoObj.playlistId)}?videoId=${encodeURIComponent(videoId||'')}`);const first=mix.videos[0];if(!first)throw new Error('ミックスリストが空です。');handleStartPlaylistPlay({id:'mix:'+mix.id,title:mix.title,videos:mix.videos,createdAt:Date.now(),updatedAt:Date.now()},false,first.videoId);setActiveMix(mix.hasMore?{id:mix.id,cursor:mix.continuation,linked:!!userInfo}:null);}catch(error:any){setYoutubeActionError(error.message);}return;}
+    setActiveMix(null);setCurrentPlaylistQueue([]);setPlaylistQueueIndex(-1);
     const selectedVideo = videoObj || videoCache[videoId] as Video | undefined;
     if (selectedVideo?.isShort) {
       handleShortSelect(selectedVideo, { source: currentVideoId ? 'related' : 'home', ...(currentVideoId ? { videoId: currentVideoId } : {}) });
@@ -978,6 +983,7 @@ export default function MainApp() {
   };
   const handlePlaylistEnded = () => {const next=queueIndex(playlistQueueIndex,currentPlaylistQueue.length,1,queueRepeat);if(next>=0)handleQueueSelect(next);};
   const handleStartPlaylistPlay = (playlist: UserPlaylist, shuffle=false, startVideoId?:string) => {
+    setActiveMix(null);
     const original=playlist.videos.filter(video=>video.videoId);
     const queue=shuffle?shuffledQueue(original,startVideoId):[...original];
     if(!queue.length)return;
@@ -989,6 +995,17 @@ export default function MainApp() {
   const hasSearchFilters=searchFilterParams(searchParams).size>0;
   const resultVideos = videos.filter(video => {if(video.isShort && !(view==='search'&&searchParams.get('type')==='shorts'))return false;if(view!=='search'||!phoneLayout)return true;if(mobileSearchFilter==='ショート')return false;const watched=watchHistory.some(item=>item.videoId===video.videoId);return mobileSearchFilter==='未視聴'?!watched:mobileSearchFilter==='視聴済み'?watched:true;});
 
+  useEffect(()=>{
+    if(!activeMix||mixLoading.current||playlistQueueIndex<currentPlaylistQueue.length-4)return;
+    mixLoading.current=true;setMixBusy(true);const generation=youtubeGeneration.current;const requestMix=activeMix;
+    void fetchJSON(`${activeMix.linked?'/api/user/mix/':'/api/mix/'}${encodeURIComponent(activeMix.id)}?continuation=${encodeURIComponent(activeMix.cursor)}`).then(result=>{
+      if(generation!==youtubeGeneration.current||activeMixRef.current?.id!==requestMix.id||activeMixRef.current?.cursor!==requestMix.cursor)return;
+      const existing=new Set(currentPlaylistQueue.map(v=>v.videoId));const added:Video[]=(result.videos||[]).filter((v:Video)=>v.videoId&&!existing.has(v.videoId)&&(existing.add(v.videoId),true));
+      if(!added.length){setActiveMix(null);return;}
+      setCurrentPlaylistQueue(previous=>[...previous,...added]);setOriginalQueue(previous=>[...previous,...added]);updateCache(added);
+      setActiveMix(result.hasMore?{...activeMix,cursor:result.continuation}:null);
+    }).catch(error=>{if(generation===youtubeGeneration.current&&activeMixRef.current?.id===requestMix.id){setYoutubeActionError('ミックスリストの続きの取得に失敗しました。現在の再生は継続します。');setActiveMix(null);}}).finally(()=>{mixLoading.current=false;setMixBusy(false);});
+  },[activeMix?.cursor,playlistQueueIndex,currentPlaylistQueue.length,mixBusy]);
   return (
     <div className={`${view === 'search' ? 'is-search-page ' : ''}${view === 'shorts' ? 'is-shorts-page ' : ''}min-h-screen bg-white text-gray-900 flex flex-col font-sans antialiased selection:bg-red-100 selection:text-red-800`}>
       <GoogleLinkAnnouncement onOpen={()=>navigate('/feed/library')}/>

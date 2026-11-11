@@ -198,6 +198,7 @@ export async function fetchJSON(url: string, options?: RequestInit) {
     const isApiCall = url.startsWith('/api/') || url.startsWith('/stream') || url.startsWith('/edu');
     const isTimeSensitive = 
       url.startsWith('/api/user/') ||
+      url.startsWith('/api/mix/') ||
       url.startsWith('/api/shorts?') ||
       url.startsWith('/api/shorts-ranking') ||
       url.startsWith('/api/home/') ||

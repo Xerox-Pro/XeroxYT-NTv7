@@ -35,3 +35,5 @@ export async function getDeviceEmbedUrl(id,signal) {
   url.search=params||'rel=0';
   return url.toString();
 }
+
+export function invalidateDeviceEmbedConfig(){refreshedAt=0;lastParams='';}

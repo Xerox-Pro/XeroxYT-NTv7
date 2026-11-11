@@ -1,3 +1,4 @@
+import YouTubePersonalLibrary from './YouTubePersonalLibrary';
 import {useYouTubeLinked} from '../lib/youtubeConnection';
 import PlaylistDetail from './PlaylistDetail';
 import VideoThumbnail from "./VideoThumbnail";
@@ -49,12 +50,13 @@ export default function LibraryPage({
   watchLaterVideos = []
 }: LibraryPageProps) {
   const youtubeLinked=useYouTubeLinked();
+  const [remoteView,setRemoteView]=useState(initialPlaylistId?.startsWith('youtube:')?initialPlaylistId.slice(8):'');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(
     initialPlaylistId || (playlists.length > 0 ? playlists[0].id : null)
   );
 
-  const [detailOpen,setDetailOpen]=useState(!!initialPlaylistId);
-  useEffect(() => {if(initialPlaylistId){setSelectedPlaylistId(initialPlaylistId);setDetailOpen(true);}},[initialPlaylistId]);
+  const [detailOpen,setDetailOpen]=useState(!!initialPlaylistId&&!initialPlaylistId.startsWith('youtube:'));
+  useEffect(() => {if(initialPlaylistId?.startsWith('youtube:'))setRemoteView(initialPlaylistId.slice(8));else if(initialPlaylistId){setSelectedPlaylistId(initialPlaylistId);setDetailOpen(true);}},[initialPlaylistId]);
   // モーダル・入力状態
   const [isCreating, setIsCreating] = useState(initialCreate);
   const [isImporting, setIsImporting] = useState(false);
@@ -184,9 +186,10 @@ export default function LibraryPage({
       )
     : [];
 
+  if(remoteView&&youtubeLinked)return <section className="playlist-overview"><button onClick={()=>{setRemoteView('');setDetailOpen(false);}}>← 再生リストに戻る</button><YouTubePersonalLibrary key={remoteView} initialKind={remoteView} initialTitle={youtubePlaylists.find(pl=>'playlist:'+pl.id===remoteView)?.title||''} onVideoSelect={(id,video)=>onVideoSelect(id,video)} onPlaylistPlay={(id,title,videos,start)=>onStartPlaylistPlay({id:'youtube-'+id,title,videos,createdAt:0,updatedAt:0},false,start)}/></section>;
   if(!isCreating&&!isImporting){
     if(detailOpen&&selectedPlaylist)return <PlaylistDetail playlist={selectedPlaylist} onBack={()=>setDetailOpen(false)} onPlay={onStartPlaylistPlay} onUpdate={onUpdatePlaylistInfo} onRemove={onRemoveVideoFromPlaylist} onMove={onReorderPlaylistVideo} onDelete={onDeletePlaylist} onDedupe={handleRemoveDuplicates}/>;
-    return <section className="playlist-overview"><header><h1>再生リスト</h1><div><button type="button" onClick={()=>setIsImporting(true)}><Download size={18}/>取り込む</button><button type="button" onClick={()=>setIsCreating(true)}><Plus size={18}/>新規作成</button></div></header><div className="playlist-overview-grid">{playlists.map(playlist=><button type="button" key={playlist.id} className="playlist-overview-card" onClick={()=>{setSelectedPlaylistId(playlist.id);setDetailOpen(true);}}><div className="playlist-overview-cover">{playlist.videos[0]?<VideoThumbnail videoId={playlist.videos[0].videoId} fallback={playlist.videos[0].videoThumbnails?.[0]?.url} sizes="(max-width:640px) 48vw, 320px"/>:<ListVideo size={36}/>}<span><ListVideo size={15}/>{playlist.videos.length} 本の動画</span></div><strong>{playlist.title}</strong><small>非公開 · 再生リスト</small></button>)}</div>{!playlists.length&&<p className="playlist-empty">再生リストを作って、お気に入りの動画を保存できます。</p>}{youtubePlaylists.length>0&&<section className="playlist-auth-section"><h2>YouTubeの再生リスト</h2><div className="playlist-overview-grid">{youtubePlaylists.map(pl=><button type="button" className="playlist-overview-card" key={pl.id} onClick={()=>{setImportUrl(pl.id);setIsImporting(true);}}><div className="playlist-overview-cover">{pl.thumbnails&&<img src={pl.thumbnails} alt="" className="w-full h-full object-cover"/>}<span><ListVideo size={15}/>{pl.videoCount} 本</span></div><strong>{pl.title}</strong><small>取り込んで開く</small></button>)}</div></section>}{watchLaterVideos.length>0&&<section className="playlist-auth-section"><h2>あとで見る</h2>{watchLaterVideos.map((video,index)=><button type="button" key={`${video.videoId}-${index}`} className="playlist-row-play playlist-auth-row" onClick={()=>onStartPlaylistPlay({id:'yt-watch-later',title:'あとで見る',videos:watchLaterVideos,createdAt:0,updatedAt:0},false,video.videoId)}><div className="playlist-row-thumbnail"><VideoThumbnail videoId={video.videoId} fallback={video.videoThumbnails?.[0]?.url} sizes="160px"/></div><div className="playlist-row-text"><h4>{video.title}</h4><p>{video.author}</p></div></button>)}</section>}</section>;
+    return <section className="playlist-overview"><header><h1>再生リスト</h1><div><button type="button" onClick={()=>setIsImporting(true)}><Download size={18}/>取り込む</button><button type="button" onClick={()=>setIsCreating(true)}><Plus size={18}/>新規作成</button></div></header><div className="playlist-overview-grid">{playlists.map(playlist=><button type="button" key={playlist.id} className="playlist-overview-card" onClick={()=>{setSelectedPlaylistId(playlist.id);setDetailOpen(true);}}><div className="playlist-overview-cover">{playlist.videos[0]?<VideoThumbnail videoId={playlist.videos[0].videoId} fallback={playlist.videos[0].videoThumbnails?.[0]?.url} sizes="(max-width:640px) 48vw, 320px"/>:<ListVideo size={36}/>}<span><ListVideo size={15}/>{playlist.videos.length} 本の動画</span></div><strong>{playlist.title}</strong><small>非公開 · 再生リスト</small></button>)}</div>{!playlists.length&&<p className="playlist-empty">再生リストを作って、お気に入りの動画を保存できます。</p>}{youtubePlaylists.length>0&&<section className="playlist-auth-section"><h2>YouTubeの再生リスト</h2><div className="playlist-overview-grid">{youtubePlaylists.map(pl=><button type="button" className="playlist-overview-card" key={pl.id} onClick={()=>setRemoteView('playlist:'+pl.id)}><div className="playlist-overview-cover">{pl.thumbnails&&<img src={pl.thumbnails} alt="" className="w-full h-full object-cover"/>}<span><ListVideo size={15}/>{pl.videoCount} 本</span></div><strong>{pl.title}</strong><small>YouTube · 開く</small></button>)}</div></section>}{youtubeLinked&&<div className="youtube-feed-tabs"><button onClick={()=>setRemoteView('playlists')}>YouTubeの再生リストをすべて表示</button><button onClick={()=>setRemoteView('liked')}>高評価</button><button onClick={()=>setRemoteView('watch-later')}>後で見る</button><button onClick={()=>setRemoteView('history')}>YouTubeの履歴</button></div>}</section>;
   }
 
   return (

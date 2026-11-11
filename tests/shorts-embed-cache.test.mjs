@@ -26,3 +26,6 @@ test('a different Short reuses the cached device configuration without another n
  const previous=globalThis.fetch;const calls=[];globalThis.fetch=async url=>{calls.push(String(url));return new Response('',{status:503});};
  try{const url=new URL(await getShortEmbedUrl('lmnopqrstuv'));assert.equal(url.hostname,'www.youtubeeducation.com');assert.equal(url.searchParams.get('key'),'sample');assert.equal(calls.length,0);}finally{globalThis.fetch=previous;}
 });
+test('retry bypasses both the stale embed URL and player configuration',async()=>{
+ const old=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;return Response.json({params:'?key=fresh'});};try{const url=new URL(await getShortEmbedUrl('abcdefghijk',undefined,true));assert.equal(url.searchParams.get('key'),'fresh');assert.equal(calls,1);}finally{globalThis.fetch=old;}
+});

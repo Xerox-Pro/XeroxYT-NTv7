@@ -1,3 +1,4 @@
+import ChannelLoading from './ChannelLoading';
 import VideoSkeleton from './VideoSkeleton';
 import ShortsSkeleton from './ShortsSkeleton';
 import CompactError from './CompactError';
@@ -257,7 +258,7 @@ export default function ChannelPage({
   }, [activeTab, loadMore]);
 
   if (loading) {
-    return activeTab === 'shorts' ? <div className="p-4 sm:p-6"><ShortsSkeleton grid/></div> : <VideoSkeleton gridClassName="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-8"/>;
+    return <ChannelLoading/>;
   }
   if (error || !channelData) {
     return <CompactError error={error || 'チャンネルを読み込めませんでした。'} message="チャンネルを読み込めませんでした。" onRetry={() => setRetryAttempt(n => n + 1)}/>;

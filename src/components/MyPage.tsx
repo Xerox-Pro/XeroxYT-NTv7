@@ -1,3 +1,4 @@
+import {useYouTubeLinked} from '../lib/youtubeConnection';
 import VideoThumbnail from "./VideoThumbnail";
 import RecommendationDebug from "./RecommendationDebug";
 import TransportSettings from "./TransportSettings";
@@ -28,6 +29,7 @@ import type { ComponentProps } from "react";
 import { formatDuration } from "../utils";
 type Props = ComponentProps<typeof LibraryPage> & { children: React.ReactNode; youtubeConnection?:React.ReactNode };
 export default function MyPage(props: Props) {
+  const youtubeLinked=useYouTubeLinked();
   const profile = useDeviceProfile(),
     account = useSiteAccount(),
     navigate = useNavigate();
@@ -169,6 +171,8 @@ export default function MyPage(props: Props) {
                   <p>この端末の再生リスト</p>
                 </button>
               ))}
+              {(props.youtubePlaylists||[]).map(pl=><button className="my-video-card my-playlist-card" key={'youtube:'+pl.id} onClick={()=>{setCreateList(false);setActiveList('youtube:playlist:'+pl.id);setLibrary(true);}}><div className="my-card-image">{(pl.thumbnail||pl.thumbnails)?<img src={pl.thumbnail||pl.thumbnails} alt="" loading="lazy"/>:<ListVideo size={32}/>}<span><ListVideo size={14}/>{pl.videoCount||''} 本の動画</span></div><h3>{pl.title}</h3><p>YouTubeの再生リスト</p></button>)}
+              {youtubeLinked&&<button className="my-video-card my-playlist-card" onClick={()=>{setCreateList(false);setActiveList('youtube:liked');setLibrary(true);}}><div className="my-card-image"><ListVideo size={32}/></div><h3>高評価・後で見る</h3><p>YouTubeのライブラリ</p></button>}
               <button
                 className="my-create-playlist"
                 onClick={() => {setCreateList(true);setActiveList(undefined);setLibrary(true);}}

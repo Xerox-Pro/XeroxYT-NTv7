@@ -1,4 +1,4 @@
-import {getDeviceEmbedUrl} from './deviceEmbed.mjs';
+import {getDeviceEmbedUrl,invalidateDeviceEmbedConfig} from './deviceEmbed.mjs';
 // Only public embed URLs are stored here; never store credentials or viewing history.
 const entries = new Map();
 const pending = new Map();
@@ -12,7 +12,8 @@ function drop(key) {
   if (entry) { bytes -= entry.bytes; entries.delete(key); }
 }
 
-export function getShortEmbedUrl(id, signal) {
+export function getShortEmbedUrl(id, signal, refresh=false) {
+  if(refresh){drop(id);invalidateDeviceEmbedConfig();}
   if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
   const entry = entries.get(id);
   if (entry && entry.expires > Date.now()) {

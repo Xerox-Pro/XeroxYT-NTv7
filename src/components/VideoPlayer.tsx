@@ -1,3 +1,4 @@
+import {useDeviceProfile} from '../lib/deviceProfile';
 import {useYouTubeLinked} from '../lib/youtubeConnection';
 import PlaybackSettings from './PlaybackSettings';
 import {usePlayerPreferences,videoEffectsStyle} from '../lib/playerPreferences';
@@ -143,6 +144,7 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
   const playerPreferences=usePlayerPreferences();
   const youtubeLinked=useYouTubeLinked();
+  const commentProfile=useDeviceProfile();
   const [youtubeActionError,setYoutubeActionError]=useState('');
   const [youtubeActionBusy,setYoutubeActionBusy]=useState(false);
   const actionLock=useRef(false);
@@ -1089,15 +1091,7 @@ export default function VideoPlayer({
     e.preventDefault();
     if (!newComment.trim()) return;
     if(youtubeLinked){if(await youtubeAction('comment',{text:newComment.trim()})){setNewComment('');setYoutubeActionError('YouTubeへコメントを送信しました。反映に時間がかかる場合があります。');}return;}
-    const commentObj: Comment = {
-      id: Date.now().toString(),
-      author: '自分 (Xeroxユーザー)',
-      text: newComment.trim(),
-      publishedTime: 'たった今',
-      likeCount: '0'
-    };
-    setComments([commentObj, ...comments]);
-    setNewComment('');
+    setYoutubeActionError('YouTubeへ投稿するにはマイページでGoogleアカウントを連携してください。');
   };
 
   if (loading && !iframeUrl) {
@@ -1561,13 +1555,15 @@ export default function VideoPlayer({
 
             {/* コメントフォーム */}
             <form onSubmit={handleAddComment} className="flex gap-3 mb-8">
-              <Avatar name="自分" className="w-10 h-10 text-sm border border-gray-300" />
+              <Avatar src={commentProfile.avatar} name={commentProfile.name} className="w-10 h-10 text-sm border border-gray-300" />
               <div className="flex-1 flex flex-col gap-2">
                 <input
                   type="text"
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="コメントを追加..."
+                  placeholder={youtubeLinked?"YouTubeへコメントを投稿…":"Google連携後にコメントできます"}
+                  disabled={!youtubeLinked||youtubeActionBusy}
+                  maxLength={10000}
                   className="w-full border-b border-gray-300 focus:border-gray-900 outline-none py-1.5 text-sm bg-transparent font-normal text-gray-900 placeholder-gray-500"
                 />
                 <div className="flex justify-end gap-2">
@@ -1580,15 +1576,17 @@ export default function VideoPlayer({
                   </button>
                   <button
                     type="submit"
-                    disabled={!newComment.trim()}
+                    disabled={!youtubeLinked||youtubeActionBusy||!newComment.trim()}
                     className="px-4 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-500 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-full transition-colors flex items-center gap-1 shadow-xs"
                   >
                     <Send size={12} />
-                    <span>コメント</span>
+                    <span>{youtubeActionBusy?'送信中…':'コメント'}</span>
                   </button>
                 </div>
               </div>
             </form>
+            {youtubeActionError&&<p role="status" className="text-sm mb-4">{youtubeActionError}</p>}
+            {!youtubeLinked&&<p className="text-sm mb-4">YouTubeへの投稿にはマイページからGoogleアカウントを連携してください。</p>}
 
             {/* コメント一覧 */}
             {loadingComments ? (
