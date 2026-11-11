@@ -75,7 +75,7 @@ export default function ShortsShelf({ context, onSelect, providedVideos, onVideo
       : <div className="shorts-shelf-scroll" ref={shelf}>
         {videos.map(video => <button key={video.videoId} data-short-id={video.videoId} className="shorts-cover text-left group" onClick={() => onSelect(video, context)}>
           <div className="aspect-[9/16] overflow-hidden rounded-xl bg-gray-100 relative">
-            <VideoThumbnail videoId={video.videoId} fallback={video.videoThumbnails[0]?.url} sizes="220px" className="transition-transform group-hover:scale-105"/>
+            <VideoThumbnail preferMaxResolution videoId={video.videoId} fallback={video.videoThumbnails[0]?.url} sizes="220px" className="transition-transform group-hover:scale-105"/>
             <span className="absolute bottom-2 left-2 text-[11px] bg-black/60 text-white rounded px-2 py-1">ショート</span>
           </div>
           <h3 className="font-semibold text-sm mt-2 line-clamp-2 leading-snug">{video.title}</h3>

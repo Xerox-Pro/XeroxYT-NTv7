@@ -1,3 +1,4 @@
+import VideoThumbnail from './VideoThumbnail';
 import {useYouTubeLinked} from '../lib/youtubeConnection';
 import PlaybackSettings from './PlaybackSettings';
 import {usePlayerPreferences,videoEffectsStyle} from '../lib/playerPreferences';
@@ -405,7 +406,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
         return <article className="shorts-slide" key={video.videoId} data-short-id={video.videoId} aria-label={info.title}>
           <div className="shorts-player-row">
           {prepare ? <ShortEmbed video={video} active={active} captionsEnabled={captionsEnabled} autoScroll={autoScroll} onEnded={advanceOnEnd} isSelected={() => !isShortsLocation(route.current.pathname) || activeRef.current === video.videoId} onRecord={detail => { recordSeenShort(detail.videoId!); onRecord(detail); }} onMetadata={detail => setMetadata(previous => ({ ...previous, [detail.videoId!]: detail }))}>{overlay}</ShortEmbed>
-            : <div className="shorts-frame"><img src={video.videoThumbnails[0]?.url} alt="" loading="lazy" className="w-full h-full object-cover" />{overlay}</div>}
+            : <div className="shorts-frame"><VideoThumbnail preferMaxResolution videoId={video.videoId} fallback={video.videoThumbnails[0]?.url} sizes="100vw"/>{overlay}</div>}
           <div className="shorts-side-actions">
             <button aria-label={youtubeLinked?'高評価':'高評価（この端末に保存）'} aria-pressed={!!likes[video.videoId!]} title={youtubeLinked?'YouTubeの高評価を切り替え':'この端末に保存・YouTubeには送信されません'} onClick={async () => {
               const id=video.videoId!;if(likeRequests.current.has(id))return;likeRequests.current.add(id);

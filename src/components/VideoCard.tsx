@@ -64,7 +64,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onClick, onSelectChannel, 
         className="relative aspect-video rounded-xl overflow-hidden bg-gray-100 border border-gray-200/80 shadow-2xs group-hover:shadow-md transition-shadow duration-300"
       >
         {imgSrc ? (
-          <VideoThumbnail preferMaxResolution={preferMaxResolution} videoId={video.videoId} fallback={imgSrc} alt={video.title} className="transition-transform duration-300 ease-out group-hover:scale-105"/>
+          <VideoThumbnail preferMaxResolution={preferMaxResolution||video.isShort} videoId={video.videoId} fallback={imgSrc} alt={video.title} className="transition-transform duration-300 ease-out group-hover:scale-105"/>
 
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gray-200">
