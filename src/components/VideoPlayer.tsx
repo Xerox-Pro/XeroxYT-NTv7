@@ -13,7 +13,7 @@ import { prioritizeUnshown } from '../lib/recommendationImpressions.mjs';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Video, Comment, ChannelSubscription, WatchHistoryItem, ShortVideo } from '../types';
-import { formatNumberJP, formatDuration, fetchJSON, isDailyVideoLimitReached } from '../utils';
+import { formatNumberJP, formatDuration, fetchJSON } from '../utils';
 import { localAI } from '../lib/intelligence';
 import {
   ThumbsUp, ThumbsDown, Share2, AlertCircle, Loader2,
@@ -854,26 +854,6 @@ export default function VideoPlayer({
     setRelatedPage(1);
     setHasMoreRelated(false);
     setRelatedVideos([]);
-
-    const isPlayerOnlyMode = isDailyVideoLimitReached();
-
-    // 1日の上限(15本)以降はプレイヤーのみ取得し、コメント・関連動画・メタデータ追加取得は行わない (内部処理)
-    if (isPlayerOnlyMode) {
-      setLoading(false);
-      setError('');
-      setIsFallback(false);
-      setVideoData(fallbackVideo);
-      activeVideoRef.current = fallbackVideo;
-      if (onRecordHistory) {
-        onRecordHistory(fallbackVideo);
-      }
-      setSidebarTab('related');
-      setComments([]);
-      setHasMoreComments(false);
-      setLoadingComments(false);
-      setIsDescExpanded(false);
-      return;
-    }
 
     const fetchVideo = async () => {
       setLoading(true);
