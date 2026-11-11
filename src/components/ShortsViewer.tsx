@@ -204,6 +204,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
   const [commentsId, setCommentsId] = useState('');
   const [descriptionId, setDescriptionId] = useState('');
   const [likes, setLikes] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem('xerox_shorts_likes_v1') || '{}'); } catch { return {}; } });
+  const likeRequests=useRef(new Set<string>());
   const scroll = useRef<HTMLDivElement>(null);
   const pending = useRef(false);
   const touchStartY = useRef<number | null>(null);
@@ -406,7 +407,16 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
           {prepare ? <ShortEmbed video={video} active={active} captionsEnabled={captionsEnabled} autoScroll={autoScroll} onEnded={advanceOnEnd} isSelected={() => !isShortsLocation(route.current.pathname) || activeRef.current === video.videoId} onRecord={detail => { recordSeenShort(detail.videoId!); onRecord(detail); }} onMetadata={detail => setMetadata(previous => ({ ...previous, [detail.videoId!]: detail }))}>{overlay}</ShortEmbed>
             : <div className="shorts-frame"><img src={video.videoThumbnails[0]?.url} alt="" loading="lazy" className="w-full h-full object-cover" />{overlay}</div>}
           <div className="shorts-side-actions">
-            <button aria-label="高評価（この端末に保存）" aria-pressed={!!likes[video.videoId!]} title="この端末に保存・YouTubeには送信されません" onClick={async () => { if(youtubeLinked){try{await fetchJSON('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:likes[video.videoId!]?'removeRating':'like',videoId:video.videoId})});}catch(error:any){window.dispatchEvent(new CustomEvent('xerox-youtube-action-error',{detail:error.message}));return;}}learnInteraction(info, likes[video.videoId!] ? 'unlike' : 'like'); const next = { ...likes, [video.videoId!]: !likes[video.videoId!] }; setLikes(next); try { localStorage.setItem('xerox_shorts_likes_v1', JSON.stringify(next)); } catch {} }}><span><ThumbsUp size={24} fill={likes[video.videoId!] ? 'currentColor' : 'none'} /></span><small>{info.likeCount == null ? '高評価' : formatNumberJP(info.likeCount)}</small></button>
+            <button aria-label={youtubeLinked?'高評価':'高評価（この端末に保存）'} aria-pressed={!!likes[video.videoId!]} title={youtubeLinked?'YouTubeの高評価を切り替え':'この端末に保存・YouTubeには送信されません'} onClick={async () => {
+              const id=video.videoId!;if(likeRequests.current.has(id))return;likeRequests.current.add(id);
+              const previous=!!likes[id];setLikes(current=>({...current,[id]:!previous}));
+              try{
+                if(youtubeLinked)await fetchJSON('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:previous?'removeRating':'like',videoId:id})});
+                learnInteraction(info,previous?'unlike':'like');
+                try{const saved=JSON.parse(localStorage.getItem('xerox_shorts_likes_v1')||'{}');localStorage.setItem('xerox_shorts_likes_v1',JSON.stringify({...saved,[id]:!previous}));}catch{}
+              }catch(error:any){setLikes(current=>({...current,[id]:previous}));window.dispatchEvent(new CustomEvent('xerox-youtube-action-error',{detail:error.message}));}
+              finally{likeRequests.current.delete(id);}
+            }}><span><ThumbsUp size={24} className={likes[video.videoId!]?'animate-yt-pop text-blue-400':''} fill={likes[video.videoId!] ? 'currentColor' : 'none'} /></span><small>{info.likeCount == null ? '高評価' : formatNumberJP(info.likeCount)}</small></button>
             <button aria-label="コメントを表示" onClick={() => { if (commentsId !== video.videoId) learnInteraction(info, 'comment'); setDescriptionId(''); setCommentsId(commentsId === video.videoId ? '' : video.videoId!); }}><span><MessageCircle size={24} /></span><small>コメント</small></button>
             <PlaybackSettings short>
               <button className="playback-toggle" aria-label="音声" role="switch" aria-checked={!muted} onClick={()=>setMuted(!muted)}>音声<span>{muted?'OFF':'ON'}</span></button>

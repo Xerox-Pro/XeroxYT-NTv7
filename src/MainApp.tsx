@@ -403,16 +403,17 @@ export default function MainApp() {
     });
   };
 
+  const subscriptionRequests=useRef(new Set<string>());
   const handleToggleSubscribe = async (channel: ChannelSubscription) => {
-    if(userInfo){const exists=subscriptions.some(item=>item.id===channel.id);try{await fetchJSON('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:exists?'unsubscribe':'subscribe',channelId:channel.id})});}catch(error:any){setAuthError(error.message);window.dispatchEvent(new CustomEvent('xerox-youtube-action-error',{detail:error.message}));return;}}
-    setSubscriptions((prev) => {
-      const exists = prev.some(s => s.id === channel.id || s.title === channel.title);
-      if (exists) {
-        return prev.filter(s => s.id !== channel.id && s.title !== channel.title);
-      } else {
-        return [...prev, channel];
-      }
-    });
+    if(subscriptionRequests.current.has(channel.id))return;
+    const matches=(item:ChannelSubscription)=>item.id===channel.id||item.title===channel.title;
+    const previous=subscriptions.find(matches),generation=youtubeGeneration.current;
+    setSubscriptions(list=>previous?list.filter(item=>!matches(item)):[...list,channel]);
+    if(!userInfo)return;
+    subscriptionRequests.current.add(channel.id);
+    try{await fetchJSON('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:previous?'unsubscribe':'subscribe',channelId:channel.id})});}
+    catch(error:any){if(generation===youtubeGeneration.current){setSubscriptions(list=>previous?[...list.filter(item=>!matches(item)),previous]:list.filter(item=>!matches(item)));window.dispatchEvent(new CustomEvent('xerox-youtube-action-error',{detail:error.message}));}}
+    finally{subscriptionRequests.current.delete(channel.id);}
   };
 
   // 閲覧履歴からキーワード抽出（登録チャンネルや高評価動画、視聴履歴を深層分析）

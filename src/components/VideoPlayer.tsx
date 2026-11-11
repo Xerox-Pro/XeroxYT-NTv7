@@ -216,31 +216,21 @@ export default function VideoPlayer({
     return () => window.clearTimeout(timer);
   }, [activeVideo.width, activeVideo.height, activeVideo.isShort, isMini]);
 
+  useEffect(()=>{setIsLiked(false);setIsDisliked(false);setLikeCountDelta(0);},[videoId]);
+  const ratingVideo=useRef(videoId);ratingVideo.current=videoId;
   const handleLike = async () => {
-    if(youtubeLinked&&!await youtubeAction(isLiked?'removeRating':'like'))return;
-    learnInteraction(activeVideo, isLiked ? 'unlike' : 'like');
-    if (isLiked) {
-      setIsLiked(false);
-      setLikeCountDelta(0);
-    } else {
-      setIsLiked(true);
-      setIsDisliked(false);
-      setLikeCountDelta(1);
-    }
+    if(actionLock.current)return;
+    const previous={liked:isLiked,disliked:isDisliked,delta:likeCountDelta},id=videoId;
+    setIsLiked(!isLiked);setIsDisliked(false);setLikeCountDelta(isLiked?0:1);
+    if(youtubeLinked&&!await youtubeAction(isLiked?'removeRating':'like')){if(ratingVideo.current===id){setIsLiked(previous.liked);setIsDisliked(previous.disliked);setLikeCountDelta(previous.delta);}return;}
+    learnInteraction(activeVideo, previous.liked ? 'unlike' : 'like');
   };
-
   const handleDislike = async () => {
-    if(youtubeLinked&&!await youtubeAction(isDisliked?'removeRating':'dislike'))return;
-    if (!isDisliked) learnInteraction(activeVideo, 'dislike');
-    if (isDisliked) {
-      setIsDisliked(false);
-    } else {
-      setIsDisliked(true);
-      if (isLiked) {
-        setIsLiked(false);
-        setLikeCountDelta(0);
-      }
-    }
+    if(actionLock.current)return;
+    const previous={liked:isLiked,disliked:isDisliked,delta:likeCountDelta},id=videoId;
+    setIsDisliked(!isDisliked);setIsLiked(false);setLikeCountDelta(0);
+    if(youtubeLinked&&!await youtubeAction(isDisliked?'removeRating':'dislike')){if(ratingVideo.current===id){setIsLiked(previous.liked);setIsDisliked(previous.disliked);setLikeCountDelta(previous.delta);}return;}
+    if(!previous.disliked)learnInteraction(activeVideo,'dislike');
   };
 
   // 動画を開いた時・再読み込み時に毎回 video_config.json から params を取得してプレイヤーURLを構築
