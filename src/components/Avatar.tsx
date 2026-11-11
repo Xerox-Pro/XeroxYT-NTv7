@@ -16,6 +16,9 @@ const bgColors = [
 ];
 
 export default function Avatar({ src, name, channelId, videoId, className = "w-8 h-8 text-sm", onResolved }: AvatarProps) {
+  const element=useRef<HTMLImageElement|HTMLDivElement|null>(null);
+  const [nearViewport,setNearViewport]=useState(()=>typeof IntersectionObserver==='undefined');
+  useEffect(()=>{if(typeof IntersectionObserver==='undefined'){setNearViewport(true);return;}const node=element.current;if(!node)return;setNearViewport(false);const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){setNearViewport(true);observer.disconnect();}},{rootMargin:'160px'});observer.observe(node);return()=>observer.disconnect();},[src,channelId,videoId,name]);
   const resolvedCallback = useRef(onResolved); resolvedCallback.current = onResolved;
   const failedUrls = useRef(new Set<string>());
   const [refresh,setRefresh] = useState(0);
@@ -34,7 +37,7 @@ export default function Avatar({ src, name, channelId, videoId, className = "w-8
 
   useEffect(() => {
     const placeholder = !src || src.includes('ui-avatars.com');
-    if (!(placeholder || imgError) || refresh > 2) return;
+    if (!nearViewport || !(placeholder || imgError) || refresh > 2) return;
     const searchAuthor = cleanName !== 'チャンネル' && cleanName !== 'Unknown' ? cleanName : name;
     const identity = channelId || videoId || searchAuthor;
     if (!identity) return;
@@ -47,7 +50,7 @@ export default function Avatar({ src, name, channelId, videoId, className = "w-8
       resolvedCallback.current?.(data);
     });
     return () => {active=false;cancel();};
-  }, [src,imgError,refresh,channelId,videoId,name,cleanName]);
+  }, [nearViewport,src,imgError,refresh,channelId,videoId,name,cleanName]);
 
   // Do not show ui-avatars as a real image if we haven't resolved yet
   const isServerPlaceholder = src && src.includes('ui-avatars.com');
@@ -66,7 +69,7 @@ export default function Avatar({ src, name, channelId, videoId, className = "w-8
 
   if (activeSrc && !imgError) {
     return (
-      <img
+      <img ref={node=>{element.current=node;}} loading="lazy" decoding="async"
         src={activeSrc}
         alt={displayName}
         referrerPolicy="no-referrer"
@@ -80,7 +83,7 @@ export default function Avatar({ src, name, channelId, videoId, className = "w-8
   }
 
   return (
-    <div className={`${className} ${bgColor} rounded-full flex items-center justify-center text-white font-semibold shrink-0 select-none shadow-inner transition-transform duration-200`}>
+    <div ref={node=>{element.current=node;}} className={`${className} ${bgColor} rounded-full flex items-center justify-center text-white font-semibold shrink-0 select-none shadow-inner transition-transform duration-200`}>
       {initial}
     </div>
   );

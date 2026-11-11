@@ -180,6 +180,8 @@ export default function VideoPlayer({
   useEffect(() => { const resize=()=>setMobileDescription(window.innerWidth <= 640);window.addEventListener('resize',resize);return()=>window.removeEventListener('resize',resize); },[]);
   useEffect(()=>setIsDescExpanded(false),[videoId]);
   const [sidebarTab, setSidebarTab] = useState<'related' | 'liveChat'>(() => initialVideo && 'isLive' in initialVideo && initialVideo.isLive ? 'liveChat' : 'related');
+  const relatedVisible=useRef(true);relatedVisible.current=!isMini&&isRelatedOpen&&sidebarTab==='related';
+  const relatedBusy=useRef(false);
   const [iframeUrl, setIframeUrl] = useState<string>('');
   const [refreshingIframe, setRefreshingIframe] = useState(false);
   const [cooldownSec, setCooldownSec] = useState(0);
@@ -880,22 +882,7 @@ export default function VideoPlayer({
 
           if (data && data.recommendedVideos) {
             setRelatedVideos(prioritizeUnshown(data.recommendedVideos));
-            // 初回から自動で2ページ目もバックグラウンドで先読みして結合（ボタン不要で最初から豊富なリストを提供）
-            fetchJSON(`/api/video/${videoId}/related?page=2&filter=all`)
-              .then((res2) => {
-                if (cancelled) return;
-                const p2Items: Video[] = Array.isArray(res2) ? res2 : res2.videos || [];
-                if (p2Items.length > 0) {
-                  setRelatedVideos((prev) => {
-                    const existingIds = new Set(prev.map((v) => v.videoId));
-                    const filtered = p2Items.filter((v) => v.videoId && !existingIds.has(v.videoId));
-                    return [...prev, ...filtered];
-                  });
-                  setRelatedPage(2);
-                  setHasMoreRelated(res2.hasMore !== undefined ? res2.hasMore : true);
-                }
-              })
-              .catch(() => {});
+            setRelatedPage(1);setHasMoreRelated(true);
           }
 
           // Local Intelligence Analysis
@@ -996,7 +983,8 @@ export default function VideoPlayer({
 
   // 関連動画の次ページ自動取得 (無限スクロール)
   const loadMoreRelated = useCallback(async () => {
-    if (loadingMoreRelated || !hasMoreRelated || !videoId) return;
+    if (!relatedVisible.current || relatedBusy.current || loadingMoreRelated || !hasMoreRelated || !videoId) return;
+    relatedBusy.current=true;
     setLoadingMoreRelated(true);
     try {
       const nextPage = relatedPage + 1;
@@ -1017,7 +1005,7 @@ export default function VideoPlayer({
       console.error('Failed to load more related videos', err);
       setHasMoreRelated(false);
     } finally {
-      setLoadingMoreRelated(false);
+      relatedBusy.current=false;setLoadingMoreRelated(false);
     }
   }, [loadingMoreRelated, hasMoreRelated, videoId, relatedPage, relatedFilter]);
 
@@ -1041,18 +1029,18 @@ export default function VideoPlayer({
   // 関連動画の自動無限スクロール監視 (IntersectionObserver & スクロールフォールバック)
   useEffect(() => {
     const target = relatedEndRef.current;
-    if (!target || !hasMoreRelated || loadingMoreRelated) return;
+    if (!relatedVisible.current || !target || !hasMoreRelated || loadingMoreRelated) return;
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
+      if (relatedVisible.current && entries[0].isIntersecting) {
         loadMoreRelated();
       }
-    }, { rootMargin: '600px' });
+    }, { rootMargin: '200px' });
     observer.observe(target);
 
     const handleWindowScroll = () => {
-      if (!relatedEndRef.current || !hasMoreRelated || loadingMoreRelated) return;
+      if (!relatedVisible.current || !relatedEndRef.current || !hasMoreRelated || loadingMoreRelated) return;
       const rect = relatedEndRef.current.getBoundingClientRect();
-      if (rect.top <= window.innerHeight + 600) {
+      if (rect.height > 0 && rect.top <= window.innerHeight + 200 && rect.bottom >= 0) {
         loadMoreRelated();
       }
     };
@@ -1062,7 +1050,7 @@ export default function VideoPlayer({
       observer.disconnect();
       window.removeEventListener('scroll', handleWindowScroll);
     };
-  }, [loadMoreRelated, hasMoreRelated, loadingMoreRelated]);
+  }, [loadMoreRelated, hasMoreRelated, loadingMoreRelated,isMini,isRelatedOpen,sidebarTab]);
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,3 +1,4 @@
+import {createInflightJson} from './lib/inflightJson.mjs';
 import { apiFetch } from './lib/apiTransport.mjs';
 import { get, set } from 'idb-keyval';
 import { DailyUsageLimits } from './types';
@@ -192,7 +193,7 @@ function hasValidContent(data: any): boolean {
   return true;
 }
 
-export async function fetchJSON(url: string, options?: RequestInit) {
+async function fetchJSONRequest(url: string, options?: RequestInit) {
   try {
     const isGet = !options || !options.method || options.method === 'GET';
     const isApiCall = url.startsWith('/api/') || url.startsWith('/stream') || url.startsWith('/edu');
@@ -565,3 +566,6 @@ export function parseYouTubeUrl(input: string): YouTubeUrlParseResult | null {
 }
 
 
+
+const sharedJSON=createInflightJson(fetchJSONRequest,()=>{try{return (localStorage.getItem('xerox_last_account_id')||'local')+'|'+(localStorage.getItem('xerox_youtube_linked')||'0');}catch{return '';}});
+export function fetchJSON(url:string,options?:RequestInit){return sharedJSON(url,options);}
