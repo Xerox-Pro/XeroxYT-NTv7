@@ -16,7 +16,7 @@ import type { ReactNode } from 'react';
 import Avatar from './Avatar';
 import { Video } from '../types';
 import { fetchJSON, formatNumberJP } from '../utils';
-import { excludeSeenShorts, isShortsLocation, MAX_SHORT_PAGES, mixShorts, createShortsSession, readSeenShorts, recordSeenShort, discoveryRequest, unseenRankingFirst } from '../lib/shortsFeed.mjs';
+import { appendShortsInOrder, excludeSeenShorts, isShortsLocation, MAX_SHORT_PAGES, mixShorts, createShortsSession, readSeenShorts, recordSeenShort, discoveryRequest, unseenRankingFirst } from '../lib/shortsFeed.mjs';
 import ShortsComments from './ShortsComments';
 import { getShortEmbedUrl } from '../lib/shortsEmbedCache.mjs';
 import { ShortsContext, shortsQuery } from './ShortsShelf';
@@ -244,13 +244,13 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
     const excluded = [...regularRef.current.map(video => video.videoId!), ...readSeenShorts()];
     if(page===1)personalCursor.current='';
     let request=discoveryRequest(withShortsInterests(query,page),page,session,excluded);
-    if(personalized&&personalCursor.current)request+='&continuation='+encodeURIComponent(personalCursor.current);
+    if(personalized){const params=new URLSearchParams();if(personalCursor.current)params.set('continuation',personalCursor.current);else if(seed.current?.videoId)params.set('videoId',seed.current.videoId);request='/api/user/shorts-sequence?'+params;}
     fetchShortsPage(request, controller.signal).then(data => {
       if (cancelled) return;
       if(personalized)personalCursor.current=data.continuation||'';
       const fetched=(data.videos||[]).filter((video:Video)=>video.isShort);
       const items:Video[]=personalized?fetched:rankCandidates(excludeSeenShorts(fetched,readSeenShorts(),seed.current?.videoId),{short:true,seed:session,seen:readSeenShorts()});
-      setRegular(previous => [...new Map([...previous, ...items].map(video => [video.videoId, video])).values()]);
+      setRegular(previous => appendShortsInOrder(previous,items));
       setHasMore(Boolean(data.hasMore));
     }).catch(reason => { if (!cancelled) setError(reason.message || 'ショートを読み込めませんでした。'); })
       .finally(() => { if (!cancelled) { pending.current = false; setLoading(false); } });

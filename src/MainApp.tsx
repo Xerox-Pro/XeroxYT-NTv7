@@ -2,6 +2,7 @@ import GoogleLinkAnnouncement from './components/GoogleLinkAnnouncement';
 import YouTubeAccountPanel from './components/YouTubeAccountPanel';
 import SearchFilters from './components/SearchFilters';
 import {searchFilterParams} from '../search-filters.mjs';
+import {spreadHome} from './lib/homeOrder.mjs';
 import {queueIndex,shuffledQueue} from './lib/playlistPlayback.mjs';
 import {loadHomeSnapshot,saveHomeSnapshot} from './lib/homeSnapshot.mjs';
 import {useSiteAccount} from './components/AccountGate';
@@ -625,7 +626,7 @@ export default function MainApp() {
       setView('home');
       fetchRecommendations(1, false);
     }
-  }, [location.pathname, location.search, navigate]);
+  }, [location.pathname, location.search, navigate, googleStatusReady, userInfo, watchHistory]);
 
   const fetchRecommendations = async (pageNum: number = 1, append: boolean = false) => {
     if(!googleStatusReady)return;
@@ -644,12 +645,13 @@ export default function MainApp() {
       const userHashtags = JSON.stringify(localAI.getHashtagsMap());
       let data = [];
 
-      // Fetch recommendations from API (deterministic parameters allow Vercel Edge CDN cache)
+      // Every home visit starts a fresh provider request.
       const queryParams = new URLSearchParams({
         keywords,
         historyIds,
         userHashtags,
         page: pageNum.toString(),
+        refreshNonce: Date.now().toString(),
       });
       if(pageNum===1)personalHomeCursor.current='';
       const result = userInfo?await fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current)):await fetchJSON(`/api/recommendations?${queryParams.toString()}`);
@@ -694,15 +696,13 @@ export default function MainApp() {
           uniqueMap.set(v.playlistId||v.videoId, v);
         }
       });
-      let finalData = shuffledQueue(userInfo?Array.from(uniqueMap.values()):prioritizeUnshown(Array.from(uniqueMap.values())));
-      if(!userInfo&&!append&&!finalData.length)finalData=loadHomeSnapshot('すべて',homeSnapshotScope);
+      let finalData = spreadHome(userInfo?Array.from(uniqueMap.values()):prioritizeUnshown(Array.from(uniqueMap.values())));
 
-      if(!userInfo)saveHomeSnapshot('すべて',finalData,homeSnapshotScope,append);
       if (append) {
         setVideos(prev => {
           const existingIds = new Set(prev.map(v => v.playlistId||v.videoId));
           const newVideos = finalData.filter((v: Video) => v && (v.playlistId||v.videoId) && !existingIds.has(v.playlistId||v.videoId));
-          return [...prev, ...newVideos];
+          return [...prev, ...spreadHome(newVideos,prev)];
         });
       } else {
         setVideos(finalData);
@@ -712,7 +712,7 @@ export default function MainApp() {
       if (currentReqId !== recommendationRequestIdRef.current) return;
       console.error(err);
       setHasMore(false);
-      if (!append) {const saved=userInfo?[]:loadHomeSnapshot('すべて',homeSnapshotScope);if(saved.length){setVideos(saved);updateCache(saved);setError('');setHasMore(false);}else setError(err.message || 'エラーが発生しました');}
+      if (!append) setError(err.message || 'エラーが発生しました');
     } finally {
       if (currentReqId === recommendationRequestIdRef.current) {
         setLoading(false);

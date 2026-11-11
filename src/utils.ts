@@ -198,6 +198,7 @@ export async function fetchJSON(url: string, options?: RequestInit) {
     const isApiCall = url.startsWith('/api/') || url.startsWith('/stream') || url.startsWith('/edu');
     const isTimeSensitive = 
       url.startsWith('/api/user/') ||
+      url.startsWith('/api/recommendations') ||
       url.startsWith('/api/mix/') ||
       url.startsWith('/api/shorts?') ||
       url.startsWith('/api/shorts-ranking') ||
@@ -227,7 +228,7 @@ export async function fetchJSON(url: string, options?: RequestInit) {
     }
 
     const reqOptions = { ...options };
-    if (url.startsWith('/api/user/') || url.startsWith('/api/auth/') || url.startsWith('/api/shorts?') || url.startsWith('/api/shorts-ranking')) reqOptions.cache = 'no-store';
+    if (url.startsWith('/api/recommendations') || url.startsWith('/api/home/') || url.startsWith('/api/user/') || url.startsWith('/api/auth/') || url.startsWith('/api/shorts?') || url.startsWith('/api/shorts-ranking')) reqOptions.cache = 'no-store';
     const finalHeaders = new Headers(reqOptions.headers || {});
     finalHeaders.delete('x-youtube-credentials');
     // Attach client id and usage token for rate limiting

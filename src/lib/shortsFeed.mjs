@@ -66,3 +66,9 @@ export function excludeSeenShorts(videos, seenIds, keepId) {
  const seen = new Set(seenIds);
  return videos.filter(video => video.videoId === keepId || !seen.has(video.videoId));
 }
+
+// Keep the provider sequence stable, including when a continuation overlaps.
+export function appendShortsInOrder(previous,incoming){
+ const seen=new Set(previous.map(v=>v.videoId));
+ return [...previous,...incoming.filter(v=>v?.videoId&&!seen.has(v.videoId)&&(seen.add(v.videoId),true))];
+}
