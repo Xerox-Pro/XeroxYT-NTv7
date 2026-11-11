@@ -102,7 +102,8 @@ export default function MainApp() {
   });
 
   // Auth state
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [userInfo,setUserInfo]=useState<UserInfo|null>(()=>{try{if(localStorage.getItem('xerox_youtube_linked')==='1'){const user=JSON.parse(localStorage.getItem('xerox_user_info')||'null');if(typeof user?.name==='string')return user;}}catch{}return null;});
+  const [googleStatusReady,setGoogleStatusReady]=useState(false);
   const homeSnapshotScope=(siteAccount?.username||'guest')+(userInfo?':youtube':'');
 
   const [loading, setLoading] = useState(true);
@@ -584,11 +585,11 @@ export default function MainApp() {
 
   useEffect(()=>{
     let cancelled=false;youtubeGeneration.current++;
-    localStorage.removeItem('xerox_youtube_credentials');localStorage.removeItem('xerox_youtube_linked');
-    fetchJSON('/api/auth/status').then(status=>{if(cancelled)return;if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else setUserInfo(null);}).catch(()=>{if(!cancelled)setUserInfo(null);});
+    setGoogleStatusReady(false);localStorage.removeItem('xerox_youtube_credentials');
+    fetchJSON('/api/auth/status').then(status=>{if(cancelled)return;if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else{localStorage.removeItem('xerox_youtube_linked');setUserInfo(null);}setGoogleStatusReady(true);}).catch(()=>{if(!cancelled){setAuthError('Google連携の状態を確認できませんでした。再読み込みしてください。');setError('連携状態を確認できないため、おすすめの読み込みを停止しています。再読み込みしてください。');setLoading(false);}});
     return()=>{cancelled=true;};
   },[siteAccount?.username]);
-  useEffect(()=>{if(userInfo)void fetchYoutubeAuthData();setPage(1);if(location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo]);
+  useEffect(()=>{if(userInfo)void fetchYoutubeAuthData();setHomeShorts({category:'',videos:[]});setSelectedCategory('すべて');setPage(1);if(googleStatusReady&&location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo,googleStatusReady]);
   const cancelGoogleLink=async()=>{isPollingRef.current=false;setIsPolling(false);setAuthFlow(null);setAuthError(null);try{await fetchJSON('/api/auth/cancel',{method:'POST'});}catch(error:any){setAuthError(error.message);}};
 
   const handleLogout = async () => {
@@ -623,6 +624,7 @@ export default function MainApp() {
   }, [location.pathname, location.search, navigate]);
 
   const fetchRecommendations = async (pageNum: number = 1, append: boolean = false) => {
+    if(!googleStatusReady)return;
     const currentReqId = ++recommendationRequestIdRef.current;
     if (append) {
       setLoadingMore(true);
@@ -718,6 +720,8 @@ export default function MainApp() {
 
   // Use the selected chip's actual YouTube home feed.
   const fetchHomeCategory = async (category: string, pageNum = 1, append = false) => {
+    if(!googleStatusReady)return;
+    if(userInfo){await fetchRecommendations(pageNum,append);return;}
     const requestId = ++recommendationRequestIdRef.current;
     if (append) setLoadingMore(true);
     else { setLoading(true); setVideos([]); }
@@ -1060,7 +1064,7 @@ export default function MainApp() {
             >
               {view==='search'&&searchQuery&&<div className="mobile-search-filters no-scrollbar" aria-label="検索結果の絞り込み">{['すべて','ショート','未視聴','視聴済み','動画'].map(filter=><button type="button" key={filter} aria-pressed={filter==='ショート'?searchParams.get('type')==='shorts':filter==='動画'?searchParams.get('type')==='video':filter==='すべて'?(!searchParams.get('type')&&mobileSearchFilter==='すべて'):mobileSearchFilter===filter} onClick={()=>{if(filter==='ショート'||filter==='動画'||filter==='すべて'){const next=new URLSearchParams(searchParams);if(filter==='すべて')next.delete('type');else next.set('type',filter==='ショート'?'shorts':'video');navigate('/results?'+next);}else setMobileSearchFilter(filter);}}>{filter}</button>)}</div>}
               {/* カテゴリーバー（ホーム ＆ 検索画面のみ） */}
-              {view === 'home' && (
+              {view === 'home' && googleStatusReady && !userInfo && (
                 <CategoryBar
                   selectedCategory={selectedCategory}
                   onSelectCategory={handleSelectCategory}
@@ -1196,7 +1200,7 @@ export default function MainApp() {
                 </div>
               )}
 
-              {!(view==='search'&&hasSearchFilters)&&<ShortsShelf
+              {(view!=='home'||googleStatusReady)&&!(view==='search'&&hasSearchFilters)&&<ShortsShelf
                 onVideosLoaded={view==='home' ? data=>setHomeShorts({category:selectedCategory,videos:data}) : undefined}
                 context={view === 'search' ? { source: 'search', q: searchQuery } : { source: 'home', q: selectedCategory === 'すべて' ? undefined : selectedCategory }}
                 onSelect={handleShortSelect}
@@ -1210,7 +1214,7 @@ export default function MainApp() {
                     <VideoCard
                       video={video}
                       preferMaxResolution={view === 'home'}
-                      onClick={() => video.isShort?handleShortSelect(video,{source:'search',q:searchQuery}):handleVideoSelect(video.videoId,video)}
+                      onClick={() => video.isShort?handleShortSelect(video,view==='home'?{source:'home'}:{source:'search',q:searchQuery}):handleVideoSelect(video.videoId,video)}
                       onSelectChannel={handleSelectChannel}
                     />
                     <button

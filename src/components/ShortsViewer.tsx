@@ -245,9 +245,10 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
     let request=discoveryRequest(withShortsInterests(query,page),page,session,excluded);
     if(personalized&&personalCursor.current)request+='&continuation='+encodeURIComponent(personalCursor.current);
     fetchShortsPage(request, controller.signal).then(data => {
-      if(personalized)personalCursor.current=data.continuation||'';
       if (cancelled) return;
-      const items: Video[] = rankCandidates(excludeSeenShorts((data.videos || []).filter((video: Video) => video.isShort), readSeenShorts(), seed.current?.videoId), { short: true, seed: session, seen: readSeenShorts() });
+      if(personalized)personalCursor.current=data.continuation||'';
+      const fetched=(data.videos||[]).filter((video:Video)=>video.isShort);
+      const items:Video[]=personalized?fetched:rankCandidates(excludeSeenShorts(fetched,readSeenShorts(),seed.current?.videoId),{short:true,seed:session,seen:readSeenShorts()});
       setRegular(previous => [...new Map([...previous, ...items].map(video => [video.videoId, video])).values()]);
       setHasMore(Boolean(data.hasMore));
     }).catch(reason => { if (!cancelled) setError(reason.message || 'ショートを読み込めませんでした。'); })

@@ -287,9 +287,8 @@ export async function fetchJSON(url: string, options?: RequestInit) {
       }
 
       if (res.status === 401 && url.startsWith('/api/user/')) {
-        console.warn('[Auth] Session expired or unauthorized. Clearing stored credentials.');
+        console.warn('[Auth] YouTube request unauthorized; preserving link state until explicitly verified.');
         localStorage.removeItem('xerox_youtube_credentials');
-        localStorage.removeItem('xerox_user_info');
       }
 
       const responseError = new Error(errorMessage) as Error & {status?: number};

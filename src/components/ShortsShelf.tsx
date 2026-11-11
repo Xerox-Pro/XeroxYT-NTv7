@@ -44,7 +44,8 @@ export default function ShortsShelf({ context, onSelect, providedVideos, onVideo
     Promise.allSettled([fetchJSON(discoveryRequest(withShortsInterests(query), 1, session, seen)), (context.source === 'search'||personalized) ? Promise.resolve({ videos: [] }) : loadShortsRanking()]).then(([native, ranked]) => {
       if (native.status === 'rejected' && !(ranked.status==='fulfilled'&&ranked.value.videos?.length)) throw native.reason;
       const currentSeen = readSeenShorts();
-      const candidates = excludeSeenShorts((native.status==='fulfilled'?(native.value.videos||[]):[]).filter((v: Video) => v.isShort), currentSeen);
+      const fetched=(native.status==='fulfilled'?(native.value.videos||[]):[]).filter((v:Video)=>v.isShort);
+      const candidates=personalized?unseenRankingFirst(fetched,currentSeen):excludeSeenShorts(fetched,currentSeen);
       const regular = (context.source === 'search'||personalized) ? candidates : rankCandidates(candidates, { short: true, seed: session, seen });
       const ranking = ranked.status === 'fulfilled' ? rankCandidates(excludeSeenShorts(ranked.value.videos || [], currentSeen), { short: true, seed: session, seen }) : [];
       if (!cancelled) { let all=ranking.length ? mixShorts(regular, ranking) : regular;if(context.source==='home'&&!personalized){if(!all.length)all=loadHomeSnapshot('shorts:'+query,snapshotScope);let previous='';const key='xerox_short_shelf_order_'+query;try{previous=sessionStorage.getItem(key)||'';}catch{}all=shuffleShelfCandidates(all,previous);try{sessionStorage.setItem(key,all[0]?.videoId||'');}catch{}saveHomeSnapshot('shorts:'+query,all,snapshotScope);}setVideos(all.slice(offset,offset+8));report.current?.(all); }

@@ -95,7 +95,7 @@ export default async function handler(request: Request) {
         body,
         redirect: "manual",
         signal: request.signal,
-      }, Math.max(1, Math.min(8000, deadline - Date.now())));
+      }, Math.max(1, Math.min(12000, deadline - Date.now())));
       // A route error or a per-user quota does not tell us whether this API is healthy.
       if (
         canRetry(request.method, path, response.status) &&
