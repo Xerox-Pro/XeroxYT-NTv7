@@ -11,7 +11,6 @@ const forwarded = [
   "cookie",
   "authorization",
   "range",
-  "x-youtube-credentials",
   "x-client-id",
   "x-usage-token",
   "x-client-usage",

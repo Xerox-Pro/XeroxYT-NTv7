@@ -15,6 +15,7 @@ interface SidebarProps {
   onHistory?: () => void;
   onDebugAPI?: () => void;
   subscriptions?: ChannelSubscription[];
+  ownChannel?: ChannelSubscription;
   onSelectChannel?: (channelId: string) => void;
 }
 
@@ -38,7 +39,8 @@ export default function Sidebar({
   onLibrary,
   onHistory,
   onDebugAPI,
-  subscriptions = [], 
+  subscriptions = [],
+  ownChannel, 
   onSelectChannel 
 }: SidebarProps) {
   
@@ -155,6 +157,7 @@ export default function Sidebar({
               <h4 className="px-3 text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                 登録チャンネル ({subscriptions.length})
               </h4>
+              {ownChannel&&<Link to={`/channel/${ownChannel.id}`} onClick={event=>{if(onSelectChannel){event.preventDefault();onSelectChannel(ownChannel.id);}if(window.innerWidth<1280)onClose?.();}} className="flex items-center gap-4 px-3 py-2 rounded-xl hover:bg-gray-100"><Avatar src={ownChannel.avatar} name={ownChannel.title} className="w-6 h-6 shrink-0"/><span className="min-w-0 truncate text-sm">{ownChannel.title}<small className="block text-gray-500 text-xs">自分のチャンネル</small></span></Link>}
               {subscriptions.length === 0 ? (
                 <p className="px-3 text-xs text-gray-400">登録チャンネルはありません</p>
               ) : (

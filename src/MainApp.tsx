@@ -1,3 +1,4 @@
+import GoogleLinkAnnouncement from './components/GoogleLinkAnnouncement';
 import YouTubeAccountPanel from './components/YouTubeAccountPanel';
 import SearchFilters from './components/SearchFilters';
 import {searchFilterParams} from '../search-filters.mjs';
@@ -287,6 +288,7 @@ export default function MainApp() {
 
   const fetchYoutubeAuthData = async () => {
     const generation=youtubeGeneration.current;
+    void fetchJSON('/api/user/channel-info').then(profile=>{if(generation===youtubeGeneration.current)setUserInfo(profile);}).catch((error:any)=>{if(generation===youtubeGeneration.current)setAuthError(error.message);});
     const jobs=[['再生リスト','/api/user/playlists',setYoutubePlaylists],['後で見る','/api/user/watch-later',setWatchLaterVideos],['高評価','/api/user/liked-videos',setYoutubeLiked],['通知','/api/user/notifications',setNotifications]] as const;
     const results=await Promise.allSettled(jobs.map(async([name,path,setter])=>{const data=await fetchJSON(path);if(!Array.isArray(data))throw new Error(name);if(generation===youtubeGeneration.current)setter(data);return name;}));
     if(generation!==youtubeGeneration.current)return;
@@ -450,8 +452,10 @@ export default function MainApp() {
   useEffect(() => {
     if (userInfo) {
       localStorage.setItem('xerox_user_info', JSON.stringify(userInfo));
+      window.dispatchEvent(new Event('xerox-profile-updated'));
     } else {
       localStorage.removeItem('xerox_user_info');
+      window.dispatchEvent(new Event('xerox-profile-updated'));
     }
   }, [userInfo]);
 
@@ -983,6 +987,7 @@ export default function MainApp() {
 
   return (
     <div className={`${view === 'search' ? 'is-search-page ' : ''}${view === 'shorts' ? 'is-shorts-page ' : ''}min-h-screen bg-white text-gray-900 flex flex-col font-sans antialiased selection:bg-red-100 selection:text-red-800`}>
+      <GoogleLinkAnnouncement onOpen={()=>navigate('/feed/library')}/>
       {youtubeActionError&&<div role="alert" className="youtube-action-toast">{youtubeActionError}<button onClick={()=>setYoutubeActionError('')}>閉じる</button></div>}
       <TopProgressBar isLoading={loading || loadingMore} />
       {/* ナビゲーションバー: 常に上部に固定しつつ、コンテンツと被らないようにする */}
@@ -1006,6 +1011,7 @@ export default function MainApp() {
           onLibrary={() => navigate('/feed/library')}
           onHistory={() => navigate('/feed/history')}
           subscriptions={subscriptions}
+          ownChannel={userInfo?.sub?.startsWith('UC')?{id:userInfo.sub,title:userInfo.name,avatar:userInfo.picture}:undefined}
           onSelectChannel={handleSelectChannel}
           onDebugAPI={() => navigate('/debug/api')}
         />
@@ -1095,7 +1101,7 @@ export default function MainApp() {
             />
           ) : view === 'library' ? (
             <MyPage
-              youtubeConnection={<YouTubeAccountPanel user={userInfo} flow={authFlow} error={authError} featureErrors={youtubeFeatureErrors} liked={youtubeLiked} notifications={notifications} onLink={handleLogin} onCancel={()=>void cancelGoogleLink()} onUnlink={()=>void handleLogout()} onVideoSelect={handleVideoSelect}/>}
+              youtubeConnection={<YouTubeAccountPanel user={userInfo} flow={authFlow} error={authError} featureErrors={youtubeFeatureErrors} liked={youtubeLiked} notifications={notifications} onLink={handleLogin} onCancel={()=>void cancelGoogleLink()} onUnlink={()=>void handleLogout()} onVideoSelect={handleVideoSelect} onPlaylistPlay={(id,title,videos,startId)=>handleStartPlaylistPlay({id:'youtube-'+id,title,videos,createdAt:Date.now(),updatedAt:Date.now()},false,startId)}/>}
               playlists={playlists}
               history={[...watchHistory, ...shortHistory].sort((a,b)=>b.timestamp-a.timestamp)}
               onCreatePlaylist={handleCreatePlaylist}

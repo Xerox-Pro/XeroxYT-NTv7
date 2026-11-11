@@ -105,7 +105,7 @@ export default function LibraryPage({
         }
       }
 
-      const res = await fetchJSON(`${youtubeLinked?'/api/user/playlist/':'/api/playlist/'}${encodeURIComponent(playlistId)}`);
+      let res;try{res=await fetchJSON(`/api/playlist/${encodeURIComponent(playlistId)}`);}catch(error){if(!youtubeLinked)throw error;res=await fetchJSON(`/api/user/playlist/${encodeURIComponent(playlistId)}`);}
       if (res && res.videos && res.videos.length > 0) {
         const newPl: UserPlaylist = {
           id: `yt-import-${Date.now()}`,

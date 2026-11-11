@@ -186,7 +186,7 @@ function getCacheTTL(url: string): number {
 }
 
 function hasValidContent(data: any): boolean {
-  if (!data) return false;
+  if (!data || data.isPlayerOnly) return false;
   if (Array.isArray(data)) return data.length > 0;
   if (Array.isArray(data.videos)) return data.videos.length > 0;
   return true;
@@ -228,6 +228,7 @@ export async function fetchJSON(url: string, options?: RequestInit) {
     const reqOptions = { ...options };
     if (url.startsWith('/api/user/') || url.startsWith('/api/auth/') || url.startsWith('/api/shorts?') || url.startsWith('/api/shorts-ranking')) reqOptions.cache = 'no-store';
     const finalHeaders = new Headers(reqOptions.headers || {});
+    finalHeaders.delete('x-youtube-credentials');
     // Attach client id and usage token for rate limiting
     if (isApiCall) {
       if (!finalHeaders.has('x-client-id')) {

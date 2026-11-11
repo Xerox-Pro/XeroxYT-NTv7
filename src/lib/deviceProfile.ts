@@ -21,16 +21,18 @@ export function useDeviceProfile() {
     () => {
       let raw: string | null = null;
       try {
-        raw = localStorage.getItem(key);
+        raw = JSON.stringify([localStorage.getItem(key),localStorage.getItem('xerox_youtube_linked')?localStorage.getItem('xerox_user_info'):null]);
       } catch {}
       if (previousKey === key && previousRaw === raw) return previousValue;
       previousKey = key;
       previousRaw = raw;
       try {
-        const data = JSON.parse(raw || "{}");
+        const [local,linked]=JSON.parse(raw||'[null,null]');
+        const data=JSON.parse(local||'{}');
+        const youtube=JSON.parse(linked||'null');
         previousValue = {
-          name: typeof data.name === "string" ? data.name.slice(0, 40) : "",
-          avatar:
+          name: typeof youtube?.name === "string" ? youtube.name : typeof data.name === "string" ? data.name.slice(0, 40) : "",
+          avatar: typeof youtube?.picture === "string" && /^https:\/\//.test(youtube.picture) ? youtube.picture :
             typeof data.avatar === "string" &&
             /^data:image\/(png|jpeg|webp);base64,/.test(data.avatar)
               ? data.avatar
