@@ -166,12 +166,12 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
   onRecord: (video: Video) => void; onSelectChannel: (id: string) => void;
 }) {
   const youtubeLinked=useYouTubeLinked();
-  const personalized=youtubeLinked&&context.source==='home';
+  const personalized=youtubeLinked;
   const navigate = useNavigate();
   const location = useLocation();
   const route = useRef(location); route.current = location;
   const navigateRef = useRef(navigate); navigateRef.current = navigate;
-  const channelMode = context.source === 'channel' && !!context.channelId;
+  const channelMode = !personalized && context.source === 'channel' && !!context.channelId;
   const [channelStart] = useState(() => {
     try {
       const data = JSON.parse(sessionStorage.getItem(`xerox_channel_shorts_${context.channelId}`) || 'null');
@@ -213,7 +213,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
   const query = shortsQuery(context).toString();
   regularRef.current = regular;
   const ranked = unseenRankingFirst(excludeSeenShorts(ranking, seenOnEntry, seed.current?.videoId), seenOnEntry, seed.current?.videoId);
-  const videos: Video[] = !rankingReady ? regular : ranked.length ? mixShorts(regular, ranked, seed.current?.videoId) : regular;
+  const videos: Video[] = personalized || !rankingReady ? regular : ranked.length ? mixShorts(regular, ranked, seed.current?.videoId) : regular;
   const ids = videos.map(video => video.videoId).join(',');
   useEffect(() => {
     try { localStorage.setItem('xerox_shorts_auto_scroll_v1', autoScroll ? 'on' : 'off'); } catch {}

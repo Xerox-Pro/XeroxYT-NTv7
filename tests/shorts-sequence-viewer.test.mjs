@@ -9,7 +9,7 @@ import {createRoot} from 'react-dom/client';
 import {MemoryRouter} from 'react-router-dom';
 import {JSDOM} from 'jsdom';
 
-test('linked Shorts skips previously displayed clips, continues past a seen page and preserves provider order',async()=>{
+for(const source of ['home','related','search','channel'])test(`linked ${source} Shorts uses only the account sequence and skips previously displayed clips`,async()=>{
  const folder=await mkdtemp(path.resolve('node_modules/.shorts-sequence-'));
  const output=path.join(folder,'viewer.mjs');
  await build({entryPoints:['src/components/ShortsViewer.tsx'],outfile:output,bundle:true,packages:'external',platform:'node',format:'esm',jsx:'automatic',plugins:[{name:'network-boundary',setup(builder){builder.onLoad({filter:/\/src\/utils\.ts$/},()=>({contents:'export const fetchJSON=async(url,options)=>{const response=await fetch(url,options);if(!response.ok){const error=new Error("upstream failed");error.status=response.status;throw error;}return response.json()};export const formatNumberJP=n=>String(n);',loader:'js'}));}}]});
@@ -36,7 +36,7 @@ test('linked Shorts skips previously displayed clips, continues past a seen page
  };
  const root=createRoot(dom.window.document.getElementById('root'));
  try{
-  await act(async()=>root.render(React.createElement(MemoryRouter,{initialEntries:['/shorts/abcdefghijk?source=home']},React.createElement(ShortsViewer,{initialId:seed.videoId,initialVideo:seed,context:{source:'home'},onRecord:()=>{},onSelectChannel:()=>{}}))));
+  await act(async()=>root.render(React.createElement(MemoryRouter,{initialEntries:['/shorts/abcdefghijk?source='+source]},React.createElement(ShortsViewer,{initialId:seed.videoId,initialVideo:seed,context:{source,channelId:source==='channel'?'UC'+'a'.repeat(22):undefined},onRecord:()=>{},onSelectChannel:()=>{}}))));
   for(let i=0;i<4;i++)await act(async()=>{await new Promise(resolve=>setTimeout(resolve,20));});
   assert.equal(requests.length,2);assert.equal(new URL(requests[0],'https://test').searchParams.get('videoId'),seed.videoId);assert.equal(new URL(requests[1],'https://test').searchParams.get('continuation'),'sequence-next');
   assert.deepEqual([...document.querySelectorAll('article[data-short-id]')].map(n=>n.dataset.shortId),[seed.videoId,first.videoId,second.videoId]);

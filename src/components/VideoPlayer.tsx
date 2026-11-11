@@ -312,6 +312,8 @@ export default function VideoPlayer({
   const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [newComment, setNewComment] = useState('');
   const commentsEndRef = useRef<HTMLDivElement>(null);
+  const commentPageBusy=useRef(false);
+  const commentContext=useRef('');commentContext.current=videoId+'|'+commentSort;
 
   // Related videos state with pagination
   const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
@@ -926,7 +928,7 @@ export default function VideoPlayer({
     const fetchComments = async () => {
       setLoadingComments(true);
       try {
-        const res = await fetchJSON(`/api/video/${videoId}/comments?sort=top&page=1`);
+        const res = await fetchJSON(`/api/video/${videoId}/comments?limit=20&sort=top&page=1`);
         if (cancelled) return;
         if (res && res.isPlayerOnly) {
           setComments([]);
@@ -959,7 +961,7 @@ export default function VideoPlayer({
     setCommentSort(sort);
     setLoadingComments(true);
     try {
-      const res = await fetchJSON(`/api/video/${videoId}/comments?sort=${sort}&page=1`);
+      const res = await fetchJSON(`/api/video/${videoId}/comments?limit=20&sort=${sort}&page=1`);
       const newItems: Comment[] = Array.isArray(res) ? res : res.comments || [];
       setComments(newItems);
       setCommentPage(1);
@@ -973,11 +975,13 @@ export default function VideoPlayer({
 
   // コメントの次ページ自動取得 (無限スクロール)
   const loadMoreComments = useCallback(async () => {
-    if (loadingComments || loadingMoreComments || !hasMoreComments || !videoId) return;
+    if (commentPageBusy.current || loadingComments || loadingMoreComments || !hasMoreComments || !videoId) return;
+    commentPageBusy.current=true;const context=commentContext.current;
     setLoadingMoreComments(true);
     try {
       const nextPage = commentPage + 1;
-      const res = await fetchJSON(`/api/video/${videoId}/comments?sort=${commentSort}&page=${nextPage}`);
+      const res = await fetchJSON(`/api/video/${videoId}/comments?limit=20&sort=${commentSort}&page=${nextPage}`);
+      if(context!==commentContext.current)return;
       const newItems: Comment[] = Array.isArray(res) ? res : res.comments || [];
       if (newItems.length > 0) {
         setComments((prev) => {
@@ -994,7 +998,7 @@ export default function VideoPlayer({
       console.error('Failed to load more comments', err);
       setHasMoreComments(false);
     } finally {
-      setLoadingMoreComments(false);
+      commentPageBusy.current=false;setLoadingMoreComments(false);
     }
   }, [loadingComments, loadingMoreComments, hasMoreComments, videoId, commentPage, commentSort]);
 
@@ -1033,13 +1037,13 @@ export default function VideoPlayer({
       if (entries[0].isIntersecting) {
         loadMoreComments();
       }
-    }, { rootMargin: '600px' });
+    }, { rootMargin: '0px',threshold:1 });
     observer.observe(target);
 
     const handleWindowScroll = () => {
       if (!commentsEndRef.current || !hasMoreComments || loadingComments || loadingMoreComments) return;
       const rect = commentsEndRef.current.getBoundingClientRect();
-      if (rect.top <= window.innerHeight + 600) {
+      if (rect.top <= window.innerHeight && rect.bottom >= 0) {
         loadMoreComments();
       }
     };

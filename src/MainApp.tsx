@@ -1112,7 +1112,7 @@ export default function MainApp() {
           {/* ビュー分岐 */}
           {view === 'video' ? null : view === 'shorts' ? (
             <ShortsViewer
-              key={['shorts', searchParams.get('source'), searchParams.get('q'), searchParams.get('videoId'), searchParams.get('channelId')].join(':')}
+              key={['shorts',userInfo?'youtube':'local', searchParams.get('source'), searchParams.get('q'), searchParams.get('videoId'), searchParams.get('channelId')].join(':')}
               initialVideo={videoCache[location.pathname.split('/')[2]] as Video | undefined}
               initialId={/^[\w-]{11}$/.test(location.pathname.split('/')[2] || '') ? location.pathname.split('/')[2] : undefined}
               context={{

@@ -26,7 +26,7 @@ export function shortsQuery(context: ShortsContext) {
 export default function ShortsShelf({ context, onSelect, providedVideos, onVideosLoaded, offset=0 }: {
   context: ShortsContext; onSelect: (video: Video, context: ShortsContext) => void; providedVideos?: Video[]; onVideosLoaded?: (videos:Video[])=>void; offset?:number;
 }) {
-  const personalized=useYouTubeLinked()&&context.source==='home';
+  const personalized=useYouTubeLinked()&&!['search','channel'].includes(context.source);
   const account=useSiteAccount();const snapshotScope=(account?.username||'guest')+(personalized?':youtube':'');
   const report = useRef(onVideosLoaded); report.current = onVideosLoaded;
   const shelf = useRef<HTMLDivElement>(null);
