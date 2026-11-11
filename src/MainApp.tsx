@@ -85,6 +85,9 @@ export default function MainApp() {
   const mixLoading=useRef(false);
   const activeMixRef=useRef(activeMix);activeMixRef.current=activeMix;
   const [mixBusy,setMixBusy]=useState(false);
+  const [openingMix,setOpeningMix]=useState('');
+  const mixOpenRequest=useRef(0);
+  useEffect(()=>{mixOpenRequest.current++;setOpeningMix('');},[location.pathname,location.search]);
   
   // Cache for static video/channel data
   const [videoCache, setVideoCache] = useState<Record<string, Video | ShortVideo>>(() => {
@@ -867,7 +870,21 @@ export default function MainApp() {
   };
 
   const handleVideoSelect = async (videoId: string, videoObj?: Video) => {
-    if(videoObj?.playlistId?.startsWith('RD')){try{const mix=await fetchJSON(`${userInfo?'/api/user/mix/':'/api/mix/'}${encodeURIComponent(videoObj.playlistId)}?videoId=${encodeURIComponent(videoId||'')}`);const first=mix.videos[0];if(!first)throw new Error('ミックスリストが空です。');handleStartPlaylistPlay({id:'mix:'+mix.id,title:mix.title,videos:mix.videos,createdAt:Date.now(),updatedAt:Date.now()},false,first.videoId);setActiveMix(mix.hasMore?{id:mix.id,cursor:mix.continuation,linked:!!userInfo}:null);}catch(error:any){setYoutubeActionError(error.message);}return;}
+    const selection=++mixOpenRequest.current;
+    if(videoObj?.playlistId?.startsWith('RD')){
+      const generation=youtubeGeneration.current;
+      setOpeningMix(videoObj.title||'ミックスリスト');setYoutubeActionError('');
+      try{
+        const mix=await fetchJSON(`${userInfo?'/api/user/mix/':'/api/mix/'}${encodeURIComponent(videoObj.playlistId)}?videoId=${encodeURIComponent(videoId||'')}`);
+        if(selection!==mixOpenRequest.current||generation!==youtubeGeneration.current)return;
+        const first=mix.videos[0];if(!first)throw new Error('ミックスリストが空です。');
+        handleStartPlaylistPlay({id:'mix:'+mix.id,title:mix.title,videos:mix.videos,createdAt:Date.now(),updatedAt:Date.now()},false,first.videoId);
+        setActiveMix(mix.hasMore?{id:mix.id,cursor:mix.continuation,linked:!!userInfo}:null);
+      }catch(error:any){if(selection===mixOpenRequest.current&&generation===youtubeGeneration.current)setYoutubeActionError(error.message);}
+      finally{if(selection===mixOpenRequest.current)setOpeningMix('');}
+      return;
+    }
+    setOpeningMix('');
     setActiveMix(null);setCurrentPlaylistQueue([]);setPlaylistQueueIndex(-1);
     const selectedVideo = videoObj || videoCache[videoId] as Video | undefined;
     if (selectedVideo?.isShort) {
@@ -1010,7 +1027,8 @@ export default function MainApp() {
     <div className={`${view === 'search' ? 'is-search-page ' : ''}${view === 'shorts' ? 'is-shorts-page ' : ''}min-h-screen bg-white text-gray-900 flex flex-col font-sans antialiased selection:bg-red-100 selection:text-red-800`}>
       <GoogleLinkAnnouncement onOpen={()=>navigate('/feed/library')}/>
       {youtubeActionError&&<div role="alert" className="youtube-action-toast">{youtubeActionError}<button onClick={()=>setYoutubeActionError('')}>閉じる</button></div>}
-      <TopProgressBar isLoading={loading || loadingMore} />
+      {openingMix&&<div role="status" aria-live="polite" className="youtube-action-toast"><span className="inline-block h-4 w-4 shrink-0 rounded-full border-2 border-white/30 border-t-white motion-safe:animate-spin" aria-hidden="true"/><span>ミックスリストを読み込み中…<span className="block max-w-64 truncate text-white/70">{openingMix}</span></span></div>}
+      <TopProgressBar isLoading={loading || loadingMore || !!openingMix} />
       {/* ナビゲーションバー: 常に上部に固定しつつ、コンテンツと被らないようにする */}
       <div className="w-full shrink-0 sticky top-0 z-50 bg-white">
         <Navbar

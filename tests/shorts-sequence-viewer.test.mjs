@@ -9,7 +9,7 @@ import {createRoot} from 'react-dom/client';
 import {MemoryRouter} from 'react-router-dom';
 import {JSDOM} from 'jsdom';
 
-test('linked Shorts appends the dedicated sequence in provider order without home reuse',async()=>{
+test('linked Shorts skips previously displayed clips, continues past a seen page and preserves provider order',async()=>{
  const folder=await mkdtemp(path.resolve('node_modules/.shorts-sequence-'));
  const output=path.join(folder,'viewer.mjs');
  await build({entryPoints:['src/components/ShortsViewer.tsx'],outfile:output,bundle:true,packages:'external',platform:'node',format:'esm',jsx:'automatic',plugins:[{name:'network-boundary',setup(builder){builder.onLoad({filter:/\/src\/utils\.ts$/},()=>({contents:'export const fetchJSON=async(url,options)=>{const response=await fetch(url,options);if(!response.ok){const error=new Error("upstream failed");error.status=response.status;throw error;}return response.json()};export const formatNumberJP=n=>String(n);',loader:'js'}));}}]});
@@ -24,9 +24,11 @@ test('linked Shorts appends the dedicated sequence in provider order without hom
  localStorage.setItem('xerox_youtube_linked','1');
  const video=id=>({videoId:id,title:id,author:'channel',viewCount:0,isShort:true,lengthSeconds:15,publishedText:'',videoThumbnails:[]});
  const seed=video('abcdefghijk'),first=video('lmnopqrstuv'),second=video('12345678901');
+ const seen=video('23456789012');
+ localStorage.setItem('xerox_shorts_seen_v1_local',JSON.stringify([{id:seen.videoId,at:Date.now()},{id:seed.videoId,at:Date.now()}]));
  const requests=[];const previousFetch=globalThis.fetch;
  globalThis.fetch=async url=>{const value=String(url);
-  if(value.startsWith('/api/user/shorts-sequence?')){requests.push(value);return Response.json(requests.length===1?{videos:[first,seed],hasMore:true,continuation:'sequence-next'}:{videos:[first,second],hasMore:false});}
+  if(value.startsWith('/api/user/shorts-sequence?')){requests.push(value);return Response.json(requests.length===1?{videos:[seen,seed],hasMore:true,continuation:'sequence-next'}:{videos:[first,seen,second,first],hasMore:false});}
   if(value.startsWith('/api/shorts/'))return Response.json(video(value.split('/').pop().split('?')[0]));
   if(value.startsWith('https://raw.githubusercontent.com/'))return Response.json({params:'?key=sequence-test'});
   throw new Error('Unexpected request '+value);

@@ -249,7 +249,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
       if (cancelled) return;
       if(personalized)personalCursor.current=data.continuation||'';
       const fetched=(data.videos||[]).filter((video:Video)=>video.isShort);
-      const items:Video[]=personalized?fetched:rankCandidates(excludeSeenShorts(fetched,readSeenShorts(),seed.current?.videoId),{short:true,seed:session,seen:readSeenShorts()});
+      const items:Video[]=personalized?excludeSeenShorts(fetched,readSeenShorts(),seed.current?.videoId):rankCandidates(excludeSeenShorts(fetched,readSeenShorts(),seed.current?.videoId),{short:true,seed:session,seen:readSeenShorts()});
       setRegular(previous => appendShortsInOrder(previous,items));
       setHasMore(Boolean(data.hasMore));
     }).catch(reason => { if (!cancelled) setError(reason.message || 'ショートを読み込めませんでした。'); })
@@ -426,7 +426,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
       })}
       <div className={channelMode && videos.length ? "shorts-channel-status" : "shorts-feed-end"}>
         {(loading || !rankingReady) && <p className="flex gap-2"><Loader2 size={18} className="animate-spin" />読み込み中…</p>}
-        {!loading && rankingReady && !error && (!channelMode || !videos.length) && <p>{videos.length ? 'ここまでのショートを表示しました。' : '表示できる縦長ショートがありません。'}</p>}
+        {!loading && rankingReady && !error && (!channelMode || !videos.length) && <p>{videos.length ? 'ここまでのショートを表示しました。' : personalized ? '未表示のショートが見つかりませんでした。' : '表示できる縦長ショートがありません。'}</p>}
         {!loading && !error && hasMore && (!channelMode || activeId === videos[videos.length - 1]?.videoId) && page < (channelMode ? 100 : MAX_SHORT_PAGES) && (!ranking.length || videos.length < ranking.length * 2) && <button className="underline mt-3" onClick={() => setPage(value => value + 1)}>{channelMode ? '古いショートを読み込む' : '続きを読み込む'}</button>}
         {error && videos.length > 0 && <div className="mt-3" role="status"><CompactError error="続きのショートを取得できませんでした。" onRetry={retryFeed} retryLabel="再試行"/></div>}
       </div>
