@@ -26,7 +26,7 @@ function origins() {
   return configured;
 }
 export async function apiFetch(path,options={}){
- if(!path.startsWith('/api/')||/^\/api\/(account|auth)(\/|$)/.test(path)||(options.method&&options.method!=='GET'))return fetch(path,options);
+ if(!path.startsWith('/api/')||/^\/api\/(account|auth|user)(\/|$)/.test(path)||(options.method&&options.method!=='GET'))return fetch(path,options);
  const state=readTransportState();if(state.mode==='proxy'||(state.mode==='auto'&&state.automatic))return fetch(path,{...options,credentials:'same-origin'});
  const list=await origins();
  options.signal?.throwIfAborted();

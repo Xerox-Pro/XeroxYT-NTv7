@@ -1,3 +1,5 @@
+import {fetchJSON} from '../utils';
+import {useYouTubeLinked} from '../lib/youtubeConnection';
 import React, { useState } from 'react';
 import { UserPlaylist, Video } from '../types';
 import { X, Plus, Check, FolderPlus, Music } from 'lucide-react';
@@ -7,6 +9,7 @@ interface AddToPlaylistModalProps {
   playlists: UserPlaylist[];
   onClose: () => void;
   onToggleVideoInPlaylist: (playlistId: string, video: Video) => void;
+  youtubePlaylists?:{id:string;title:string}[];
   onCreatePlaylist: (title: string, description?: string) => string; // returns new playlist id
 }
 
@@ -15,15 +18,19 @@ export default function AddToPlaylistModal({
   playlists,
   onClose,
   onToggleVideoInPlaylist,
-  onCreatePlaylist
+  onCreatePlaylist, youtubePlaylists=[]
 }: AddToPlaylistModalProps) {
+  const linked=useYouTubeLinked();
+  const [remoteSaved,setRemoteSaved]=useState<string[]>([]);const [remoteError,setRemoteError]=useState('');const [remoteBusy,setRemoteBusy]=useState('');
+  const [createGoogle,setCreateGoogle]=useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+    if(createGoogle&&linked){setRemoteBusy('create');setRemoteError('');try{await fetchJSON('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'playlistCreate',title:newTitle.trim(),videoIds:[video.videoId]})});onClose();}catch(error:any){setRemoteError(error.message);}finally{setRemoteBusy('');}return;}
     const newId = onCreatePlaylist(newTitle.trim(), newDesc.trim());
     onToggleVideoInPlaylist(newId, video);
     setNewTitle('');
@@ -37,6 +44,7 @@ export default function AddToPlaylistModal({
         className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-gray-100 flex flex-col gap-4 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
+        {linked&&youtubePlaylists.length>0&&<section><h3 className="text-sm font-bold">YouTubeに保存</h3>{youtubePlaylists.map(list=><button type="button" key={list.id} disabled={!!remoteBusy||remoteSaved.includes(list.id)} className="flex w-full justify-between py-2 text-left text-sm" onClick={async()=>{setRemoteBusy(list.id);setRemoteError('');try{await fetchJSON('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'playlistAdd',playlistId:list.id,videoIds:[video.videoId]})});setRemoteSaved(previous=>[...previous,list.id]);}catch(error:any){setRemoteError(error.message);}finally{setRemoteBusy('');}}}>{list.title}<span>{remoteSaved.includes(list.id)?'追加済み':'追加'}</span></button>)}{remoteError&&<p role="alert" className="text-xs text-red-700">{remoteError}</p>}</section>}
         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
           <div className="flex items-center gap-2 text-gray-900 font-bold text-base">
             <Music size={18} className="text-red-600" />
@@ -103,6 +111,8 @@ export default function AddToPlaylistModal({
           </button>
         ) : (
           <form onSubmit={handleCreate} className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+            {linked&&<label className="flex gap-2 py-2 text-xs"><input type="checkbox" checked={createGoogle} onChange={event=>setCreateGoogle(event.target.checked)}/>YouTubeに作成する</label>}
+            {remoteError&&<p role="alert" className="text-xs text-red-700">{remoteError}</p>}
             <input
               type="text"
               placeholder="再生リストのタイトル (必須)"
@@ -114,7 +124,8 @@ export default function AddToPlaylistModal({
             />
             <input
               type="text"
-              placeholder="説明 (任意)"
+              placeholder="説明 (端末内リスト・任意)"
+              disabled={createGoogle}
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
               className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none focus:border-black"
@@ -129,7 +140,7 @@ export default function AddToPlaylistModal({
               </button>
               <button
                 type="submit"
-                disabled={!newTitle.trim()}
+                disabled={!newTitle.trim()||!!remoteBusy}
                 className="px-4 py-1.5 bg-black text-white text-xs font-bold rounded-lg hover:bg-gray-800 disabled:opacity-40 transition-colors"
               >
                 作成して追加

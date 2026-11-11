@@ -1,3 +1,4 @@
+import {useYouTubeLinked} from '../lib/youtubeConnection';
 import PlaybackSettings from './PlaybackSettings';
 import {usePlayerPreferences,videoEffectsStyle} from '../lib/playerPreferences';
 import {readPlaybackPosition,savePlaybackPosition} from '../lib/playbackPosition.mjs';
@@ -141,6 +142,11 @@ export default function VideoPlayer({
   watchHistory = []
 }: VideoPlayerProps) {
   const playerPreferences=usePlayerPreferences();
+  const youtubeLinked=useYouTubeLinked();
+  const [youtubeActionError,setYoutubeActionError]=useState('');
+  const [youtubeActionBusy,setYoutubeActionBusy]=useState(false);
+  const actionLock=useRef(false);
+  const youtubeAction=async(action:string,payload:Record<string,unknown>={})=>{if(actionLock.current)return false;actionLock.current=true;setYoutubeActionBusy(true);setYoutubeActionError('');try{await fetchJSON('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,videoId,...payload})});return true;}catch(error:any){setYoutubeActionError(error.message);return false;}finally{actionLock.current=false;setYoutubeActionBusy(false);}};
   const endedCallback=useRef(onPlaybackEnded);endedCallback.current=onPlaybackEnded;
   const [autoNext, setAutoNext] = useState(() => { try { return localStorage.getItem('xerox_video_auto_next_v1') !== 'off'; } catch { return true; } });
   const autoNextRef = useRef(autoNext); autoNextRef.current = autoNext;
@@ -208,7 +214,8 @@ export default function VideoPlayer({
     return () => window.clearTimeout(timer);
   }, [activeVideo.width, activeVideo.height, activeVideo.isShort, isMini]);
 
-  const handleLike = () => {
+  const handleLike = async () => {
+    if(youtubeLinked&&!await youtubeAction(isLiked?'removeRating':'like'))return;
     learnInteraction(activeVideo, isLiked ? 'unlike' : 'like');
     if (isLiked) {
       setIsLiked(false);
@@ -220,7 +227,8 @@ export default function VideoPlayer({
     }
   };
 
-  const handleDislike = () => {
+  const handleDislike = async () => {
+    if(youtubeLinked&&!await youtubeAction(isDisliked?'removeRating':'dislike'))return;
     if (!isDisliked) learnInteraction(activeVideo, 'dislike');
     if (isDisliked) {
       setIsDisliked(false);
@@ -1097,9 +1105,10 @@ export default function VideoPlayer({
     };
   }, [loadMoreRelated, hasMoreRelated, loadingMoreRelated]);
 
-  const handleAddComment = (e: React.FormEvent) => {
+  const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim()) return;
+    if(youtubeLinked){if(await youtubeAction('comment',{text:newComment.trim()})){setNewComment('');setYoutubeActionError('YouTubeへコメントを送信しました。反映に時間がかかる場合があります。');}return;}
     const commentObj: Comment = {
       id: Date.now().toString(),
       author: '自分 (Xeroxユーザー)',
@@ -1300,6 +1309,7 @@ export default function VideoPlayer({
         </div>
 
         <div className="mt-4 flex flex-col">
+          {youtubeActionError&&<p role="status" className="mb-3 rounded-lg bg-gray-100 p-3 text-xs">{youtubeActionError}</p>}
           {/* 実際のライブ配信時のみバッジを表示 */}
           {isLive && (
             <div className="flex items-center gap-2 mb-2">
@@ -1380,11 +1390,12 @@ export default function VideoPlayer({
 
             {/* アクションボタン */}
             <div className="watch-actions flex items-center gap-2 overflow-x-auto no-scrollbar">
-              <PlaybackSettings/>
+              <PlaybackSettings>{youtubeLinked&&<button className="playback-toggle" disabled={youtubeActionBusy} onClick={async()=>{if(await youtubeAction('watchLater'))setYoutubeActionError('YouTubeの「後で見る」に追加しました。');}}>YouTubeの「後で見る」に追加</button>}</PlaybackSettings>
               <div className="flex items-center bg-gray-100 rounded-full p-0.5 border border-gray-200 shadow-2xs">
                 <motion.button
                   onClick={handleLike}
                   aria-label="高く評価"
+                  disabled={youtubeActionBusy}
                   whileTap={{ scale: 0.88 }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-l-full transition-colors duration-150 ${
                     isLiked ? 'text-blue-600 bg-blue-50' : 'text-gray-800 hover:bg-gray-200'
@@ -1397,6 +1408,7 @@ export default function VideoPlayer({
                 <motion.button
                   onClick={handleDislike}
                   aria-label="低く評価"
+                  disabled={youtubeActionBusy}
                   whileTap={{ scale: 0.88 }}
                   className={`px-3 py-1.5 text-xs rounded-r-full transition-colors duration-150 ${
                     isDisliked ? 'text-blue-600 bg-blue-50' : 'text-gray-800 hover:bg-gray-200'

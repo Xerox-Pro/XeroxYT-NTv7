@@ -1,3 +1,4 @@
+import {useYouTubeLinked} from '../lib/youtubeConnection';
 import {loadHomeSnapshot,saveHomeSnapshot} from '../lib/homeSnapshot.mjs';
 import {useSiteAccount} from './AccountGate';
 import {shuffleShelfCandidates} from '../lib/shortsShelfOrder.mjs';
@@ -25,7 +26,8 @@ export function shortsQuery(context: ShortsContext) {
 export default function ShortsShelf({ context, onSelect, providedVideos, onVideosLoaded, offset=0 }: {
   context: ShortsContext; onSelect: (video: Video, context: ShortsContext) => void; providedVideos?: Video[]; onVideosLoaded?: (videos:Video[])=>void; offset?:number;
 }) {
-  const account=useSiteAccount();const snapshotScope=account?.username||'guest';
+  const personalized=useYouTubeLinked()&&context.source==='home';
+  const account=useSiteAccount();const snapshotScope=(account?.username||'guest')+(personalized?':youtube':'');
   const report = useRef(onVideosLoaded); report.current = onVideosLoaded;
   const shelf = useRef<HTMLDivElement>(null);
   const [session] = useState(createShortsSession);
@@ -39,13 +41,13 @@ export default function ShortsShelf({ context, onSelect, providedVideos, onVideo
     let cancelled = false;
     setLoading(true); setVideos([]); setError('');
     const seen = readSeenShorts();
-    Promise.allSettled([fetchJSON(discoveryRequest(withShortsInterests(query), 1, session, seen)), context.source === 'search' ? Promise.resolve({ videos: [] }) : loadShortsRanking()]).then(([native, ranked]) => {
+    Promise.allSettled([fetchJSON(discoveryRequest(withShortsInterests(query), 1, session, seen)), (context.source === 'search'||personalized) ? Promise.resolve({ videos: [] }) : loadShortsRanking()]).then(([native, ranked]) => {
       if (native.status === 'rejected' && !(ranked.status==='fulfilled'&&ranked.value.videos?.length)) throw native.reason;
       const currentSeen = readSeenShorts();
       const candidates = excludeSeenShorts((native.status==='fulfilled'?(native.value.videos||[]):[]).filter((v: Video) => v.isShort), currentSeen);
-      const regular = context.source === 'search' ? candidates : rankCandidates(candidates, { short: true, seed: session, seen });
+      const regular = (context.source === 'search'||personalized) ? candidates : rankCandidates(candidates, { short: true, seed: session, seen });
       const ranking = ranked.status === 'fulfilled' ? rankCandidates(excludeSeenShorts(ranked.value.videos || [], currentSeen), { short: true, seed: session, seen }) : [];
-      if (!cancelled) { let all=ranking.length ? mixShorts(regular, ranking) : regular;if(context.source==='home'){if(!all.length)all=loadHomeSnapshot('shorts:'+query,snapshotScope);let previous='';const key='xerox_short_shelf_order_'+query;try{previous=sessionStorage.getItem(key)||'';}catch{}all=shuffleShelfCandidates(all,previous);try{sessionStorage.setItem(key,all[0]?.videoId||'');}catch{}saveHomeSnapshot('shorts:'+query,all,snapshotScope);}setVideos(all.slice(offset,offset+8));report.current?.(all); }
+      if (!cancelled) { let all=ranking.length ? mixShorts(regular, ranking) : regular;if(context.source==='home'&&!personalized){if(!all.length)all=loadHomeSnapshot('shorts:'+query,snapshotScope);let previous='';const key='xerox_short_shelf_order_'+query;try{previous=sessionStorage.getItem(key)||'';}catch{}all=shuffleShelfCandidates(all,previous);try{sessionStorage.setItem(key,all[0]?.videoId||'');}catch{}saveHomeSnapshot('shorts:'+query,all,snapshotScope);}setVideos(all.slice(offset,offset+8));report.current?.(all); }
     }).catch(err => { if (!cancelled) {const saved=context.source==='home'?loadHomeSnapshot('shorts:'+query,snapshotScope):[];if(saved.length){const restored=shuffleShelfCandidates(saved,saved[0]?.videoId);setVideos(restored.slice(offset,offset+8));report.current?.(restored);setError('');}else setError(err.message || 'ショートを取得できませんでした');} })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

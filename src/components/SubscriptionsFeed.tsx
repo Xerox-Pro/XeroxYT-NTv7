@@ -1,3 +1,4 @@
+import {useYouTubeLinked} from '../lib/youtubeConnection';
 import {sortSubscriptions} from '../lib/subscriptionOrder.mjs';
 import {fetchSubscriptionPage} from '../lib/subscriptionFeed.mjs';
 import VideoThumbnail from './VideoThumbnail';
@@ -25,6 +26,8 @@ export default function SubscriptionsFeed({
   onToggleSubscribe,
   onOpenAddToPlaylist
 }: SubscriptionsFeedProps) {
+  const youtubeLinked=useYouTubeLinked();
+  const personalCursor=useRef('');
   const [feedVideos, setFeedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -48,7 +51,9 @@ export default function SubscriptionsFeed({
     const version = append ? requestVersion.current : ++requestVersion.current;
     setError('');
     try {
-      const result = await fetchSubscriptionPage(subscriptions, selectedChannelId, pageNum, fetchJSON);
+      if(pageNum===1)personalCursor.current='';
+      const result = youtubeLinked&&selectedChannelId==='all'?await fetchJSON('/api/user/feed/subscriptions?continuation='+encodeURIComponent(personalCursor.current)):await fetchSubscriptionPage(subscriptions, selectedChannelId, pageNum, fetchJSON);
+      if(youtubeLinked&&selectedChannelId==='all')personalCursor.current=result.continuation||'';
       if (version !== requestVersion.current) return;
       const data: Video[] = result.videos;
 
@@ -74,7 +79,7 @@ export default function SubscriptionsFeed({
       setLoadingMore(false);
       isFetchingMore.current = false;
     }
-  }, [subscriptions, selectedChannelId]);
+  }, [subscriptions, selectedChannelId, youtubeLinked]);
 
   // Selected channel / subscriptions change -> reload page 1
   useEffect(() => {

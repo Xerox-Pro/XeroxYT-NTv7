@@ -1,3 +1,4 @@
+import {useYouTubeLinked} from '../lib/youtubeConnection';
 import PlaylistDetail from './PlaylistDetail';
 import VideoThumbnail from "./VideoThumbnail";
 import React, { useState, useEffect } from 'react';
@@ -47,6 +48,7 @@ export default function LibraryPage({
   youtubePlaylists = [],
   watchLaterVideos = []
 }: LibraryPageProps) {
+  const youtubeLinked=useYouTubeLinked();
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(
     initialPlaylistId || (playlists.length > 0 ? playlists[0].id : null)
   );
@@ -103,7 +105,7 @@ export default function LibraryPage({
         }
       }
 
-      const res = await fetchJSON(`/api/playlist/${encodeURIComponent(playlistId)}`);
+      const res = await fetchJSON(`${youtubeLinked?'/api/user/playlist/':'/api/playlist/'}${encodeURIComponent(playlistId)}`);
       if (res && res.videos && res.videos.length > 0) {
         const newPl: UserPlaylist = {
           id: `yt-import-${Date.now()}`,

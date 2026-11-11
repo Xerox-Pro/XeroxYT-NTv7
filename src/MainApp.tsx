@@ -1,3 +1,4 @@
+import YouTubeAccountPanel from './components/YouTubeAccountPanel';
 import SearchFilters from './components/SearchFilters';
 import {searchFilterParams} from '../search-filters.mjs';
 import {queueIndex,shuffledQueue} from './lib/playlistPlayback.mjs';
@@ -56,7 +57,6 @@ export default function MainApp() {
 
   const [view, setView] = useState<'home' | 'search' | 'video' | 'shorts' | 'channel' | 'subscriptions' | 'library' | 'history' | 'debug' | 'license'>('home');
   const siteAccount = useSiteAccount();
-  const homeSnapshotScope = siteAccount?.username || 'guest';
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileSearchFilter,setMobileSearchFilter] = useState('すべて');
   const [phoneLayout,setPhoneLayout] = useState(()=>window.innerWidth<=640);
@@ -70,9 +70,15 @@ export default function MainApp() {
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [currentPlaylistId, setCurrentPlaylistId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
-  const [authFlow, setAuthFlow] = useState<{ userCode: string, verificationUrl: string } | null>(null);
+  const [authFlow, setAuthFlow] = useState<{ userCode: string, verificationUrl: string; interval?:number; expiresAt?:number } | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const youtubeGeneration=useRef(0);
+  const [youtubeFeatureErrors,setYoutubeFeatureErrors]=useState<string[]>([]);
+  const [youtubeLiked,setYoutubeLiked]=useState<Video[]>([]);
+  const [youtubeActionError,setYoutubeActionError]=useState('');
+  useEffect(()=>{const show=(event:Event)=>setYoutubeActionError(String((event as CustomEvent).detail||''));window.addEventListener('xerox-youtube-action-error',show);return()=>window.removeEventListener('xerox-youtube-action-error',show);},[]);
+  const personalHomeCursor=useRef('');
   
   // Cache for static video/channel data
   const [videoCache, setVideoCache] = useState<Record<string, Video | ShortVideo>>(() => {
@@ -95,14 +101,8 @@ export default function MainApp() {
   });
 
   // Auth state
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(() => {
-    try {
-      const saved = localStorage.getItem('xerox_user_info');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const homeSnapshotScope=(siteAccount?.username||'guest')+(userInfo?':youtube':'');
 
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -286,71 +286,17 @@ export default function MainApp() {
   const [showNotificationsMenu, setShowNotificationsMenu] = useState<boolean>(false);
 
   const fetchYoutubeAuthData = async () => {
-    const ytCreds = localStorage.getItem('xerox_youtube_credentials');
-    if (!ytCreds) return;
-
-    try {
-      const channelInfo = await fetchJSON('/api/user/channel-info');
-      if (channelInfo && channelInfo.id) {
-        setUserInfo(prev => {
-          if (!prev) return null;
-          const updated = {
-            ...prev,
-            handle: channelInfo.handle,
-            subscriberCount: channelInfo.subscriberCount,
-            videoCount: channelInfo.videoCount,
-            bannerUrl: channelInfo.bannerUrl,
-            picture: channelInfo.avatar || prev.picture
-          };
-          localStorage.setItem('xerox_user_info', JSON.stringify(updated));
-          return updated;
-        });
-      }
-    } catch (e) {
-      console.warn('Failed to fetch YouTube channel info:', e);
-    }
-
-    try {
-      const ytPlaylists = await fetchJSON('/api/user/playlists');
-      if (Array.isArray(ytPlaylists)) {
-        setYoutubePlaylists(ytPlaylists);
-      }
-    } catch (e) {
-      console.warn('Failed to fetch YouTube playlists:', e);
-    }
-
-    try {
-      const wlVideos = await fetchJSON('/api/user/watch-later');
-      if (Array.isArray(wlVideos)) {
-        setWatchLaterVideos(wlVideos);
-      }
-    } catch (e) {
-      console.warn('Failed to fetch Watch Later videos:', e);
-    }
-
-    try {
-      const countRes = await fetchJSON('/api/user/notifications/unread-count');
-      if (countRes && typeof countRes.count === 'number') {
-        setUnreadNotificationsCount(countRes.count);
-      }
-    } catch (e) {
-      console.warn('Failed to fetch unread notifications count:', e);
-    }
-
-    try {
-      const notifs = await fetchJSON('/api/user/notifications');
-      if (Array.isArray(notifs)) {
-        setNotifications(notifs);
-      }
-    } catch (e) {
-      console.warn('Failed to fetch notifications list:', e);
-    }
+    const generation=youtubeGeneration.current;
+    const jobs=[['再生リスト','/api/user/playlists',setYoutubePlaylists],['後で見る','/api/user/watch-later',setWatchLaterVideos],['高評価','/api/user/liked-videos',setYoutubeLiked],['通知','/api/user/notifications',setNotifications]] as const;
+    const results=await Promise.allSettled(jobs.map(async([name,path,setter])=>{const data=await fetchJSON(path);if(!Array.isArray(data))throw new Error(name);if(generation===youtubeGeneration.current)setter(data);return name;}));
+    if(generation!==youtubeGeneration.current)return;
+    setYoutubeFeatureErrors(results.flatMap((result,index)=>result.status==='rejected'?[jobs[index][0]]:[]));
+    try{const channels=await fetchJSON('/api/user/subscriptions');if(generation===youtubeGeneration.current&&Array.isArray(channels))setSubscriptions(channels.map(c=>({id:c.id,title:c.title,avatar:c.avatar})));}catch{}
   };
 
   useEffect(() => {
     if (view === 'history') {
-      const ytCreds = localStorage.getItem('xerox_youtube_credentials');
-      if (ytCreds && userInfo) {
+      if (userInfo) {
         setLoadingHistory(true);
         fetchJSON('/api/user/history')
           .then((data) => {
@@ -364,11 +310,11 @@ export default function MainApp() {
                 lengthSeconds: v.lengthSeconds || 0,
                 viewCount: v.viewCount || 0,
                 timestamp: v.timestamp || Date.now(),
-                type: 'video'
+                type: v.isShort?'short':'video'
               })));
             }
           })
-          .catch((err) => console.error('Failed to fetch YouTube history:', err))
+          .catch((err) => setYoutubeActionError('YouTubeの履歴を取得できませんでした。'+err.message))
           .finally(() => setLoadingHistory(false));
       } else {
         setYoutubeHistory([]);
@@ -446,7 +392,8 @@ export default function MainApp() {
     });
   };
 
-  const handleToggleSubscribe = (channel: ChannelSubscription) => {
+  const handleToggleSubscribe = async (channel: ChannelSubscription) => {
+    if(userInfo){const exists=subscriptions.some(item=>item.id===channel.id);try{await fetchJSON('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:exists?'unsubscribe':'subscribe',channelId:channel.id})});}catch(error:any){setAuthError(error.message);window.dispatchEvent(new CustomEvent('xerox-youtube-action-error',{detail:error.message}));return;}}
     setSubscriptions((prev) => {
       const exists = prev.some(s => s.id === channel.id || s.title === channel.title);
       if (exists) {
@@ -547,11 +494,11 @@ export default function MainApp() {
       setLoading(true);
       setError('');
       setAuthError(null);
-      const data = await fetchJSON('/api/auth/signin');
+      const data = await fetchJSON('/api/auth/signin',{method:'POST'});
       if (data && data.userCode && data.verificationUrl) {
         setAuthFlow({
           userCode: data.userCode,
-          verificationUrl: data.verificationUrl
+          verificationUrl: data.verificationUrl, interval:data.interval, expiresAt:data.expiresAt
         });
         setIsPolling(true);
         isPollingRef.current = true;
@@ -560,7 +507,7 @@ export default function MainApp() {
       }
     } catch (err: any) {
       console.error('Google login error:', err);
-      setError(err.message || 'ログイン処理に失敗しました。時間をおいて再度お試しください。');
+      setAuthError(err.message || 'Google連携を開始できませんでした。');
     } finally {
       setLoading(false);
     }
@@ -576,24 +523,23 @@ export default function MainApp() {
         console.log('[Auth] Polling authentication status...');
         const res = await fetchJSON('/api/auth/poll');
         if (res && res.success && res.user) {
-          console.log('[Auth] Successfully authenticated!', res.user);
+
           const uInfo = {
             name: res.user.name,
-            email: res.user.email || 'authenticated@youtube.com',
-            picture: res.user.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(res.user.name)}&background=random`
+            email: res.user.email || '',
+            picture: res.user.picture || ''
           };
           setUserInfo(uInfo);
           localStorage.setItem('xerox_user_info', JSON.stringify(uInfo));
-          if (res.credentials) {
-            localStorage.setItem('xerox_youtube_credentials', JSON.stringify(res.credentials));
-          }
+          localStorage.setItem('xerox_youtube_linked','1');
+          window.dispatchEvent(new Event('xerox-youtube-connection'));
           setAuthFlow(null);
           setIsPolling(false);
           isPollingRef.current = false;
           
           // Force refreshing recommendations with their new personal home feed
           setPage(1);
-          fetchRecommendations(1, false);
+          navigate('/');
           
           // Sync Subscribed Channels on login
           try {
@@ -610,7 +556,7 @@ export default function MainApp() {
           }
 
           // Fetch additional YouTube features data
-          fetchYoutubeAuthData();
+
         } else if (res && res.status === 'error') {
           console.error('[Auth] Polling returned error:', res.error);
           setAuthError(res.error || '認証中にエラーが発生しました。最初からやり直してください。');
@@ -618,54 +564,39 @@ export default function MainApp() {
           isPollingRef.current = false;
         } else {
           // If pending, poll again
-          timer = setTimeout(poll, 6000);
+          timer = setTimeout(poll, Math.max(5,res.interval||authFlow.interval||6)*1000);
         }
       } catch (err: any) {
         console.error('[Auth] Poll failed:', err);
-        // Retry polling
-        timer = setTimeout(poll, 6000);
+        if(err.status===400||err.status===401){setAuthError(err.message);setIsPolling(false);isPollingRef.current=false;}else timer = setTimeout(poll, Math.max(5,authFlow.interval||6)*1000);
       }
     };
 
-    timer = setTimeout(poll, 6000);
+    timer = setTimeout(poll, Math.max(5,authFlow.interval||6)*1000);
     return () => {
       clearTimeout(timer);
     };
   }, [isPolling, authFlow]);
 
-  useEffect(() => {
-    const initYtAuth = async () => {
-      const ytCreds = localStorage.getItem('xerox_youtube_credentials');
-      if (ytCreds && userInfo) {
-        // Sync subscribed channels on load
-        try {
-          const subChannels = await fetchJSON('/api/user/subscriptions');
-          if (Array.isArray(subChannels) && subChannels.length > 0) {
-            setSubscriptions(subChannels.map(c => ({
-              id: c.id,
-              title: c.title,
-              avatar: c.avatar
-            })));
-          }
-        } catch (e) {
-          console.warn('Initial subscriptions sync failed:', e);
-        }
-
-        // Fetch additional YouTube features data
-        fetchYoutubeAuthData();
-      }
-    };
-    initYtAuth();
-  }, [userInfo]);
+  useEffect(()=>{
+    let cancelled=false;youtubeGeneration.current++;
+    localStorage.removeItem('xerox_youtube_credentials');localStorage.removeItem('xerox_youtube_linked');
+    fetchJSON('/api/auth/status').then(status=>{if(cancelled)return;if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else setUserInfo(null);}).catch(()=>{if(!cancelled)setUserInfo(null);});
+    return()=>{cancelled=true;};
+  },[siteAccount?.username]);
+  useEffect(()=>{if(userInfo)void fetchYoutubeAuthData();setPage(1);if(location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo]);
+  const cancelGoogleLink=async()=>{isPollingRef.current=false;setIsPolling(false);setAuthFlow(null);setAuthError(null);try{await fetchJSON('/api/auth/cancel',{method:'POST'});}catch(error:any){setAuthError(error.message);}};
 
   const handleLogout = async () => {
-    try {
-      await fetchJSON('/api/auth/logout', { method: 'POST' }).catch(() => {});
-    } catch {}
+    try{await fetchJSON('/api/auth/logout',{method:'POST'});}catch(error:any){setAuthError(error.message);return;}
+    youtubeGeneration.current++;
     localStorage.removeItem('xerox_youtube_credentials');
+    localStorage.removeItem('xerox_youtube_linked');
+    window.dispatchEvent(new Event('xerox-youtube-connection'));
     localStorage.removeItem('xerox_user_info');
     localStorage.removeItem('webauthn_credential_id');
     setUserInfo(null);
+    setYoutubeHistory([]);setYoutubeLiked([]);setYoutubeFeatureErrors([]);
     setSubscriptions([]);
     setYoutubePlaylists([]);
     setWatchLaterVideos([]);
@@ -673,7 +604,7 @@ export default function MainApp() {
     setUnreadNotificationsCount(0);
     setShowNotificationsMenu(false);
     setPage(1);
-    fetchRecommendations(1, false);
+    navigate('/');
   };
 
   const handleGoHome = useCallback(() => {
@@ -710,9 +641,10 @@ export default function MainApp() {
         userHashtags,
         page: pageNum.toString(),
       });
-      const result = await fetchJSON(`/api/recommendations?${queryParams.toString()}`);
-
+      if(pageNum===1)personalHomeCursor.current='';
+      const result = userInfo?await fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current)):await fetchJSON(`/api/recommendations?${queryParams.toString()}`);
       if (currentReqId !== recommendationRequestIdRef.current) return;
+      if(userInfo){personalHomeCursor.current=result.continuation||'';setHasMore(!!result.hasMore);}
 
       let publicData: Video[] = [];
       if (Array.isArray(result)) {
@@ -727,7 +659,7 @@ export default function MainApp() {
       }
 
       // フォールバック: 初回読み込みで動画が取得できなかった場合は人気動画(trending)を表示
-      if (publicData.length === 0 && data.length === 0 && pageNum === 1) {
+      if (!userInfo && publicData.length === 0 && data.length === 0 && pageNum === 1) {
         try {
           const trendingData = await fetchJSON('/api/trending');
           if (Array.isArray(trendingData) && trendingData.length > 0) {
@@ -752,8 +684,8 @@ export default function MainApp() {
           uniqueMap.set(v.videoId, v);
         }
       });
-      let finalData = prioritizeUnshown(Array.from(uniqueMap.values()));
-      if(!append&&!finalData.length)finalData=loadHomeSnapshot('すべて',homeSnapshotScope);
+      let finalData = userInfo?Array.from(uniqueMap.values()):prioritizeUnshown(Array.from(uniqueMap.values()));
+      if(!userInfo&&!append&&!finalData.length)finalData=loadHomeSnapshot('すべて',homeSnapshotScope);
 
       saveHomeSnapshot('すべて',finalData,homeSnapshotScope,append);
       if (append) {
@@ -765,12 +697,12 @@ export default function MainApp() {
       } else {
         setVideos(finalData);
       }
-      setHasMore(finalData.length > 0);
+      setHasMore(userInfo?!!result.hasMore:finalData.length>0);
     } catch (err: any) {
       if (currentReqId !== recommendationRequestIdRef.current) return;
       console.error(err);
       setHasMore(false);
-      if (!append) {const saved=loadHomeSnapshot('すべて',homeSnapshotScope);if(saved.length){setVideos(saved);updateCache(saved);setError('');setHasMore(false);}else setError(err.message || 'エラーが発生しました');}
+      if (!append) {const saved=userInfo?[]:loadHomeSnapshot('すべて',homeSnapshotScope);if(saved.length){setVideos(saved);updateCache(saved);setError('');setHasMore(false);}else setError(err.message || 'エラーが発生しました');}
     } finally {
       if (currentReqId === recommendationRequestIdRef.current) {
         setLoading(false);
@@ -1051,6 +983,7 @@ export default function MainApp() {
 
   return (
     <div className={`${view === 'search' ? 'is-search-page ' : ''}${view === 'shorts' ? 'is-shorts-page ' : ''}min-h-screen bg-white text-gray-900 flex flex-col font-sans antialiased selection:bg-red-100 selection:text-red-800`}>
+      {youtubeActionError&&<div role="alert" className="youtube-action-toast">{youtubeActionError}<button onClick={()=>setYoutubeActionError('')}>閉じる</button></div>}
       <TopProgressBar isLoading={loading || loadingMore} />
       {/* ナビゲーションバー: 常に上部に固定しつつ、コンテンツと被らないようにする */}
       <div className="w-full shrink-0 sticky top-0 z-50 bg-white">
@@ -1162,6 +1095,7 @@ export default function MainApp() {
             />
           ) : view === 'library' ? (
             <MyPage
+              youtubeConnection={<YouTubeAccountPanel user={userInfo} flow={authFlow} error={authError} featureErrors={youtubeFeatureErrors} liked={youtubeLiked} notifications={notifications} onLink={handleLogin} onCancel={()=>void cancelGoogleLink()} onUnlink={()=>void handleLogout()} onVideoSelect={handleVideoSelect}/>}
               playlists={playlists}
               history={[...watchHistory, ...shortHistory].sort((a,b)=>b.timestamp-a.timestamp)}
               onCreatePlaylist={handleCreatePlaylist}
@@ -1319,6 +1253,7 @@ export default function MainApp() {
       {/* プレイリスト保存モーダル */}
       {playlistModalVideo && (
         <AddToPlaylistModal
+          youtubePlaylists={youtubePlaylists}
           video={playlistModalVideo}
           playlists={playlists}
           onClose={() => setPlaylistModalVideo(null)}

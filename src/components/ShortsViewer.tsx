@@ -1,3 +1,4 @@
+import {useYouTubeLinked} from '../lib/youtubeConnection';
 import PlaybackSettings from './PlaybackSettings';
 import {usePlayerPreferences,videoEffectsStyle} from '../lib/playerPreferences';
 import {readPlaybackPosition,savePlaybackPosition} from '../lib/playbackPosition.mjs';
@@ -162,6 +163,8 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
   initialId?: string; initialVideo?: Video; context: ShortsContext;
   onRecord: (video: Video) => void; onSelectChannel: (id: string) => void;
 }) {
+  const youtubeLinked=useYouTubeLinked();
+  const personalized=youtubeLinked&&context.source==='home';
   const navigate = useNavigate();
   const location = useLocation();
   const route = useRef(location); route.current = location;
@@ -179,6 +182,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
   const seed = useRef(initialId ? initialVideo || { videoId: initialId, title: 'ショート動画', author: 'チャンネル', isShort: true, viewCount: 0, publishedText: '', lengthSeconds: 0, videoThumbnails: [] } as Video : null);
   const [session] = useState(createShortsSession);
   const [seenOnEntry] = useState(readSeenShorts);
+  const personalCursor=useRef('');
   const regularRef = useRef<Video[]>([]);
   const [regular, setRegular] = useState<Video[]>(channelMode && channelStart ? [...channelStart.videos] : seed.current ? [seed.current] : []);
   const [ranking, setRanking] = useState<Video[]>([]);
@@ -213,12 +217,12 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
   }, [autoScroll]);
   useEffect(() => {
     let cancelled = false;
-    ((context.source === 'search' || channelMode) ? Promise.resolve({ videos: [], updatedAt: '' }) : loadShortsRanking()).then(data => {
+    ((context.source === 'search' || channelMode || personalized) ? Promise.resolve({ videos: [], updatedAt: '' }) : loadShortsRanking()).then(data => {
       if (!cancelled) setRanking(rankCandidates(excludeSeenShorts(data.videos || [], readSeenShorts(), seed.current?.videoId), { short: true, seed: session, seen: seenOnEntry }));
     }).catch(reason => { if (!cancelled) console.warn('[Shorts ranking]', reason); })
       .finally(() => { if (!cancelled) setRankingReady(true); });
     return () => { cancelled = true; };
-  }, []);
+  }, [personalized]);
   useEffect(() => {
     let cancelled = false; pending.current = true; setLoading(true); setError('');
     const controller = new AbortController();
@@ -237,7 +241,11 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
       return () => { cancelled = true; controller.abort(); };
     }
     const excluded = [...regularRef.current.map(video => video.videoId!), ...readSeenShorts()];
-    fetchShortsPage(discoveryRequest(withShortsInterests(query, page), page, session, excluded), controller.signal).then(data => {
+    if(page===1)personalCursor.current='';
+    let request=discoveryRequest(withShortsInterests(query,page),page,session,excluded);
+    if(personalized&&personalCursor.current)request+='&continuation='+encodeURIComponent(personalCursor.current);
+    fetchShortsPage(request, controller.signal).then(data => {
+      if(personalized)personalCursor.current=data.continuation||'';
       if (cancelled) return;
       const items: Video[] = rankCandidates(excludeSeenShorts((data.videos || []).filter((video: Video) => video.isShort), readSeenShorts(), seed.current?.videoId), { short: true, seed: session, seen: readSeenShorts() });
       setRegular(previous => [...new Map([...previous, ...items].map(video => [video.videoId, video])).values()]);
@@ -245,7 +253,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
     }).catch(reason => { if (!cancelled) setError(reason.message || 'ショートを読み込めませんでした。'); })
       .finally(() => { if (!cancelled) { pending.current = false; setLoading(false); } });
     return () => { cancelled = true; controller.abort(); };
-  }, [query, page, session, attempt]);
+  }, [query, page, session, attempt, personalized]);
   useLayoutEffect(() => {
     if (!channelMode || !scroll.current || !videos.length) return;
     const selected = scroll.current.querySelector<HTMLElement>(`[data-short-id="${initialId}"]`);
@@ -295,7 +303,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
     if (rankingReady && !filledRanking && (channelMode ? videos.length > 0 && index >= videos.length - 3 : index >= videos.length - 6) && hasMore && !loading && !pending.current && !error && page < (channelMode ? 100 : MAX_SHORT_PAGES)) setPage(value => value + 1);
   }, [activeId, ids, rankingReady, ranking.length, hasMore, loading, error, page]);
   useEffect(() => {
-    if (channelMode || context.source === 'search' || !activeId) return;
+    if (personalized || channelMode || context.source === 'search' || !activeId) return;
     // Preserve everything already visited and the two prepared embeds.
     const index = videos.findIndex(v => v.videoId === activeId);
     const locked = new Set(videos.slice(0, index + 3).map(v => v.videoId));
@@ -396,7 +404,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
           {prepare ? <ShortEmbed video={video} active={active} captionsEnabled={captionsEnabled} autoScroll={autoScroll} onEnded={advanceOnEnd} isSelected={() => !isShortsLocation(route.current.pathname) || activeRef.current === video.videoId} onRecord={detail => { recordSeenShort(detail.videoId!); onRecord(detail); }} onMetadata={detail => setMetadata(previous => ({ ...previous, [detail.videoId!]: detail }))}>{overlay}</ShortEmbed>
             : <div className="shorts-frame"><img src={video.videoThumbnails[0]?.url} alt="" loading="lazy" className="w-full h-full object-cover" />{overlay}</div>}
           <div className="shorts-side-actions">
-            <button aria-label="高評価（この端末に保存）" aria-pressed={!!likes[video.videoId!]} title="この端末に保存・YouTubeには送信されません" onClick={() => { learnInteraction(info, likes[video.videoId!] ? 'unlike' : 'like'); const next = { ...likes, [video.videoId!]: !likes[video.videoId!] }; setLikes(next); try { localStorage.setItem('xerox_shorts_likes_v1', JSON.stringify(next)); } catch {} }}><span><ThumbsUp size={24} fill={likes[video.videoId!] ? 'currentColor' : 'none'} /></span><small>{info.likeCount == null ? '高評価' : formatNumberJP(info.likeCount)}</small></button>
+            <button aria-label="高評価（この端末に保存）" aria-pressed={!!likes[video.videoId!]} title="この端末に保存・YouTubeには送信されません" onClick={async () => { if(youtubeLinked){try{await fetchJSON('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:likes[video.videoId!]?'removeRating':'like',videoId:video.videoId})});}catch(error:any){window.dispatchEvent(new CustomEvent('xerox-youtube-action-error',{detail:error.message}));return;}}learnInteraction(info, likes[video.videoId!] ? 'unlike' : 'like'); const next = { ...likes, [video.videoId!]: !likes[video.videoId!] }; setLikes(next); try { localStorage.setItem('xerox_shorts_likes_v1', JSON.stringify(next)); } catch {} }}><span><ThumbsUp size={24} fill={likes[video.videoId!] ? 'currentColor' : 'none'} /></span><small>{info.likeCount == null ? '高評価' : formatNumberJP(info.likeCount)}</small></button>
             <button aria-label="コメントを表示" onClick={() => { if (commentsId !== video.videoId) learnInteraction(info, 'comment'); setDescriptionId(''); setCommentsId(commentsId === video.videoId ? '' : video.videoId!); }}><span><MessageCircle size={24} /></span><small>コメント</small></button>
             <PlaybackSettings short>
               <button className="playback-toggle" aria-label="音声" role="switch" aria-checked={!muted} onClick={()=>setMuted(!muted)}>音声<span>{muted?'OFF':'ON'}</span></button>

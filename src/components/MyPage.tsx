@@ -26,7 +26,7 @@ import { useDeviceProfile, readProfileImage } from "../lib/deviceProfile";
 import type LibraryPage from "./LibraryPage";
 import type { ComponentProps } from "react";
 import { formatDuration } from "../utils";
-type Props = ComponentProps<typeof LibraryPage> & { children: React.ReactNode };
+type Props = ComponentProps<typeof LibraryPage> & { children: React.ReactNode; youtubeConnection?:React.ReactNode };
 export default function MyPage(props: Props) {
   const profile = useDeviceProfile(),
     account = useSiteAccount(),
@@ -85,6 +85,7 @@ export default function MyPage(props: Props) {
           <Settings size={22} />
         </button>
       </section>
+      {props.youtubeConnection}
       <div className="my-account-actions">
         <button type="button" onClick={() => setDebugOpen(true)}>おすすめ分析（デバッグ）</button>
         <button onClick={() => void account?.logout()}>

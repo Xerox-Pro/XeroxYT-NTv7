@@ -197,6 +197,7 @@ export async function fetchJSON(url: string, options?: RequestInit) {
     const isGet = !options || !options.method || options.method === 'GET';
     const isApiCall = url.startsWith('/api/') || url.startsWith('/stream') || url.startsWith('/edu');
     const isTimeSensitive = 
+      url.startsWith('/api/user/') ||
       url.startsWith('/api/shorts?') ||
       url.startsWith('/api/shorts-ranking') ||
       url.startsWith('/api/home/') ||
@@ -225,13 +226,8 @@ export async function fetchJSON(url: string, options?: RequestInit) {
     }
 
     const reqOptions = { ...options };
-    if (url.startsWith('/api/shorts?') || url.startsWith('/api/shorts-ranking')) reqOptions.cache = 'no-store';
+    if (url.startsWith('/api/user/') || url.startsWith('/api/auth/') || url.startsWith('/api/shorts?') || url.startsWith('/api/shorts-ranking')) reqOptions.cache = 'no-store';
     const finalHeaders = new Headers(reqOptions.headers || {});
-    const ytCreds = localStorage.getItem('xerox_youtube_credentials');
-    if (ytCreds && !finalHeaders.has('x-youtube-credentials')) {
-      finalHeaders.set('x-youtube-credentials', ytCreds);
-    }
-
     // Attach client id and usage token for rate limiting
     if (isApiCall) {
       if (!finalHeaders.has('x-client-id')) {
@@ -324,7 +320,7 @@ export async function fetchJSON(url: string, options?: RequestInit) {
     
     // Fallback to cache if network fails and cache exists (Offline mode)
     const isGet = !options || !options.method || options.method === 'GET';
-    if (isGet) {
+    if (isGet && !url.startsWith('/api/user/') && !url.startsWith('/api/auth/')) {
        try {
          const cached = await get(url);
          if (cached && hasValidContent(cached.data)) {
