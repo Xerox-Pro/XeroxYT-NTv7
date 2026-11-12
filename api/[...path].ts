@@ -1,3 +1,4 @@
+import {boundedRequestBody} from "../server/lib/requestSecurity.mjs";
 import {fetchApiResponse} from "../server/lib/apiRequest.mjs";
 import {apiSelector} from "../server/lib/apiAvailability.mjs";
 import { apiPool, canRetry } from "../server/lib/apiPool.mjs";
@@ -30,6 +31,7 @@ export default async function handler(request: Request) {
     else console.info(JSON.stringify(fields));
     return response;
   };
+  if(/^\/api\/(instagram|tiktok)(\/|$)/.test(url.pathname))return respond(Response.json({error:'このサービスはCloudflareへ直接接続してください。',code:'CLOUDFLARE_DIRECT_REQUIRED'},{status:403,headers:{'Cache-Control':'no-store'}}));
   let pool: string[];
   try {
     pool = apiPool(process.env);
@@ -76,7 +78,8 @@ export default async function handler(request: Request) {
   else pool=await apiSelector.plan(pool,headers);
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
   const readonly = ["GET", "HEAD"].includes(request.method);
-  const body = readonly ? undefined : await request.arrayBuffer();
+  let body: Uint8Array | undefined;
+  try{body=readonly?undefined:await boundedRequestBody(request);}catch{return respond(Response.json({error:'Request too large'},{status:413}));}
   if (body && body.byteLength > 1024 * 1024)
     return respond(Response.json({ error: "Request too large" }, { status: 413 }));
   let lastFailure = 'upstream_unavailable';
