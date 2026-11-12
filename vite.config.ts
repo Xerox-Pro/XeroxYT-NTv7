@@ -56,7 +56,7 @@ export default defineConfig(({mode}) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-          globIgnores: ['**/SocialApp-*.js','**/SocialApp-*.css'],
+          globIgnores: ['**/SocialApp-*.js','**/SocialApp-*.css','**/app-icons/**'],
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,

@@ -27,7 +27,7 @@ export default function App() {
     <>
       <PWAUpdateIndicator />
       <Routes>
-        <Route path="/*" element={<AccountGate><MainApp socialContent={service==='youtube'?undefined:<ServiceBoundary key={service}><Suspense fallback={<div role="status" className="p-10 text-center text-gray-500">アプリを読み込み中…</div>}><SocialApp key={service} service={service}/></Suspense></ServiceBoundary>}/></AccountGate>} />
+        <Route path="/*" element={<AccountGate allowGuest={service!=='youtube'}><MainApp socialContent={service==='youtube'?undefined:<ServiceBoundary key={service}><Suspense fallback={<div role="status" className="p-10 text-center text-gray-500">アプリを読み込み中…</div>}><SocialApp key={service} service={service}/></Suspense></ServiceBoundary>}/></AccountGate>} />
       </Routes>
     </>
   );

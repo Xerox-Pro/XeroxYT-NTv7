@@ -64,6 +64,7 @@ function googleFetch(path,options){
  return task.then(response=>response.clone());
 }
 export async function apiFetch(path,options={}){
+ if((typeof sessionStorage!=='undefined'&&sessionStorage.getItem('xerox_guest')==='true')&&/^\/api\/(auth|user)(\/|$)/.test(path))return Response.json({error:'アカウント連携にはログインしてください。',code:'SITE_SESSION_REQUIRED'},{status:401});
  if(/^\/api\/(auth|user)(\/|$)/.test(path))return googleFetch(path,options);
  if(!path.startsWith('/api/')||/^\/api\/(account|auth|user)(\/|$)/.test(path)||(options.method&&options.method!=='GET'))return fetch(path,options);
  const state=readTransportState();if(state.mode==='proxy'||(state.mode==='auto'&&state.automatic))return fetch(path,{...options,credentials:'same-origin'});
@@ -76,4 +77,4 @@ export async function apiFetch(path,options={}){
  return fetch(path,{...options,credentials:'same-origin'});
 }
 
-export function cloudflareOnlyFetch(path,options={}){if(!/^\/api\/(instagram|tiktok)(\/|$)/.test(path))throw new Error('サービスの接続先が無効です。');return limitedPrivate(()=>googleFetchRequest(path,options,true));}
+export function cloudflareOnlyFetch(path,options={}){if((typeof sessionStorage!=='undefined'&&sessionStorage.getItem('xerox_guest')==='true'))return Promise.resolve(Response.json({error:'連携にはサイトへのログインが必要です。',code:'SITE_SESSION_REQUIRED'},{status:401}));if(!/^\/api\/(instagram|tiktok)(\/|$)/.test(path))throw new Error('サービスの接続先が無効です。');return limitedPrivate(()=>googleFetchRequest(path,options,true));}

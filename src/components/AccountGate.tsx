@@ -39,8 +39,14 @@ async function api(path: string, method = 'GET', body?: unknown) {
   return data;
 }
 
-export default function AccountGate({ children }: { children: ReactNode }) {
+function enterGuestStorage(){
+ switchDeviceAccount('guest');localStorage.setItem('xerox_last_account_id','guest');
+ localStorage.setItem(LEGACY_KEY,JSON.stringify(read<Cache>(accountKey('guest'),{history:[],version:0,dirty:false}).history));
+ sessionStorage.setItem('xerox_guest','true');
+}
+export default function AccountGate({ children, allowGuest=false }: { children: ReactNode; allowGuest?:boolean }) {
   const [cachedUser] = useState<User | null>(() => { const hint = read<User | null>(SESSION_HINT_KEY, null); return hint && typeof hint.id === 'string' && typeof hint.username === 'string' && localStorage.getItem('xerox_last_account_id') === hint.id ? hint : null; });
+  const [guest,setGuest]=useState(()=>{const value=!cachedUser&&(allowGuest||sessionStorage.getItem('xerox_guest')==='true');if(value)enterGuestStorage();return value;});
   const [user, setUser] = useState<User | null>(cachedUser);
   const [phase, setPhase] = useState<'checking' | 'login' | 'loading' | 'ready' | 'error'>(cachedUser ? 'ready' : 'login');
   const [register, setRegister] = useState(false);
@@ -116,6 +122,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if(guest){active.current=null;return;}
     if (cachedUser) active.current = cachedUser;
     const epoch = authEpoch.current;
     api('/session').then(({ user: existing }) => { if (authEpoch.current === epoch) return initialize(existing, false, cachedUser?.id === existing.id); }).catch((err) => {
@@ -125,7 +132,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       else { setMessage('ログイン状態を確認できません。通信環境を確認してください。'); setPhase('error'); }
     });
     return () => { active.current = null; if (timer.current) clearTimeout(timer.current); };
-  }, [initialize, cachedUser]);
+  }, [initialize, cachedUser,guest]);
 
   useEffect(() => {
     const changed = (event: Event) => {
@@ -147,6 +154,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     if (register && password !== confirm) { setMessage('パスワードが一致しません。'); return; }
     try {
       setPhase('loading');
+      sessionStorage.removeItem('xerox_guest');
       const result = await api(register ? '/register' : '/login', 'POST', { username, password });
       setPassword(''); setConfirm(''); await initialize(result.user, migrate);
     } catch (err) { setMessage(err instanceof Error ? err.message : 'ログインに失敗しました。'); setPhase('login'); }
@@ -156,7 +164,8 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     try { authEpoch.current++; await api('/logout', 'POST', {}); active.current = null; localStorage.removeItem(SESSION_HINT_KEY); setUser(null); setPhase('login'); setMessage(''); }
     catch { setMessage('ログアウトできませんでした。'); }
   }
+  if(guest)return <AccountContext.Provider value={{username:'ゲスト',logout:async()=>{sessionStorage.removeItem('xerox_guest');setGuest(false);setPhase('login');}}}>{children}</AccountContext.Provider>;
   if (phase === 'ready' && user) return <AccountContext.Provider value={{ username: user.username, logout }}>{children}{message && <div role="status" className="fixed top-16 right-4 z-[200] bg-gray-900 text-white text-xs p-3 rounded-xl max-w-xs shadow-lg">{message}</div>}</AccountContext.Provider>;
 
-  return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><section className="w-full max-w-md bg-white rounded-3xl shadow-lg border border-gray-100 p-7 sm:p-9"><h1 className="text-2xl font-bold text-gray-900">XeroxYT-NTv7</h1><p className="text-sm text-gray-500 mt-2">アカウントにログインして、視聴履歴を端末とクラウドに保存します。</p>{phase === 'error' ? <><p className="mt-6 text-red-700" role="alert">{message}</p><button className="mt-4 rounded-xl bg-gray-900 text-white px-4 py-2" onClick={() => user ? void initialize(user) : window.location.reload()}>再試行</button></> : <form onSubmit={submit} className="mt-7 space-y-4"><h2 className="text-lg font-semibold">{register ? '新規アカウント作成' : 'ログイン'}</h2><label className="block text-sm">ユーザー名<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="英数字と _" /></label><label className="block text-sm">パスワード<input type="password" autoComplete={register ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={12} maxLength={128} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="12文字以上" /></label>{register && <label className="block text-sm">パスワード（確認）<input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" /></label>}{!localStorage.getItem('xerox_last_account_id') && <label className="flex items-start gap-2 text-sm text-gray-600"><input type="checkbox" checked={migrate} onChange={e => setMigrate(e.target.checked)} className="mt-1" />この端末にある以前の視聴履歴を取り込む</label>}{message && <p className="text-sm text-red-700" role="alert">{message}</p>}<button disabled={phase === 'loading'} className="w-full bg-gray-900 disabled:opacity-60 text-white rounded-xl py-3 font-semibold">{phase === 'loading' ? '処理中…' : register ? 'アカウントを作成' : 'ログイン'}</button><button type="button" onClick={() => { setRegister(!register); setMessage(''); }} className="w-full text-sm text-blue-700 py-2">{register ? 'すでにアカウントを持っている' : '新規アカウントを作成'}</button>{register && <p className="text-xs text-gray-500">パスワード再設定機能はまだありません。忘れないよう安全に保管してください。</p>}</form>}</section></main>;
+  return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><section className="w-full max-w-md bg-white rounded-3xl shadow-lg border border-gray-100 p-7 sm:p-9"><button type="button" onClick={()=>{authEpoch.current++;active.current=null;enterGuestStorage();setGuest(true);}} className="mb-6 w-full rounded-xl border border-gray-300 py-3">ログインせずに使う</button><h1 className="text-2xl font-bold text-gray-900">XeroxYT-NTv7</h1><p className="text-sm text-gray-500 mt-2">アカウントにログインして、視聴履歴を端末とクラウドに保存します。</p>{phase === 'error' ? <><p className="mt-6 text-red-700" role="alert">{message}</p><button className="mt-4 rounded-xl bg-gray-900 text-white px-4 py-2" onClick={() => user ? void initialize(user) : window.location.reload()}>再試行</button></> : <form onSubmit={submit} className="mt-7 space-y-4"><h2 className="text-lg font-semibold">{register ? '新規アカウント作成' : 'ログイン'}</h2><label className="block text-sm">ユーザー名<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="英数字と _" /></label><label className="block text-sm">パスワード<input type="password" autoComplete={register ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={12} maxLength={128} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="12文字以上" /></label>{register && <label className="block text-sm">パスワード（確認）<input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" /></label>}{!localStorage.getItem('xerox_last_account_id') && <label className="flex items-start gap-2 text-sm text-gray-600"><input type="checkbox" checked={migrate} onChange={e => setMigrate(e.target.checked)} className="mt-1" />この端末にある以前の視聴履歴を取り込む</label>}{message && <p className="text-sm text-red-700" role="alert">{message}</p>}<button disabled={phase === 'loading'} className="w-full bg-gray-900 disabled:opacity-60 text-white rounded-xl py-3 font-semibold">{phase === 'loading' ? '処理中…' : register ? 'アカウントを作成' : 'ログイン'}</button><button type="button" onClick={() => { setRegister(!register); setMessage(''); }} className="w-full text-sm text-blue-700 py-2">{register ? 'すでにアカウントを持っている' : '新規アカウントを作成'}</button>{register && <p className="text-xs text-gray-500">パスワード再設定機能はまだありません。忘れないよう安全に保管してください。</p>}</form>}</section></main>;
 }

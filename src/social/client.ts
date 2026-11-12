@@ -3,7 +3,7 @@ export type Service='instagram'|'tiktok';
 export type Item={id:string;service:Service;kind:'video'|'post'|'image'|'carousel';title:string;author:string;authorId?:string;profileUsername?:string;url:string;embed?:string;media?:string;thumbnail?:string;duration?:number;timestamp?:number;children?:{kind:string;media:string}[]};
 export async function socialRequest(service:Service,path:string,options:RequestInit={}){try{const response=await cloudflareOnlyFetch(`/api/${service}/${path}`,options);const data=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(data.error||'サービスの情報を取得できませんでした。'),{status:response.status,code:data.code});return data;}catch(error:any){if(error.name==='AbortError'||error.code||error.status||/^(リクエスト|通信が集中)/.test(error.message||''))throw error;throw new Error('Cloudflareに直接接続できません。接続環境を確認してから再試行してください。');}}
 
-export const key=(service:string,name:string)=>`xerox_social_${localStorage.getItem('xerox_last_account_id')||'local'}_${service}_${name}`;
+export const key=(service:string,name:string)=>`xerox_social_${(sessionStorage.getItem('xerox_guest')==='true'?'guest':localStorage.getItem('xerox_last_account_id'))||'local'}_${service}_${name}`;
 export function read<T>(service:string,name:string,fallback:T):T{try{return JSON.parse(localStorage.getItem(key(service,name))||'null')??fallback;}catch{return fallback;}}
 export function write(service:string,name:string,value:unknown){try{localStorage.setItem(key(service,name),JSON.stringify(value));}catch{}}
 export type Signals=Record<string,{weight:number;at:number}>;
