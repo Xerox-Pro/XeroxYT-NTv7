@@ -283,7 +283,8 @@ async function fetchJSONRequest(url: string, options?: RequestInit) {
       if (res.status === 429) {
         // Daily limit or burst limit exceeded (handled internally)
         const limitErr = new Error(errorMessage) as any;
-        limitErr.isDailyLimit = true;
+        limitErr.isDailyLimit = errorData.code !== 'YOUTUBE_RATE_LIMITED';
+        limitErr.retryAfter = Number(errorData.retryAfter || res.headers.get('retry-after') || 0);
         limitErr.status = 429;
         limitErr.limitData = errorData;
         throw limitErr;

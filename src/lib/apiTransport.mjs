@@ -26,8 +26,15 @@ function origins() {
   return configured;
 }
 // Google credentials never enter the browser. Only a five-minute site-scoped ticket is kept in memory.
-let privateTicket,privateTicketRequest,privateScope;
-async function googleFetch(path,options){
+let privateTicket,privateTicketRequest,privateScope,privateProxy=false;
+const privateReads=new Map();
+let activePrivate=0,privateBlockedUntil=0;const privateQueue=[];
+async function limitedPrivate(work){if(activePrivate>=4){if(privateQueue.length>=40)throw new Error('通信が集中しています。少し待ってから操作してください。');await new Promise(resolve=>privateQueue.push(resolve));}else activePrivate++;try{if(Date.now()<privateBlockedUntil)throw new Error('リクエストが集中しています。少し待ってから再試行してください。');const response=await work();if(response.status===429){const retry=Number(response.headers.get('retry-after'));privateBlockedUntil=Date.now()+Math.min(60000,Math.max(1000,Number.isFinite(retry)&&retry>0?retry*1000:10000));}return response;}finally{const next=privateQueue.shift();if(next)next();else activePrivate--;}}
+async function googleFetchRequest(path,options){
+ const state=readTransportState();
+ if(state.mode==='proxy'||privateProxy||(state.mode==='auto'&&state.automatic))return fetch(path,{...options,credentials:'same-origin'});
+ const proxy=()=>{privateProxy=true;return fetch(path,{...options,credentials:'same-origin'});};
+ try{
  const scope=(()=>{try{return localStorage.getItem('xerox_last_account_id')||'';}catch{return '';}})();
  if(privateScope!==scope){privateScope=scope;privateTicket=undefined;privateTicketRequest=undefined;}
  if(!privateTicket||privateTicket.expiresAt<Date.now()+15000){
@@ -40,9 +47,21 @@ async function googleFetch(path,options){
  }
  options.signal?.throwIfAborted();
  const ticket=privateTicket,headers=new Headers(options.headers);headers.set('Authorization','XYT '+ticket.token);
- const response=await fetch(ticket.origin+path,{...options,headers,credentials:'omit',mode:'cors',cache:'no-store',redirect:'error'});
+ const readonly=!options.method||['GET','HEAD'].includes(options.method);const timeout=readonly?AbortSignal.timeout(8000):undefined;const signal=timeout?(options.signal?AbortSignal.any([options.signal,timeout]):timeout):options.signal;
+ let response;try{response=await fetch(ticket.origin+path,{...options,signal,headers,credentials:'omit',mode:'cors',cache:'no-store',redirect:'error'});}catch(error){if(options.signal?.aborted)throw error;if(state.mode==='auto'&&(!options.method||['GET','HEAD'].includes(options.method)))return proxy();throw error;}
+ if(state.mode==='auto'&&readonly&&!response.headers.get('content-type')?.includes('application/json')){await response.body?.cancel();return proxy();}
  if(response.status===401&&response.headers.get('content-type')?.includes('application/json')){const data=await response.clone().json().catch(()=>null);if(data?.code==='SITE_SESSION_REQUIRED')privateTicket=undefined;}
  return response;
+ }catch(error){if(options.signal?.aborted)throw error;if(state.mode==='auto'&&!privateTicket)return proxy();throw error;}
+}
+function googleFetch(path,options){
+ const readonly=!options.method||options.method==='GET';
+ let scope='';try{scope=localStorage.getItem('xerox_last_account_id')||'';}catch{}
+ const key=scope+'|'+path;
+ const work=()=>{options.signal?.throwIfAborted();let current='';try{current=localStorage.getItem('xerox_last_account_id')||'';}catch{}if(current!==scope)throw new Error('ログイン状態が変わりました。');return googleFetchRequest(path,options);};
+ if(!readonly||options.signal)return limitedPrivate(work);
+ let task=privateReads.get(key);if(!task){task=limitedPrivate(work).finally(()=>{if(privateReads.get(key)===task)privateReads.delete(key);});privateReads.set(key,task);}
+ return task.then(response=>response.clone());
 }
 export async function apiFetch(path,options={}){
  if(/^\/api\/(auth|user)(\/|$)/.test(path))return googleFetch(path,options);
