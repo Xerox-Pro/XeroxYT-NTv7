@@ -73,7 +73,7 @@ CloudflareのSecrets/Variablesで設定します。秘密値をソース、READM
 ## 検証結果
 
 - フロント：関連テスト30件成功、TypeScriptチェック成功、Viteビルド成功。
-- API：既存・追加テスト54件成功、Worker / Nodeビルド成功。
+- API：既存・追加テスト56件成功、Worker / Nodeビルド成功。
 - サービス切り替え後も同じYouTube iframeを保持することを検証。
 - OAuthのstate再利用拒否、保存データの暗号化、権限のない機能の無効表示、公開リンクの検証をテスト。
 - 実アカウントでのInstagram / TikTokログインは、管理者キーと審査設定がないため未検証。
@@ -89,3 +89,5 @@ CloudflareのSecrets/Variablesで設定します。秘密値をソース、READM
 - 非公式TikTok APIの調査対象: https://github.com/davidteather/TikTok-Api
 
 ビルド出力の比較では、YouTube側の初期JavaScriptはgzip 222.12 kBから224.54 kB（+2.42 kB）です。追加アプリ本体は別チャンクで、PWAの初回一括取得にも含めていません。これは転送サイズの比較で、読み込み時間の実測ではありません。
+
+追加で、TikTokのトークン更新と解除が重なっても解除済み連携を復活させないこと、更新後のトークンだけを使用することを検証しました。
