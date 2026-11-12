@@ -4,6 +4,7 @@ import { Router, createPath, parsePath, NavigationType } from 'react-router-dom'
 import type { Location, To } from 'react-router-dom';
 import App from './App.tsx';
 import './index.css';
+import './social/switcher.css';
 import { initPWA } from './pwa';
 
 const LAST_PAGE_KEY = 'xerox_last_page';
@@ -50,7 +51,7 @@ function initializeEntry(): Entry {
     }
   }
   if (!entry) entry = newEntry(path, null);
-  window.history.replaceState({ ...window.history.state, [HISTORY_KEY]: entry }, '', '/');
+  window.history.replaceState({ ...window.history.state, [HISTORY_KEY]: entry }, '', entry.path);
   return entry;
 }
 
@@ -62,7 +63,7 @@ function CleanUrlRouter() {
   }));
 
   const navigator = useMemo(() => ({
-    createHref: () => '/',
+    createHref: (to: To) => typeof to==='string'?to:createPath(to),
     encodeLocation: (to: To) => {
       const parsed = typeof to === 'string' ? parsePath(to) : to;
       return { pathname: parsed.pathname || '/', search: parsed.search || '', hash: parsed.hash || '' };
@@ -70,12 +71,12 @@ function CleanUrlRouter() {
     go: (delta: number) => window.history.go(delta),
     push: (to: To, state?: unknown) => {
       const entry = newEntry(to, state);
-      window.history.pushState({ ...window.history.state, [HISTORY_KEY]: entry }, '', '/');
+      window.history.pushState({ ...window.history.state, [HISTORY_KEY]: entry }, '', entry.path);
       setNavigation({ action: NavigationType.Push, location: makeLocation(entry) });
     },
     replace: (to: To, state?: unknown) => {
       const entry = newEntry(to, state);
-      window.history.replaceState({ ...window.history.state, [HISTORY_KEY]: entry }, '', '/');
+      window.history.replaceState({ ...window.history.state, [HISTORY_KEY]: entry }, '', entry.path);
       setNavigation({ action: NavigationType.Replace, location: makeLocation(entry) });
     },
   }), []);

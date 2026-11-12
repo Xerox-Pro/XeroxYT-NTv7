@@ -1,3 +1,4 @@
+import AppSwitcher from './AppSwitcher';
 import { useDeviceProfile } from '../lib/deviceProfile';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -379,7 +380,7 @@ export default function Navbar({
   }, []);
 
   return (
-    <header className={`app-navbar ${mobileSearch ? 'mobile-search-open' : ''}`}>
+    <header className={`app-navbar ${mobileSearch ? 'mobile-search-open' : ''}`}><AppSwitcher compact/>
       {/* リンク検知通知バナー (トースト: クリーンなミニマルスタイル) */}
       <AnimatePresence>
         {detectedNotice && (

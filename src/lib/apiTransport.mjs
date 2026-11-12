@@ -30,9 +30,9 @@ let privateTicket,privateTicketRequest,privateScope,privateProxy=false;
 const privateReads=new Map();
 let activePrivate=0,privateBlockedUntil=0;const privateQueue=[];
 async function limitedPrivate(work){if(activePrivate>=4){if(privateQueue.length>=40)throw new Error('通信が集中しています。少し待ってから操作してください。');await new Promise(resolve=>privateQueue.push(resolve));}else activePrivate++;try{if(Date.now()<privateBlockedUntil)throw new Error('リクエストが集中しています。少し待ってから再試行してください。');const response=await work();if(response.status===429){const retry=Number(response.headers.get('retry-after'));privateBlockedUntil=Date.now()+Math.min(60000,Math.max(1000,Number.isFinite(retry)&&retry>0?retry*1000:10000));}return response;}finally{const next=privateQueue.shift();if(next)next();else activePrivate--;}}
-async function googleFetchRequest(path,options){
- const state=readTransportState();
- if(state.mode==='proxy'||privateProxy||(state.mode==='auto'&&state.automatic))return fetch(path,{...options,credentials:'same-origin'});
+async function googleFetchRequest(path,options,directOnly=false){
+ const state=directOnly?{mode:'direct',automatic:false}:readTransportState();
+ if(!directOnly&&(state.mode==='proxy'||privateProxy||(state.mode==='auto'&&state.automatic)))return fetch(path,{...options,credentials:'same-origin'});
  const proxy=()=>{privateProxy=true;return fetch(path,{...options,credentials:'same-origin'});};
  try{
  const scope=(()=>{try{return localStorage.getItem('xerox_last_account_id')||'';}catch{return '';}})();
@@ -75,3 +75,5 @@ export async function apiFetch(path,options={}){
  try{localStorage.setItem(AUTO_KEY,String(Date.now()+10*60*1000));window.dispatchEvent(new Event('xerox-transport-changed'));}catch{}
  return fetch(path,{...options,credentials:'same-origin'});
 }
+
+export function cloudflareOnlyFetch(path,options={}){if(!/^\/api\/(instagram|tiktok)(\/|$)/.test(path))throw new Error('サービスの接続先が無効です。');return limitedPrivate(()=>googleFetchRequest(path,options,true));}

@@ -51,7 +51,9 @@ declare global {
   }
 }
 
-export default function MainApp() {
+export default function MainApp({socialContent}:{socialContent?:React.ReactNode}={}) {
+  const isSocial=!!socialContent;
+  const inactiveRequests=useRef(new AbortController());
   const navigate = useNavigate();
   const deviceProfile = useDeviceProfile();
   const location = useLocation();
@@ -133,6 +135,8 @@ export default function MainApp() {
       setLoadingMore(false);
       isFetchingMore.current = false;
     }
+    if (/^\/(instagram|tiktok)(\/|$)/.test(path)){inactiveRequests.current.abort();setGoogleStatusReady(false);return;}
+    if(inactiveRequests.current.signal.aborted)inactiveRequests.current=new AbortController();
     if (path === '/') {
       const category = searchParams.get('category') || 'すべて';
       setSelectedCategory(category);
@@ -297,12 +301,12 @@ export default function MainApp() {
 
   const fetchYoutubeAuthData = async () => {
     const generation=youtubeGeneration.current;
-    void fetchJSON('/api/user/channel-info').then(profile=>{if(generation===youtubeGeneration.current)setUserInfo(profile);}).catch((error:any)=>{if(generation===youtubeGeneration.current)setAuthError(error.message);});
+    void fetchJSON('/api/user/channel-info',{signal:inactiveRequests.current.signal}).then(profile=>{if(generation===youtubeGeneration.current)setUserInfo(profile);}).catch((error:any)=>{if(generation===youtubeGeneration.current)setAuthError(error.message);});
     const jobs=[['再生リスト','/api/user/playlists',setYoutubePlaylists],['後で見る','/api/user/watch-later',setWatchLaterVideos],['高評価','/api/user/liked-videos',setYoutubeLiked],['通知','/api/user/notifications',setNotifications]] as const;
-    const results=await Promise.allSettled(jobs.map(async([name,path,setter])=>{const data=await fetchJSON(path);if(!Array.isArray(data))throw new Error(name);if(generation===youtubeGeneration.current)setter(data);return name;}));
+    const results=await Promise.allSettled(jobs.map(async([name,path,setter])=>{const data=await fetchJSON(path,{signal:inactiveRequests.current.signal});if(!Array.isArray(data))throw new Error(name);if(generation===youtubeGeneration.current)setter(data);return name;}));
     if(generation!==youtubeGeneration.current)return;
     setYoutubeFeatureErrors(results.flatMap((result,index)=>result.status==='rejected'?[jobs[index][0]]:[]));
-    try{const channels=await fetchJSON('/api/user/subscriptions');if(generation===youtubeGeneration.current&&Array.isArray(channels))setSubscriptions(channels.map(c=>({id:c.id,title:c.title,avatar:c.avatar})));}catch{}
+    try{const channels=await fetchJSON('/api/user/subscriptions',{signal:inactiveRequests.current.signal});if(generation===youtubeGeneration.current&&Array.isArray(channels))setSubscriptions(channels.map(c=>({id:c.id,title:c.title,avatar:c.avatar})));}catch{}
   };
 
   useEffect(() => {
@@ -593,12 +597,13 @@ export default function MainApp() {
   }, [isPolling, authFlow]);
 
   useEffect(()=>{
+    if(isSocial)return;
     let cancelled=false;youtubeGeneration.current++;
     setGoogleStatusReady(false);localStorage.removeItem('xerox_youtube_credentials');
-    fetchJSON('/api/auth/status').then(status=>{if(cancelled)return;if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else{localStorage.removeItem('xerox_youtube_linked');setUserInfo(null);}setGoogleStatusReady(true);}).catch(()=>{if(!cancelled){setAuthError('Google連携の状態を確認できませんでした。再読み込みしてください。');setError('連携状態を確認できないため、おすすめの読み込みを停止しています。再読み込みしてください。');setLoading(false);}});
+    fetchJSON('/api/auth/status',{signal:inactiveRequests.current.signal}).then(status=>{if(cancelled)return;if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else{localStorage.removeItem('xerox_youtube_linked');setUserInfo(null);}setGoogleStatusReady(true);}).catch(()=>{if(!cancelled){setAuthError('Google連携の状態を確認できませんでした。再読み込みしてください。');setError('連携状態を確認できないため、おすすめの読み込みを停止しています。再読み込みしてください。');setLoading(false);}});
     return()=>{cancelled=true;youtubeGeneration.current++;};
-  },[siteAccount?.username]);
-  useEffect(()=>{if(!googleStatusReady)return;if(userInfo)void fetchYoutubeAuthData();setHomeShorts({category:'',videos:[]});setSelectedCategory('すべて');setPage(1);if(googleStatusReady&&location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo,googleStatusReady]);
+  },[siteAccount?.username,isSocial]);
+  useEffect(()=>{if(isSocial||!googleStatusReady)return;if(userInfo)void fetchYoutubeAuthData();setHomeShorts({category:'',videos:[]});setSelectedCategory('すべて');setPage(1);if(googleStatusReady&&location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo,googleStatusReady,isSocial]);
   const cancelGoogleLink=async()=>{isPollingRef.current=false;setIsPolling(false);setAuthFlow(null);setAuthError(null);try{await fetchJSON('/api/auth/cancel',{method:'POST'});}catch(error:any){setAuthError(error.message);}};
 
   const handleLogout = async () => {
@@ -658,7 +663,7 @@ export default function MainApp() {
         refreshNonce: Date.now().toString(),
       });
       if(pageNum===1)personalHomeCursor.current='';
-      const result = userInfo?await fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current)):await fetchJSON(`/api/recommendations?${queryParams.toString()}`);
+      const result = userInfo?await fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current),{signal:inactiveRequests.current.signal}):await fetchJSON(`/api/recommendations?${queryParams.toString()}`,{signal:inactiveRequests.current.signal});
       if (currentReqId !== recommendationRequestIdRef.current) return;
       if(userInfo){personalHomeCursor.current=result.continuation||'';setHasMore(!!result.hasMore);}
 
@@ -787,7 +792,7 @@ export default function MainApp() {
       const continuationKey=q+'?'+filters.toString();
       if(pageNum===1)searchContinuation.current={key:continuationKey,next:''};
       if(pageNum>1&&searchContinuation.current.key===continuationKey&&searchContinuation.current.next)filters.set('continuation',searchContinuation.current.next);
-      const data = await fetchJSON(`/api/search?q=${encodeURIComponent(q)}&page=${pageNum}&${filters}`);
+      const data = await fetchJSON(`/api/search?q=${encodeURIComponent(q)}&page=${pageNum}&${filters}`,{signal:inactiveRequests.current.signal});
       if (requestId !== recommendationRequestIdRef.current) return;
       searchContinuation.current={key:continuationKey,next:typeof data.continuation==='string'?data.continuation:''};
       const newVideos: Video[] = Array.isArray(data) ? data : (data.videos || []);
@@ -821,7 +826,7 @@ export default function MainApp() {
 
   // 無限スクロール検知
   const handleScroll = useCallback(() => {
-    if (view !== 'home' && view !== 'search') return;
+    if (isSocial || (view !== 'home' && view !== 'search')) return;
     if (view === 'search' && !searchQuery.trim()) return;
     if (loading || loadingMore || !hasMore || isFetchingMore.current) return;
 
@@ -842,12 +847,12 @@ export default function MainApp() {
         fetchSearch(searchQuery, nextPage, true);
       }
     }
-  }, [view, loading, loadingMore, hasMore, page, searchQuery, selectedCategory, location.search]);
+  }, [view, loading, loadingMore, hasMore, page, searchQuery, selectedCategory, location.search,isSocial]);
 
   useEffect(() => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+  }, [handleScroll,isSocial]);
 
   const handleSearch = (q: string) => {
     saveShortsInterest(q);
@@ -1026,12 +1031,12 @@ export default function MainApp() {
   },[activeMix?.cursor,playlistQueueIndex,currentPlaylistQueue.length,mixBusy]);
   return (
     <div className={`${view === 'search' ? 'is-search-page ' : ''}${view === 'shorts' ? 'is-shorts-page ' : ''}min-h-screen bg-white text-gray-900 flex flex-col font-sans antialiased selection:bg-red-100 selection:text-red-800`}>
-      <GoogleLinkAnnouncement onOpen={()=>navigate('/feed/library')}/>
+      {!isSocial&&<GoogleLinkAnnouncement onOpen={()=>navigate('/feed/library')}/>}
       {youtubeActionError&&<div role="alert" className="youtube-action-toast">{youtubeActionError}<button onClick={()=>setYoutubeActionError('')}>閉じる</button></div>}
       {openingMix&&<div role="status" aria-live="polite" className="youtube-action-toast"><span className="inline-block h-4 w-4 shrink-0 rounded-full border-2 border-white/30 border-t-white motion-safe:animate-spin" aria-hidden="true"/><span>ミックスリストを読み込み中…<span className="block max-w-64 truncate text-white/70">{openingMix}</span></span></div>}
       <TopProgressBar isLoading={loading || loadingMore || !!openingMix} />
       {/* ナビゲーションバー: 常に上部に固定しつつ、コンテンツと被らないようにする */}
-      <div className="w-full shrink-0 sticky top-0 z-50 bg-white">
+      {!isSocial&&<div className="w-full shrink-0 sticky top-0 z-50 bg-white">
         <Navbar
           onSearch={handleSearch}
           googleLinked={!!userInfo}
@@ -1040,11 +1045,11 @@ export default function MainApp() {
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           initialSearchQuery={searchQuery}
         />
-      </div>
+      </div>}
 
       <div className="flex flex-1 relative items-start">
         {/* サイドバー: Desktopではsticky、モバイルではfixed overlay */}
-        <Sidebar
+        {!isSocial&&<Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           currentView={view}
@@ -1056,7 +1061,7 @@ export default function MainApp() {
           ownChannel={userInfo?.sub?.startsWith('UC')?{id:userInfo.sub,title:userInfo.name,avatar:userInfo.picture}:undefined}
           onSelectChannel={handleSelectChannel}
           onDebugAPI={() => navigate('/debug/api')}
-        />
+        />}
 
         {/* メインコンテンツビュー */}
         <main
@@ -1064,13 +1069,13 @@ export default function MainApp() {
         >
           {/* Keep the same player mounted when navigating, preserving iframe playback. */}
           {currentVideoId && (
-            <FloatingPlayerFrame mini={view !== 'video'}
+            <FloatingPlayerFrame mini={isSocial || view !== 'video'}
               onRestore={() => navigate(`/watch?v=${encodeURIComponent(currentVideoId)}${currentPlaylistId ? `&list=${encodeURIComponent(currentPlaylistId)}` : ''}`)}
               onClose={() => { setCurrentVideoId(null); setCurrentPlaylistId(null); }}>
               <VideoPlayer
                 key={currentVideoId}
                 videoId={currentVideoId}
-                isMini={view !== 'video'}
+                isMini={isSocial || view !== 'video'}
                 onRequestPip={()=>navigate('/')}
                 playlistQueue={currentPlaylistQueue}
                 playlistQueueIndex={playlistQueueIndex}
@@ -1092,7 +1097,7 @@ export default function MainApp() {
               />
             </FloatingPlayerFrame>
           )}
-          <AnimatePresence mode="wait">
+          {isSocial?socialContent:<AnimatePresence mode="wait">
             <motion.div
               key={view}
               initial={{ opacity: 0, y: 10 }}
@@ -1291,13 +1296,13 @@ export default function MainApp() {
           )
         }
         </motion.div>
-      </AnimatePresence>
+      </AnimatePresence>}
         </main>
       </div>
 
-      <nav className="mobile-bottom-nav" aria-label="メインメニュー">
+      {!isSocial&&<nav className="mobile-bottom-nav" aria-label="メインメニュー">
         {[{to:'/', label:'ホーム', Icon:Home, current:'home'}, {to:'/shorts', label:'ショート', Icon:Zap, current:'shorts'}, {to:'/feed/subscriptions', label:'登録チャンネル', Icon:PlaySquare, current:'subscriptions'}, {to:'/feed/library', label:'マイページ', Icon:User, current:'library'}].map(({to, label, Icon, current}) => <Link key={to} to={to} aria-current={view === current ? 'page' : undefined}><>{current === 'library' && deviceProfile.avatar ? <img src={deviceProfile.avatar} alt="" className="mobile-profile-avatar"/> : <Icon size={23} strokeWidth={view === current ? 2.5 : 1.8}/>}</><span>{label}</span></Link>)}
-      </nav>
+      </nav>}
 
       {/* プレイリスト保存モーダル */}
       {playlistModalVideo && (

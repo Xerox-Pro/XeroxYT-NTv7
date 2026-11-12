@@ -433,6 +433,7 @@ export default function VideoPlayer({
   // IFrame への postMessage コマンド送信
   const postPlayerCommand = useCallback((func: string, args: any[] = []) => {
     try {
+      if(func==='playVideo')window.dispatchEvent(new CustomEvent('xerox-media-focus',{detail:'youtube'}));
       if (iframeRef.current && iframeRef.current.contentWindow) {
         iframeRef.current.contentWindow.postMessage(
           JSON.stringify({
@@ -448,6 +449,7 @@ export default function VideoPlayer({
     }
   }, []);
 
+  useEffect(()=>{const focus=(event:Event)=>{if((event as CustomEvent).detail!=='youtube')postPlayerCommand('pauseVideo');};window.addEventListener('xerox-media-focus',focus);return()=>window.removeEventListener('xerox-media-focus',focus);},[postPlayerCommand]);
   useSleepTimer(()=>{postPlayerCommand('pauseVideo');cancelAutoNextCountdown();});
   const cancelAutoNextCountdown = useCallback(() => {
     if (countdownTimer.current !== null) clearTimeout(countdownTimer.current);
@@ -531,7 +533,7 @@ export default function VideoPlayer({
       if (cancelled || !iframeRef.current) return;
       const player = new YT.Player(iframeRef.current, {
         events: {
-          onStateChange: (event:any) => { if(cancelled)return;playerStateRef.current=event.data;setIsPlaying(event.data===1);if(event.data===1)playbackResumeCallback.current();if(event.data===0)playbackEndCallback.current(); },
+          onStateChange: (event:any) => { if(cancelled)return;if(event.data===1&&playerStateRef.current!==1)window.dispatchEvent(new CustomEvent('xerox-media-focus',{detail:'youtube'}));playerStateRef.current=event.data;setIsPlaying(event.data===1);if(event.data===1)playbackResumeCallback.current();if(event.data===0)playbackEndCallback.current(); },
           onReady: () => {
             if (cancelled) return;
             apiPlayerRef.current = player;
@@ -584,6 +586,7 @@ export default function VideoPlayer({
             durationRef.current = data.info.duration;
           }
           if (typeof data.info.playerState === 'number') {
+            if(data.info.playerState===1&&playerStateRef.current!==1)window.dispatchEvent(new CustomEvent('xerox-media-focus',{detail:'youtube'}));
             if(data.info.playerState===1)playbackResumeCallback.current();if(data.info.playerState===0)playbackEndCallback.current();
             playerStateRef.current = data.info.playerState;
             setIsPlaying(data.info.playerState === 1);

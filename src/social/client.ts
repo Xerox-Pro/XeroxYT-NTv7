@@ -1,0 +1,12 @@
+import {cloudflareOnlyFetch} from '../lib/apiTransport.mjs';
+export type Service='instagram'|'tiktok';
+export type Item={id:string;service:Service;kind:'video'|'post'|'image'|'carousel';title:string;author:string;authorId?:string;profileUsername?:string;url:string;embed?:string;media?:string;thumbnail?:string;duration?:number;timestamp?:number;children?:{kind:string;media:string}[]};
+export async function socialRequest(service:Service,path:string,options:RequestInit={}){try{const response=await cloudflareOnlyFetch(`/api/${service}/${path}`,options);const data=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(data.error||'サービスの情報を取得できませんでした。'),{status:response.status,code:data.code});return data;}catch(error:any){if(error.name==='AbortError'||error.code||error.status||/^(リクエスト|通信が集中)/.test(error.message||''))throw error;throw new Error('Cloudflareに直接接続できません。接続環境を確認してから再試行してください。');}}
+
+export const key=(service:string,name:string)=>`xerox_social_${localStorage.getItem('xerox_last_account_id')||'local'}_${service}_${name}`;
+export function read<T>(service:string,name:string,fallback:T):T{try{return JSON.parse(localStorage.getItem(key(service,name))||'null')??fallback;}catch{return fallback;}}
+export function write(service:string,name:string,value:unknown){try{localStorage.setItem(key(service,name),JSON.stringify(value));}catch{}}
+export type Signals=Record<string,{weight:number;at:number}>;
+export function terms(item:Item){return [...new Set((item.title+' '+item.author).toLowerCase().match(/[\p{L}\p{N}_#]{2,30}/gu)||[])].slice(0,20);}
+export function learn(service:Service,item:Item,kind:string,amount=1){const weights:Record<string,number>={watch:1,complete:2,replay:2,skip:-1,like:3,save:4,unsave:-4,notInterested:-8,search:1};const signals=read<Signals>(service,'signals',{});for(const term of terms(item)){const value=(weights[kind]||0)*Math.min(1,Math.max(0,amount));signals[term]={weight:Math.max(-20,Math.min(20,(signals[term]?.weight||0)+value)),at:Date.now()};}write(service,'signals',Object.fromEntries(Object.entries(signals).sort((a,b)=>b[1].at-a[1].at).slice(0,200)));}
+export function rank(items:Item[],signals:Signals):Item[]{const score=(item:Item)=>terms(item).reduce((n,term)=>n+(signals[term]?.weight||0)*Math.pow(.5,Math.max(0,Date.now()-(signals[term]?.at||Date.now()))/(21*86400000)),0);return items.map((item,index)=>({item,index,score:score(item)})).sort((a,b)=>b.score-a.score||a.index-b.index).map(x=>x.item);}

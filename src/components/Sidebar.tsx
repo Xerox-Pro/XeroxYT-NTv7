@@ -1,3 +1,4 @@
+import AppSwitcher from './AppSwitcher';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -116,7 +117,7 @@ export default function Sidebar({
             : 'w-[72px] p-1.5 fixed xl:sticky top-0 md:top-[56px] h-screen md:h-[calc(100vh-56px)] left-0 -translate-x-full md:translate-x-0'
         }`}
       >
-      <div className="flex flex-col gap-1">
+      <AppSwitcher compact={!isOpen}/><div className="flex flex-col gap-1">
         {/* セクション 1 */}
         <div className="flex flex-col gap-0.5">
           {section1.map(renderLink)}
