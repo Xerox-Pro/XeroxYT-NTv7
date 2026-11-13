@@ -20,7 +20,8 @@ export default async function handler(request: Request) {
   const startedAt = Date.now();
   // Keep the entire Edge invocation below its 25s first-response limit,
   // including health checks, request-body parsing and upstream retries.
-  const deadline = startedAt + 18000;
+  const loginStart = /^\/api\/(instagram|tiktok)\/login\/start$/.test(new URL(request.url).pathname);
+  const deadline = startedAt + (loginStart ? 24000 : 18000);
   const url = new URL(request.url);
   const routeName = '/' + url.pathname.split('/').filter(Boolean).slice(0, 3).map((part, index) => index === 2 && part !== 'batch' ? ':id' : part).join('/');
   let attempts = 0;
@@ -94,7 +95,7 @@ export default async function handler(request: Request) {
         body,
         redirect: "manual",
         signal: request.signal,
-      }, Math.max(1, Math.min(12000, deadline - Date.now())));
+      }, Math.max(1, Math.min(loginStart ? 22000 : 12000, deadline - Date.now())));
       // A route error or a per-user quota does not tell us whether this API is healthy.
       if (
         canRetry(request.method, path, response.status) &&

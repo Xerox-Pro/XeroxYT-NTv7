@@ -17,7 +17,7 @@ export default async function handler(req:any,res:any){
    stage='chromium_launch';await sandbox.runCommand({cmd:'node',args:[ROOT+'/launch.mjs'],cwd:ROOT,detached:true});
    // The template has dependencies preinstalled; wait briefly for Chromium.
    let ready=false;
-   for(let i=0;i<12;i++){const file=await sandbox.readFileToBuffer({path:ROOT+'/browser-connection.json'});if(file){ready=true;break;}await new Promise(resolve=>setTimeout(resolve,250));}
+   for(let i=0;i<32;i++){const file=await sandbox.readFileToBuffer({path:ROOT+'/browser-connection.json'});if(file){ready=true;break;}await new Promise(resolve=>setTimeout(resolve,250));}
    if(!ready)throw Error('launch');stage='navigate';
    // Navigate only to a fixed service login URL, never to a caller-supplied URL.
    const urls={instagram:'https://www.instagram.com/accounts/login/',tiktok:'https://www.tiktok.com/login'};
