@@ -1,115 +1,62 @@
-# 統合アプリの実装状況
+# Instagram / TikTok integration status
 
-既存のReact/Vite構成に追加。Next.js移行、新規リポジトリ作成、既存D1レコードの削除は行っていません。
+Updated 2026-11-13. Existing React/Vite frontend and Cloudflare API repositories are retained. YouTube routing, authentication and player lifecycle are unchanged.
 
-## 利用できる機能
+## UI
 
-- YouTube / Instagram / TikTokの切り替え。PC・タブレットはサイドバー、スマホはヘッダー。
-- サービス別ルート、最後のページとアプリの復元、戻る・進む、サービス別の端末内ページ履歴。
-- 既存YouTubeプレイヤーをマウントしたままミニプレイヤーへ移行。他サービスで再生を始めると一時停止。
-- Instagram / TikTok別の画面。公開リンクの追加、公式埋め込み、端末内保存、共有、興味なし。
-- 縦型フィードのスクロールスナップ、次の直接動画のメタデータだけの先読み、画面外の再生停止。
-- 追加済みコンテンツの検索と、公式サービスでの動画・ユーザー・ハッシュタグ検索への遷移。
-- サービス別・サイトアカウント別の独自推薦。視聴・完了・再視聴・スキップ・好み・保存・検索を使用。
-- D1の既存保存領域に、推薦設定とOAuth情報をサービス別のキーで暗号化保存。共有学習は標準OFF。
-- 新規APIはCloudflareへ直接接続。VercelでInstagram/TikTokのAPIを中継しない。
-- OAuth処理：stateの単回消費、サイトセッションとの対応、暗号化保存、プロフィール、本人の投稿、ページング、TikTokのトークン更新、解除。
-- 公式APIで利用できないDMは公式サービスへのリンクを表示。
+- Instagram: home feed, story tray/viewer, reels, account search, profile grid, messages, comments, note composer.
+- TikTok: vertical recommended feed, following fallback, inbox/messages, profile grid, search fallback.
+- Phone (<768px): bottom navigation and sticky header; tablet (768–1199px): icon rail; desktop: labelled sidebar.
+- Separate service state, guest storage and account storage. YouTube iframe remains mounted during service switches.
+- Supplied logo assets remain unchanged. No simulated users or invented feed results are displayed.
 
-## 管理者設定が必要な項目
+## Connection
 
-CloudflareのSecrets/Variablesで設定します。秘密値をソース、README、ブラウザへ入れないでください。
+Settings → 自分のアカウントを接続 uses the user's existing official-site session. The user signs in on the official site, then explicitly authorizes the unofficial session connection. This is a session import, not a native username/password login implementation. This site cannot automatically read another origin's cookies.
 
-| サービス | キー名 |
-| --- | --- |
-| Instagram | `INSTAGRAM_CLIENT_ID`, `INSTAGRAM_CLIENT_SECRET`, `INSTAGRAM_REDIRECT_URI`, `INSTAGRAM_APPROVED` |
-| TikTok | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_REDIRECT_URI`, `TIKTOK_APPROVED` |
+`SOCIAL_UNOFFICIAL_ENABLED=true` enables the consent-gated import endpoint. Only allowlisted cookies are accepted. The server checks the account identity, probes feed / inbox / stories and enables successful reads. Cookies are stored encrypted in D1 with account/service-associated authenticated encryption. They are not returned in status responses or written into browser storage by the connection form. TikTok IM additionally requires the user's own logged-in `device_id`.
 
-- コールバックは同じWorkerの `/api/instagram/oauth/callback` または `/api/tiktok/oauth/callback`。
-- プロバイダーの管理画面にも同一のHTTPSコールバックを登録。
-- 承認済みアプリでのみ `*_APPROVED=true`。設定不足ならログインボタンは無効。
-- Instagramのスコープは `instagram_business_basic`。プロアカウントが対象。
-- TikTokのスコープは `user.info.basic,video.list`。Login Kit / Display APIの許可が必要。
-- Instagramは現在、短期トークンの範囲で接続。期限切れ時は再連携が必要。長期トークン交換・自動更新は未実装。
-- 実アカウントでの同意・ログイン・権限付与・投稿取得は、キー設定と審査の完了後に検証が必要。
+Official OAuth remains available only when administrator client keys, callback URI and provider approval are configured. No credentials are committed to either repository.
 
-## 未対応・制約
+## Account features
 
-| 項目 | 状況 |
-| --- | --- |
-| 本家Instagramホーム・おすすめ・フォロー投稿 | 取得しない。本人の投稿とユーザー追加の公開リンクのみ |
-| 本家TikTok For You・フォロー中フィード | Display APIの対象外。独自おすすめと公式リンクで区別 |
-| ストーリーズ | 公式サービスへ遷移。アプリ内の取得は未対応 |
-| DM、返信、リアクション、既読・未読、通知 | アプリ内送受信は未対応。公式サービスへ遷移 |
-| 公式のいいね・保存・コメント | 公式投稿で操作。アプリ内の好みと保存は別物 |
-| 他ユーザーのプロフィール・投稿一覧 | 公式プロフィールへ遷移。自分のデータを他人の情報として表示しない |
-| 非公式API | instagrapi / TikTok-Apiを調査したが、有効化していない。追加認証・アカウント制限・実行基盤の問題があり、安定性を未検証 |
-| 非公開・地域制限・埋め込み不可の投稿 | アクセス制限を回避しない。公式リンクを表示 |
-| 動画本体・音源メタデータ | 直接許可されたメディアURLまたは公式埋め込みのみ。独自の動画プロキシ・ダウンロードは追加しない |
-| Next.js | 未移行。既存YouTubeの保護を優先してReact/Viteを維持 |
-| YouTubeの既存通信経路 | 直接接続と互換中継を維持。Vercel API Routesの全面撤去は未実施。新規2サービスは直接接続のみ |
+| Feature | Instagram | TikTok |
+| --- | --- | --- |
+| Personal account feed | Nonofficial timeline adapter, enabled after successful probe | Nonofficial recommend endpoint, enabled after successful probe; provider may reject requests |
+| Stories | Tray and image/video viewer, probe-gated | Unsupported |
+| DM | Existing threads, text history, user-initiated text send | Existing threads / text adapter; requires device ID; real account interoperability unverified |
+| Search | Account search via nonofficial endpoint; profiles open official site | Local library and official search link |
+| Like / unlike | User-initiated adapter for numeric media IDs from the connected feed | Official-post fallback |
+| Comments | Read, pagination and user-initiated text posting | Official-post fallback |
+| Notes | Text composer, mutual followers / close friends audience | Unsupported |
+| Following feed | Timeline adapter only; no separate following-only selector | Official-site fallback |
+| Media/voice DM, calls, live notifications | Unsupported | Unsupported |
+| Other users' profiles and complete account tools | Official-site fallback | Official-site fallback |
 
-## 主な変更ファイル
+Instagram write capabilities describe implemented adapters, not a successful live write probe. No test post or message is sent on connection. Provider signatures, challenges, region restrictions or endpoint changes may prevent operation. Public-link imports lack numeric media IDs and keep official interaction fallbacks. The local preference button and device-local bookmarks are distinct from account likes and saves.
 
-- `src/App.tsx`, `src/main.tsx`：サービスルーティング、復元、URLと履歴。
-- `src/MainApp.tsx`, `src/components/VideoPlayer.tsx`：既存プレイヤー維持、別サービスへの切り替えと再生調整。
-- `src/components/AppSwitcher.tsx`, `Navbar.tsx`, `Sidebar.tsx`：切り替えUI。
-- `src/social/`：サービス別UI、メディア、APIクライアント、公開リンク検証、独自推薦。
-- `src/lib/apiTransport.mjs`：新規サービス専用のCloudflare直接接続。
-- `vite.config.ts`：新規アプリのバンドルをPWAの初回一括取得から除外。
-- APIリポジトリ `cloudflare/social/api.mjs`, `cloudflare/api/worker.mjs`：サービス別API。
-- `tests/social-*.test.mjs`：ルーティング、プレイヤー維持、公開URLの検証、OAuth分離。
+## Request safety
 
-## 検証範囲
+- New social traffic uses direct Cloudflare connection and a short-lived site-scoped ticket; Vercel refuses social API relay requests.
+- Fixed HTTPS credential destinations, no redirects with credentials, bounded input/response sizes, per-user read/write quotas.
+- Provider challenges/throttling trigger a cooldown. No challenge bypass, token forgery, device identity borrowing or automated engagement.
+- Mutations use a unique client ID and server-side duplicate claim. No automatic mutation retries. Uncertain sends require review instead of automatic resending.
+- Disconnect deletes both unofficial session and official OAuth link; official OAuth revocation is attempted. Users should revoke a leaked session from the official app.
+- Unofficial APIs can still cause additional verification, restrictions or account suspension. Encryption reduces exposure and does not guarantee safety.
 
-既存YouTubeのプレイヤー・再生位置・コメント表示・接続方式・非公開キャッシュの回帰テスト、新規ルート・履歴・サービス切り替えを390/820/1280px相当のDOMで検証。OAuthはプロバイダーを模した応答で検証。ブラウザではプレビューの切り替え・公開リンク追加・埋め込み失敗時の公式リンクを確認しました。TikTokの検証用公開動画は検証ブラウザでサービス側エラーとなり、再生成功は確認していません。
+## Verification
 
-実アカウントログイン・ネイティブDM・本家おすすめを完成済みとして扱わないでください。使用量の削減率も実測前には断定しません。
+- Frontend TypeScript and production build; existing full suite passed 141 tests before the new behavior test.
+- Added DOM behavior test covers account feed selection, comments, notes, text DM, escaping provider text and blocking duplicate/uncertain sends.
+- Existing routing tests cover 390 / 820 / 1280px DOM environments and preserve the same YouTube player.
+- API full suite passed 70 tests, including new invalid ID/audience, acknowledgement, fixed-destination, challenge, capability, encryption and disconnect checks.
+- Provider responses in these tests are mocked. Real-account login, feed, DM, notes, comments and likes are not verified. Full native feature parity is not claimed.
+- Browser screenshots and visual checks are reported separately from DOM tests; a DOM viewport does not prove rendered layout.
 
-## 推薦エンジンの共通化方針
+## Sources
 
-共通イベント形式は `{service, contentId, kind, value, timestamp, source}` とし、`service` はYouTube / Instagram / TikTokを区別します。YouTubeは既存の視聴・推薦処理を維持し、今回の新規推薦実装はInstagram / TikTokの許可された候補に限定しています。YouTubeを含む3サービス共通の学習パイプラインとサービス横断学習は未接続です。
-
-## 検証結果
-
-- フロント：関連テスト30件成功、TypeScriptチェック成功、Viteビルド成功。
-- API：既存・追加テスト56件成功、Worker / Nodeビルド成功。
-- サービス切り替え後も同じYouTube iframeを保持することを検証。
-- OAuthのstate再利用拒否、保存データの暗号化、権限のない機能の無効表示、公開リンクの検証をテスト。
-- 実アカウントでのInstagram / TikTokログインは、管理者キーと審査設定がないため未検証。
-- 独立チャンクとPWA初回プリキャッシュ除外を確認。実端末での読み込み時間・運用使用量の比較測定は未実施。
-
-## 調査した公開ドキュメント
-
-- TikTok Login Kit: https://developers.tiktok.com/docs/en/login-kit-web
-- TikTok Display API: https://developers.tiktok.com/docs/en/display-api-overview
-- TikTok Embed Player: https://developers.tiktok.com/docs/en/embed-player
-- Meta公式Instagram API資料: https://www.postman.com/meta/instagram/overview
-- 非公式Instagram APIの調査対象: https://github.com/subzeroid/instagrapi
-- 非公式TikTok APIの調査対象: https://github.com/davidteather/TikTok-Api
-
-ビルド出力の比較では、YouTube側の初期JavaScriptはgzip 222.12 kBから224.54 kB（+2.42 kB）です。追加アプリ本体は別チャンクで、PWAの初回一括取得にも含めていません。これは転送サイズの比較で、読み込み時間の実測ではありません。
-
-追加で、TikTokのトークン更新と解除が重なっても解除済み連携を復活させないこと、更新後のトークンだけを使用することを検証しました。
-
-## セキュリティ強化（2026-11-12）
-
-連携設定に、Cookie流出・非公式接続のアカウント制限・連携解除と公式セッション失効の違いを表示する。
-非公式接続は管理者フラグ `SOCIAL_UNOFFICIAL_ENABLED` が明示的に有効な場合のみ利用可能で、
-本番では無効のまま。おすすめ・DM・ストーリーのアダプターは開発中で、実アカウントの動作保証はない。
-Vercelの新サービスAPI中継は拒否する。YouTubeの既存通信経路は維持する。
-シェルのCSP・フレーム埋め込み拒否・型検証・ストリーミング入力上限を追加した。
-フロント33件、API66件のテストに成功。フロントの型チェック・両方のビルドに成功。
-暗号化保存を含む対策はリスク低減であり、漏えいや乗っ取りが起きない保証ではない。
-
-## UI・ゲスト対応（2026-11-13）
-
-アプリ名を押すとロゴ付きダイアログで3サービスを選択できる。添付されたInstagram・TikTokの画像をそのまま使用する。
-スマホは下ナビ、タブレットはアイコンレール、PCはラベル付きサイドバー。
-Instagram・TikTokはサイトログインなしで開ける。追加した公開リンクの埋め込みと端末内検索が対象。
-ゲスト時は連携API・クラウド履歴同期を呼ばず、過去アカウントの履歴・設定とは分離する。
-全サービス横断の公開検索は未実装。公式検索へのリンクを提供し、端末内検索と区別する。
-ストーリーのトレイ・画像/動画ビューアを追加したが、接続のstories能力が確認できたときだけ取得する。
-現在の本番接続は未対応のため、フォロー中ストーリー・DM・本家おすすめを完成扱いしない。
-非公式セッション連携は引き続き無効。サービス側制限時は自動接続を停止し、通常の取得回数も制限する。
-BANや漏えいを完全に防ぐ保証はない。
+- Meta official API: https://www.postman.com/meta/instagram/overview
+- TikTok Login Kit: https://developers.tiktok.com/docs/en/login-kit-overview
+- TikTok Display API: https://developers.tiktok.com/docs/en/display-api-get-started
+- Nonofficial Instagram protocol reference: https://github.com/subzeroid/instagrapi
+- TikTok IM attribution and limitations: API repository `docs/social-protocols.md`
