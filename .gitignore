@@ -11,3 +11,6 @@ coverage/
 cloudflare/api/generated.ts
 cloudflare/api/bundle.mjs
 cloudflare/api/worker-configuration.d.ts
+
+# GAS runtime assets are published on the gas-runtime branch.
+gas/web/

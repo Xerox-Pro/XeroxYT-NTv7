@@ -10,7 +10,9 @@
     "clean": "rm -rf dist server.js",
     "start": "vite --host 0.0.0.0",
     "lint": "tsc --noEmit",
-    "verify:browser": "node scripts/verify-browser.mjs"
+    "verify:browser": "node scripts/verify-browser.mjs",
+    "build:gas": "node scripts/build-gas.mjs",
+    "test:gas": "node --test tests/gas-*.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",
