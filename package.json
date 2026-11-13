@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-env.mjs && node scripts/prepare-browser.mjs && node scripts/verify-browser.mjs && vite build",
+    "build": "node scripts/check-env.mjs && node scripts/prepare-browser.mjs && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "start": "vite --host 0.0.0.0",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "verify:browser": "node scripts/verify-browser.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",
