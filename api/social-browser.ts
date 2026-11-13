@@ -1,3 +1,5 @@
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
 import {Sandbox} from '@vercel/sandbox';
 import browserTemplate from '../server/browser-template.mjs';
 import {timingSafeEqual,randomUUID} from 'node:crypto';
@@ -32,7 +34,7 @@ export default async function handler(req:any,res:any){
   if(body.operation==='close'){await sandbox.stop();return res.json({success:true});}
   if(body.operation!=='command')return res.status(400).json({error:'Invalid operation'});
   const id=randomUUID(),input=ROOT+'/input-'+id+'.json',output=ROOT+'/output-'+id+'.json';
-  await sandbox.writeFiles([{path:input,content:Buffer.from(JSON.stringify({method:body.method,params:body.params}))}]);
-  try{const command=await sandbox.runCommand('node',[ROOT+'/control.mjs',input,output]);if(command.exitCode!==0)throw Error('command');const result=await sandbox.readFileToBuffer({path:output});if(!result)throw Error('result');const data=JSON.parse(result.toString());if(data.error)throw Error('command');return res.json(data.result);}finally{await sandbox.runCommand('rm',['-f',input,output]);}
+  await sandbox.writeFiles([{path:input,content:Buffer.from(JSON.stringify({method:body.method,params:body.params}))},...await Promise.all(['control.mjs','fill-field.mjs'].map(async file=>({path:ROOT+'/'+file,content:await readFile(path.join(process.cwd(),'server/browser',file))})))]);
+  try{const command=await sandbox.runCommand('node',[ROOT+'/control.mjs',input,output]);if(command.exitCode!==0)throw Error('command');const result=await sandbox.readFileToBuffer({path:output});if(!result)throw Error('result');const data=JSON.parse(result.toString());if(['LOGIN_FIELD_NOT_FOUND','LOGIN_INPUT'].includes(data.error))return res.status(409).json({error:data.error});if(data.error)throw Error('command');return res.json(data.result);}finally{await sandbox.runCommand('rm',['-f',input,output]);}
  }catch(error:any){console.warn(JSON.stringify({event:'social_browser_error',operation:body.operation,stage,name:error?.name,code:error?.code||error?.json?.error?.code||null,status:error?.status||null}));if(body.operation==='create')await sandbox?.stop().catch(()=>{});return res.status(502).json({error:'VERCEL_BROWSER_FAILED'});}
 }

@@ -36,5 +36,10 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/social-browser.ts": {
+      "includeFiles": "server/browser/**"
+    }
+  }
 }
