@@ -46,3 +46,9 @@ test('loader follows latest manifest while pinning JS and CSS to one immutable r
  h.reply(release('1'.repeat(40)));h.sandbox.doGet({parameter:{route:'/watch?v=test'}});const first=JSON.parse(current.assetConfig);assert.ok(first.js.includes('@'+'1'.repeat(40)));assert.equal(first.js.split('/gas/web/')[0],first.css.split('/gas/web/')[0]);assert.equal(first.route,'/watch?v=test');
  h.reply(release('2'.repeat(40)));h.sandbox.doGet({parameter:{}});const second=JSON.parse(current.assetConfig);assert.ok(second.js.includes('@'+'2'.repeat(40)));assert.equal(first.webAppUrl,second.webAppUrl);assert.equal(JSON.stringify(second).includes('private.example.com'),false);
 });
+test('HTML loads both released stylesheet and script without API configuration',()=>{
+ const html=readFileSync(new URL('../gas/Index.html',import.meta.url),'utf8');
+ assert.match(html,/stylesheet\.href=window\.__XEROX_GAS_ASSETS__\.css/);
+ assert.match(html,/app\.src=window\.__XEROX_GAS_ASSETS__\.js/);
+ assert.equal(/API_BASE_URL|API_SHARED_SECRET/.test(html),false);
+});

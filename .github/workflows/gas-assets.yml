@@ -28,10 +28,10 @@ jobs:
           set -euo pipefail
           cp -R gas/web "$RUNNER_TEMP/gas-web"
           if git ls-remote --exit-code --heads origin gas-runtime >/dev/null; then
-            git switch --force-create gas-runtime origin/gas-runtime
+            git fetch origin gas-runtime
+            git switch --force-create gas-runtime FETCH_HEAD
           else
             git switch --orphan gas-runtime
-            git rm -rf .
           fi
           mkdir -p gas/web
           cp -R "$RUNNER_TEMP/gas-web/." gas/web/

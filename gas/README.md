@@ -3,9 +3,11 @@
 既存のReact画面・CSSをビルドし、GASのHTML Serviceで起動します。
 ブラウザ → `google.script.run` → GAS `UrlFetchApp` → 既存API の経路です。
 GitHubにアップロードするJS・CSSにAPI接続先とAPI共有シークレットは入りません。
-既存のVercel/Cloudflareデプロイの設定変更は不要です。
+利用者自身のCloudflareにAPIとD1を作成します。作者のAPI・DB・秘密鍵は使いません。構築方法は [API_SETUP.md](API_SETUP.md) を参照してください。
 
 ## 初回セットアップ
+
+先に [APIの構築手順](API_SETUP.md) で自分のAPIを用意してください。画面資産も自分で更新する場合はこのフロントをForkし、Actionsを有効にして `Publish GAS assets` を実行し、`ASSET_REPO` を自分の `ユーザー名/リポジトリ名` に設定します。
 
 1. https://script.google.com/ で独立したプロジェクトを作成。
 2. `Code.gs` をコピーし、HTMLファイル `Index` を作って `Index.html` をコピー。
@@ -14,10 +16,10 @@ GitHubにアップロードするJS・CSSにAPI接続先とAPI共有シークレ
 
 | 名前 | 値 |
 | --- | --- |
-| `API_BASE_URL` | 現在使えるAPIのHTTPSオリジン。末尾の `/api` は付けない |
+| `API_BASE_URL` | 自分で構築したAPIのHTTPSオリジン。末尾の `/api` は付けない |
 | `API_SHARED_SECRET` | 既存APIに設定済みの共有シークレット。認証を使わないAPIなら不要 |
 | `ACCOUNT_BASE_URL` | サイトアカウント用APIのHTTPSオリジン。API_BASE_URLと同じなら省略 |
-| `UPSTREAM_ORIGIN` | APIの `ALLOWED_ORIGINS` に登録済みの既存フロントエンドのHTTPSオリジン |
+| `UPSTREAM_ORIGIN` | `https://script.google.com`（APIの `ALLOWED_ORIGINS` と一致させる） |
 | `ASSET_REPO` | `Xerox-Pro/XeroxYT-NTv7`（省略可） |
 | `ASSET_BRANCH` | `gas-runtime`（省略可） |
 
