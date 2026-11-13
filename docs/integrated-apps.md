@@ -71,3 +71,12 @@ closes. Cancellation closes it without importing. Login views expire after ten
 minutes; view links should not be shared. Session recording is disabled. Actual
 provider sign-in with a real account remains unverified and can be rejected by
 the provider. The application never promises to bypass verification or blocks.
+
+## Same-origin login screen relay
+
+The external Live View is replaced by authenticated same-origin login/view and
+login/input requests through Vercel to Cloudflare. Users click the rendered screen,
+send text with the masked input box, use Tab / Backspace / Enter, and manually
+refresh or scroll. There is no client connection to live.browser.run. Frames and
+input values are not persisted. Text is sent transiently by POST, not in URLs.
+This is a screenshot/input relay, not an unrestricted HTML or WebSocket proxy.
