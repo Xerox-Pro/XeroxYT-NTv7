@@ -13,7 +13,7 @@ test('account feed, DM, comments and notes use private routes; double submission
   b.onLoad({filter:/\/src\/lib\/apiTransport\.mjs$/},()=>({loader:'js',contents:'export async function cloudflareOnlyFetch(path,options){return window.__api(path,options)}'}));
  }}]});
  const dom=new JSDOM('<div id="root"></div>',{url:'https://site.test/instagram',pretendToBeVisual:true});
- const keys=['window','document','HTMLElement','Event','MouseEvent','CustomEvent','localStorage','sessionStorage','IntersectionObserver'],old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
+ const keys=['window','document','HTMLElement','Event','MouseEvent','CustomEvent','localStorage','sessionStorage','FormData','IntersectionObserver'],old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
  for(const key of keys.slice(0,-1))Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
  globalThis.IntersectionObserver=class{observe(){}disconnect(){}};window.matchMedia=()=>({matches:false});dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};dom.window.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open')};globalThis.IS_REACT_ACT_ENVIRONMENT=true;
  const {default:React,act}=await import('react');const {createRoot}=await import('react-dom/client');const {MemoryRouter,useNavigate}=await import('react-router-dom');
@@ -44,5 +44,19 @@ test('account feed, DM, comments and notes use private routes; double submission
   await click(find('.social-sidebar>button','ノート'));await fill('[aria-label="ノート本文"]','note');await click(find('.social-dialog button','シェア'));assert.equal(notes,1);
   await act(async()=>navigate('/instagram/messages'));await flush();await click(find('.social-thread-list>button','QA conversation会話を開く'));assert.equal(document.querySelectorAll('.social-message img').length,0);assert.match(document.body.textContent,/<img onerror=alert\(1\)>/);
   await fill('[aria-label="メッセージ本文"]','test');const form=document.querySelector('.social-message-compose');await act(async()=>{form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));});await flush();assert.equal(sends,1);assert.equal(document.querySelector('[aria-label="メッセージを送信"]').disabled,true);assert.match(document.body.textContent,/送信済みの可能性/);
+  window.__api=async(path,options={})=>{requests.push({path,options});
+   if(path.endsWith('/status'))return Response.json({connected:true,mode:'unofficial',user:{id:'42',username:'qa'},capabilities:{homeFeed:true,forYou:true,following:true,search:true,ownMedia:false}});
+   if(path.endsWith('/preferences'))return Response.json({signals:{}});
+   const item=(id,title,timestamp)=>({id:'tt:'+id,service:'tiktok',kind:'video',title,timestamp,author:'creator',url:'https://www.tiktok.com/@creator/video/'+id});
+   if(path.endsWith('/feed'))return Response.json({items:[item('1234567890123','For You item',1)]});
+   if(path.endsWith('/following'))return Response.json({items:[item('1234567890124','Old followed video',1),item('1234567890125','Newest followed video',3)]});
+   if(path.startsWith('/api/tiktok/search?'))return Response.json(new URL('https://site.test'+path).searchParams.get('kind')==='users'?{users:[{id:'43',username:'found_user',name:'Found user'}]}:{items:[item('1234567890126','Semantic result without keyword',2)]});
+   throw Error('Unexpected TikTok request '+path);
+  };
+  await act(async()=>root.render(React.createElement(MemoryRouter,{key:'tiktok',initialEntries:['/tiktok']},React.createElement(React.Fragment,null,React.createElement(App,{service:'tiktok'}),React.createElement(Probe)))));await flush();assert.match(document.body.textContent,/For You item/);
+  await act(async()=>navigate('/tiktok/following'));await flush();assert.ok(requests.some(row=>row.path==='/api/tiktok/following'));const titles=[...document.querySelectorAll('.social-video-caption>p')].map(node=>node.textContent);assert.deepEqual(titles,['Newest followed video','Old followed video']);
+  await act(async()=>navigate('/tiktok/search'));await flush();await fill('[aria-label="TikTokを検索"]','cat');await click(find('.social-search>button','検索'));assert.match(document.body.textContent,/Semantic result without keyword/);
+  await click(find('.social-search-tabs>button','ユーザー'));assert.match(document.body.textContent,/found_user/);assert.equal(document.querySelector('.social-search-results>a').href,'https://www.tiktok.com/@found_user');
+
  }finally{await act(async()=>root.unmount());dom.window.close();for(const[k,v]of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}delete globalThis.IS_REACT_ACT_ENVIRONMENT;await rm(dir,{recursive:true,force:true});}
 });
