@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-env.mjs && vite build",
+    "build": "node scripts/check-env.mjs && node scripts/prepare-browser.mjs && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "start": "vite --host 0.0.0.0",
@@ -15,6 +15,7 @@
     "@radix-ui/react-avatar": "^1.2.6",
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@tailwindcss/typography": "^0.5.20",
+    "@vercel/sandbox": "^4.0.0",
     "axios": "^1.19.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",

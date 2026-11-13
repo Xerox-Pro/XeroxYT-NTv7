@@ -34,7 +34,7 @@ export default async function handler(request: Request) {
 
   let pool: string[];
   try {
-    pool = apiPool(process.env);
+    pool = apiPool(process.env).filter(origin=>new URL(origin).hostname.endsWith('.workers.dev'));
   } catch {
     return respond(Response.json(
       { error: "API URLの環境変数を確認してください。" },
