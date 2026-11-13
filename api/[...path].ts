@@ -20,7 +20,7 @@ export default async function handler(request: Request) {
   const startedAt = Date.now();
   // Keep the entire Edge invocation below its 25s first-response limit,
   // including health checks, request-body parsing and upstream retries.
-  const loginStart = /^\/api\/(instagram|tiktok)\/login\/start$/.test(new URL(request.url).pathname);
+  const loginStart = /^\/api\/(instagram|tiktok)\/login\/(start|credentials|verify|check|finish)$/.test(new URL(request.url).pathname);
   const deadline = startedAt + (loginStart ? 24000 : 18000);
   const url = new URL(request.url);
   const routeName = '/' + url.pathname.split('/').filter(Boolean).slice(0, 3).map((part, index) => index === 2 && part !== 'batch' ? ':id' : part).join('/');
