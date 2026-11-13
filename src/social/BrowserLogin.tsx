@@ -5,24 +5,24 @@ type Phase='credentials'|'code'|'pending';
 export default function BrowserLogin({service,enabled,onConnected}:{service:Service;enabled:boolean;onConnected:()=>void}){
  const [username,setUsername]=useState(''),[password,setPassword]=useState(''),[code,setCode]=useState(''),[consent,setConsent]=useState(false),[active,setActive]=useState(false),[phase,setPhase]=useState<Phase>('credentials'),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');const lock=useRef(false);
  const post=(route:string,body:object={})=>socialRequest(service,'login/'+route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
- const accept=(result:any)=>{
+ const accept=(result:any,preserveForm=false)=>{
   if(result.connected){setActive(false);setPhase('credentials');setPassword('');setCode('');setMessage('ログインが完了しました。');onConnected();return true;}
   setMessage(result.message||'ログイン結果を確認しています。');
   if(result.state==='code_required')setPhase('code');
   else if(result.state==='invalid_credentials'){setError(result.message);setPhase(phase==='code'?'code':'credentials');}
-  else if(['captcha_required','unsupported'].includes(result.state)){setError(result.message);setPhase('credentials');}
-  else setPhase('pending');
+  else if(['captcha_required','unsupported'].includes(result.state)){setError(result.message);if(!preserveForm)setPhase('credentials');}
+  else if(!preserveForm)setPhase('pending');
   return result.state!=='pending';
  };
  const run=async(operation:'credentials'|'verify'|'check'|'cancel')=>{
-  if(lock.current)return;lock.current=true;setBusy(true);setError('');setMessage('認証中…');
-  const credentials={username:username.trim(),password},verification={code};setPassword('');setCode('');
+  if(lock.current)return;lock.current=true;setBusy(true);setError('');setMessage(operation==='check'?'ログイン状態を確認中…':'認証中…');
+  const credentials={username:username.trim(),password},verification={code};if(operation==='credentials')setPassword('');if(operation==='verify')setCode('');
   try{
-   if(operation==='cancel'){await post('cancel');setActive(false);setPhase('credentials');setMessage('ログインを中止しました。');return;}
+   if(operation==='cancel'){await post('cancel');setPassword('');setCode('');setActive(false);setPhase('credentials');setMessage('ログインを中止しました。');return;}
    if(operation==='credentials'&&!active){await post('start',{consent});setActive(true);}
    const complete=async(result:any)=>result.state==='authenticated'?await post('finish'):result;
    let result=await complete(await post(operation,operation==='credentials'?credentials:operation==='verify'?verification:{}));
-   for(let attempt=0;attempt<3;attempt++){if(accept(result))return;await new Promise(resolve=>setTimeout(resolve,1200));result=await complete(await post('check'));}accept(result);if(result.state==='pending')setMessage('まだ認証が完了していません。公式アプリへの承認通知も確認し、「ログイン状態を確認」を押してください。');
+   for(let attempt=0;attempt<3;attempt++){if(accept(result,operation==='check'||attempt>0))return;await new Promise(resolve=>setTimeout(resolve,1200));result=await complete(await post('check'));}accept(result,true);if(result.state==='pending')setMessage('まだ認証が完了していません。公式アプリへの承認通知も確認し、「ログイン状態を確認」を押してください。');
   }catch(e:any){setError(e.message||'ログインに失敗しました。もう一度お試しください。');}
   finally{lock.current=false;setBusy(false);}
  };

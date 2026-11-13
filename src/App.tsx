@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import MainApp from './MainApp';
-import {serviceForPath} from './social/services.mjs';
+import {serviceForPath,services} from './social/services.mjs';
 const SocialApp=lazy(()=>import('./social/SocialApp'));
 import AccountGate from './components/AccountGate';
 import PWAUpdateIndicator from './components/PWAUpdateIndicator';
@@ -17,7 +17,7 @@ export default function App() {
       localStorage.setItem('xerox_last_service',service);
       sessionStorage.setItem(`xerox_service_page_${service}`,location.pathname+location.search+location.hash);
       const historyKey=`xerox_service_history_${service}`;let history=JSON.parse(sessionStorage.getItem(historyKey)||'[]');if(!Array.isArray(history))history=[];if(!history.some(entry=>entry.key===location.key))history=[...history,{key:location.key,path:location.pathname+location.search+location.hash}].slice(-100);sessionStorage.setItem(historyKey,JSON.stringify(history));
-      if(service!=='youtube')document.title=`${service==='instagram'?'Instagram':'TikTok'} · XeroxYT-NTv7`;
+      if(service!=='youtube')document.title=`${services.find(item=>item.id===service)?.name} · XeroxYT-NTv7`;
     } catch {
       // Browsing still works when storage is unavailable.
     }
