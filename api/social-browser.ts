@@ -1,5 +1,5 @@
 import {Sandbox} from '@vercel/sandbox';
-import browserTemplate from '../server/browser-template.json';
+import browserTemplate from '../server/browser-template.mjs';
 import {timingSafeEqual,randomUUID} from 'node:crypto';
 export const config={maxDuration:60};
 const ROOT='/vercel/sandbox';
