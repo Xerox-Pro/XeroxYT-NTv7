@@ -60,3 +60,14 @@ Write capabilities describe implemented adapters, not a successful live write pr
 - TikTok Display API: https://developers.tiktok.com/docs/en/display-api-get-started
 - Nonofficial Instagram protocol reference: https://github.com/subzeroid/instagrapi
 - TikTok IM attribution and limitations: API repository `docs/social-protocols.md`
+
+## Dedicated browser login
+
+Settings now offers a dedicated Browser Run login before manual cookie import.
+The user opens the short-lived official-page Live View, completes login and 2FA
+there, returns and selects “ログイン完了・Cookieを保存”. Cookie extraction and
+account/service-scoped encrypted storage occur server-side, then the browser
+closes. Cancellation closes it without importing. Login views expire after ten
+minutes; view links should not be shared. Session recording is disabled. Actual
+provider sign-in with a real account remains unverified and can be rejected by
+the provider. The application never promises to bypass verification or blocks.
