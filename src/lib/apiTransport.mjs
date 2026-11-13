@@ -39,7 +39,7 @@ async function googleFetchRequest(path,options,directOnly=false){
  if(privateScope!==scope){privateScope=scope;privateTicket=undefined;privateTicketRequest=undefined;}
  if(!privateTicket||privateTicket.expiresAt<Date.now()+15000){
   if(!privateTicketRequest){const currentScope=scope;const task=fetch('/api/account/cloudflare-session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)}).then(async response=>{
-   if(!response.ok)throw new Error('Cloudflareへの接続を確認できませんでした。再読み込みしてください。');const data=await response.json();const origin=new URL(data.origin);
+   const data=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(response.status===401?'サイトのログインが切れています。一度ログアウトして、サイトにログインし直してください。':data.error||'Cloudflareの認証を確認できませんでした。'),{status:response.status,code:response.status===401?'SITE_SESSION_REQUIRED':'CLOUDFLARE_TICKET_FAILED'});const origin=new URL(data.origin);
    if(origin.protocol!=='https:'||!origin.hostname.endsWith('.workers.dev')||!data.token||data.expiresAt<=Date.now())throw new Error('Cloudflareの接続設定が無効です。');
    if(privateScope!==currentScope)throw new Error('ログイン状態が変わりました。');privateTicket={...data,origin:origin.origin};return privateTicket;
   }).finally(()=>{if(privateTicketRequest===task)privateTicketRequest=undefined;});privateTicketRequest=task;}
@@ -77,4 +77,5 @@ export async function apiFetch(path,options={}){
  return fetch(path,{...options,credentials:'same-origin'});
 }
 
-export function cloudflareOnlyFetch(path,options={}){if((typeof sessionStorage!=='undefined'&&sessionStorage.getItem('xerox_guest')==='true'))return Promise.resolve(Response.json({error:'連携にはサイトへのログインが必要です。',code:'SITE_SESSION_REQUIRED'},{status:401}));if(!/^\/api\/(instagram|tiktok)(\/|$)/.test(path))throw new Error('サービスの接続先が無効です。');return limitedPrivate(()=>googleFetchRequest(path,options,true));}
+let socialRelay=false;
+export function cloudflareOnlyFetch(path,options={}){if((typeof sessionStorage!=='undefined'&&sessionStorage.getItem('xerox_guest')==='true'))return Promise.resolve(Response.json({error:'連携にはサイトへのログインが必要です。',code:'SITE_SESSION_REQUIRED'},{status:401}));if(!/^\/api\/(instagram|tiktok)(\/|$)/.test(path))throw new Error('サービスの接続先が無効です。');return limitedPrivate(async()=>{if(socialRelay||readTransportState().mode!=='direct')return fetch(path,{...options,credentials:'same-origin',cache:'no-store'});try{return await googleFetchRequest(path,options,true);}catch(error){if(options.signal?.aborted||error.code||error.status)throw error;if(options.method&&!['GET','HEAD'].includes(options.method))throw error;socialRelay=true;return fetch(path,{...options,credentials:'same-origin',cache:'no-store'});}});}

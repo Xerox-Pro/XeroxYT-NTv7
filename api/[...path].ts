@@ -31,7 +31,7 @@ export default async function handler(request: Request) {
     else console.info(JSON.stringify(fields));
     return response;
   };
-  if(/^\/api\/(instagram|tiktok)(\/|$)/.test(url.pathname))return respond(Response.json({error:'このサービスはCloudflareへ直接接続してください。',code:'CLOUDFLARE_DIRECT_REQUIRED'},{status:403,headers:{'Cache-Control':'no-store'}}));
+
   let pool: string[];
   try {
     pool = apiPool(process.env);
@@ -73,7 +73,7 @@ export default async function handler(request: Request) {
   if (!headers.has('Origin')) headers.set('Origin', url.origin);
   if (process.env.API_SHARED_SECRET) headers.set('Authorization','Bearer '+process.env.API_SHARED_SECRET);
   const configuredPool = pool;
-  const cloudflareOnly=/^\/api\/(auth|user)(\/|$)/.test(path)||path==='/api/account/cloudflare-session';
+  const cloudflareOnly=/^\/api\/(auth|user|instagram|tiktok)(\/|$)/.test(path)||path==='/api/account/cloudflare-session';
   if(cloudflareOnly)pool=pool.filter(origin=>new URL(origin).hostname.endsWith('.workers.dev'));
   else pool=await apiSelector.plan(pool,headers);
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
