@@ -3,3 +3,5 @@
 .app-switcher>button{touch-action:manipulation;user-select:none}
 
 .app-switcher{display:flex;align-items:center}.app-switcher>.app-picker-trigger{display:grid;place-items:center;min-width:32px;min-height:36px;padding:6px}.app-switcher>button[data-app-logo]{padding-right:4px}
+
+.app-switcher>.app-picker-trigger>svg{display:block!important}
