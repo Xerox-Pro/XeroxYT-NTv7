@@ -34,3 +34,29 @@ export async function fillLoginField(page,{service,field,value}){
  }
  throw Error('LOGIN_FIELD_NOT_FOUND');
 }
+
+export function findLoginButton(action){
+ const patterns={login:/^(ログイン|log\s*in|sign\s*in)$/i,next:/^(次へ|続行|続ける|next|continue)$/i,verify:/^(確認|確認する|認証|認証する|送信|verify|confirm|submit)$/i};
+ if(!Object.hasOwn(patterns,action))return null;
+ const visible=el=>!el.disabled&&el.getAttribute('aria-disabled')!=='true'&&el.getAttribute('aria-hidden')!=='true'&&el.getClientRects().length>0&&getComputedStyle(el).visibility!=='hidden'&&getComputedStyle(el).display!=='none';
+ const inputs=[...document.querySelectorAll('input')].filter(visible);
+ if(action==='verify'&&!inputs.some(el=>/one-time-code|code|otp|認証|確認/.test([el.autocomplete,el.name,el.placeholder,el.getAttribute('aria-label')].join(' ').toLowerCase())))return null;
+ let matches=[...document.querySelectorAll('button,input[type=submit],input[type=button],[role=button]')].filter(el=>visible(el)&&patterns[action].test((el.getAttribute('aria-label')||el.innerText||el.value||'').replace(/\s+/g,' ').trim()));
+ const formButtons=matches.filter(el=>el.closest('form'));if(formButtons.length)matches=formButtons;
+ return matches.length===1?matches[0]:null;
+}
+export async function pressLoginButton(page,{service,button}){
+ if(!['instagram','tiktok'].includes(service)||!['login','next','verify'].includes(button))throw Error('LOGIN_INPUT');
+ const host=service==='instagram'?'instagram.com':'tiktok.com';
+ const candidates=[];
+ try{
+  for(const frame of page.frames()){
+   let url;try{url=new URL(frame.url());}catch{continue;}
+   if(url.protocol!=='https:'||!(url.hostname===host||url.hostname.endsWith('.'+host)))continue;
+   const handle=await frame.evaluateHandle(findLoginButton,button),element=handle.asElement();
+   if(element)candidates.push(element);else await handle.dispose();
+  }
+  if(candidates.length!==1)throw Error('LOGIN_BUTTON_NOT_FOUND');
+  await candidates[0].click();return {success:true,button};
+ }finally{for(const element of candidates)await element.dispose();}
+}
