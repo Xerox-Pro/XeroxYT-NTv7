@@ -63,6 +63,7 @@ test('account feed, DM, comments and notes use private routes; double submission
    if(path.endsWith('/status'))return Response.json({connected:false,capabilities:{search:true}});
    if(path.endsWith('/preferences'))return Response.json({signals:{}});
    if(path==='/api/instagram/public/feed'){if(++publicFeedCalls===1)return Response.json({error:'Temporary public feed failure'},{status:502});return Response.json({items:[{id:'ig:public',kind:'image',service:'instagram',title:'Recovered public post',author:'creator',profileUsername:'creator',media:'https://image.test/p.jpg',url:'https://www.instagram.com/p/TestPost/'}]});}
+   if(path.startsWith('/api/instagram/public/resolve?'))return Response.json({items:[{id:'ig:ExpandedCode',url:'https://www.instagram.com/reel/ExpandedCode/',service:'instagram',kind:'video',author:'creator',title:'Expanded shared reel'}]});
    if(path.startsWith('/api/instagram/public/search?'))return Response.json({users:[{id:'creator',username:'creator',name:'Public creator'}],items:[{id:'ig:profile',kind:'image',service:'instagram',title:'Public profile post',author:'creator',profileUsername:'creator',media:'https://image.test/profile.jpg',url:'https://www.instagram.com/p/ProfilePost/'}]});
    throw Error('Unexpected public request '+path);
   };
@@ -71,6 +72,8 @@ test('account feed, DM, comments and notes use private routes; double submission
   await click(find('.social-alert button','再試行'));assert.equal(publicFeedCalls,2);assert.match(document.body.textContent,/Recovered public post/);
   await act(async()=>navigate('/instagram/search'));await flush();await fill('[aria-label="Instagramを検索"]','@creator');await click(find('.social-search>button','検索'));
   await click(document.querySelector('.social-search-results>a'));assert.match(document.body.textContent,/Public profile post/);assert.ok(requests.some(r=>r.path==='/api/instagram/public/search?q=%40creator'));
+
+  await act(async()=>navigate('/instagram'));await flush();await click(find('.social-sidebar>button','公開投稿を追加'));await fill('[aria-label="公開投稿のURL"]','https://www.instagram.com/share/reel/Public123/');await click(find('.social-dialog button','追加する'));assert.match(document.body.textContent,/Expanded shared reel/);assert.ok(requests.some(r=>r.path.includes('/public/resolve?url=https%3A%2F%2Fwww.instagram.com%2Fshare%2Freel%2FPublic123%2F')));
 
  }finally{await act(async()=>root.unmount());dom.window.close();for(const[k,v]of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}delete globalThis.IS_REACT_ACT_ENVIRONMENT;await rm(dir,{recursive:true,force:true});}
 });

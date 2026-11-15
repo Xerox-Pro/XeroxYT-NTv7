@@ -13,3 +13,5 @@ https://xeroxyt-ntv6-apiv1.xeroxapps.workers.dev/
 API側の提供元制限は残っています。実データ確認ではInstagram公開検索が拒否され、TikTok公開おすすめは外部APIの上限に達していました。ストーリー、DM、ノート・ストーリー投稿、SNS個人向けおすすめの復旧確認はできていません。
 
 Cloudflare配信先ではサイトへの再ログインが必要です。既存VercelドメインのCookieは移動しません。GAS版の同じ画面修正は別リポジトリに含まれ、GAS版の配信手順でリリースします。
+
+追加更新: 公開投稿追加はTikTok・Instagramの公式共有リンクにも対応します。APIにはGAS鍵の受付を常設し、TikTok公開フィードのBrowser Run取得とInstagram公開投稿の匿名web API取得を追加しました。キーワード検索・ストーリー・ログイン後の投稿機能は制限が残っています。
