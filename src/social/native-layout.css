@@ -15,6 +15,8 @@
 .social-app .social-source:hover { background:#ededed; }
 .instagram-mode:has(.social-home-feed) .social-body { padding-right:40px; }
 .instagram-mode .social-home-feed { max-width:470px; }
+.instagram-mode:not(.is-vertical) .social-media-frame { min-height:0; }
+.instagram-mode:not(.is-vertical) .social-media-frame>video { height:auto; min-height:0; max-height:min(680px,85dvh); object-fit:contain; }
 .instagram-mode .social-feed-tabs { max-width:630px; font-size:18px; padding-top:10px; }
 .instagram-mode .social-post-content>header { padding:12px 0; }
 .instagram-mode .social-post-actions { gap:17px; padding-top:13px; }
