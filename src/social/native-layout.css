@@ -1,0 +1,137 @@
+/* Shared feed structure: keep navigation and playback independent of page height. */
+.social-app { --social-border:#e5e5e5; color:#101010; }
+.social-host { padding-bottom:0!important; }
+.social-app .social-body { margin:0 auto; }
+.social-app .social-sidebar { padding-top:26px; }
+.social-app .social-sidebar>.app-switcher { margin-bottom:28px; }
+.social-app .social-sidebar .app-switcher>button { font-size:25px; letter-spacing:-.7px; }
+.social-app .app-switcher [data-app-logo]>img { width:30px; height:30px; border-radius:6px; }
+.instagram-mode .app-switcher [data-app-logo]>img { display:none; }
+.instagram-mode .social-sidebar .app-switcher [data-app-logo]>span { font-family:Georgia,serif; font-size:29px; font-style:italic; }
+.social-app .social-page-heading { margin-bottom:24px; }
+.social-app .social-page-heading h1 { font-size:24px; }
+.social-app .social-client-label { margin-top:5px; }
+.social-app .social-source { display:flex; width:fit-content; gap:5px; border:0; border-radius:20px; background:#f6f6f6; padding:6px 10px; margin:0 auto 14px; font-size:10px; line-height:1.4; color:#737373; cursor:pointer; }
+.social-app .social-source:hover { background:#ededed; }
+.instagram-mode:has(.social-home-feed) .social-body { padding-right:40px; }
+.instagram-mode .social-home-feed { max-width:470px; }
+.instagram-mode .social-feed-tabs { max-width:630px; font-size:18px; padding-top:10px; }
+.instagram-mode .social-post-content>header { padding:12px 0; }
+.instagram-mode .social-post-actions { gap:17px; padding-top:13px; }
+.instagram-mode .social-post-actions>button:nth-child(3) { margin-left:auto; order:1; }
+.instagram-mode .social-post-actions>button:last-child { margin-left:0; color:inherit; }
+.social-post-options { position:relative; }
+.social-post-options>summary { display:grid; place-items:center; padding:5px; list-style:none; cursor:pointer; }
+.social-post-options>summary::-webkit-details-marker { display:none; }
+.social-post-options>div { position:absolute; right:0; top:100%; z-index:50; min-width:180px; padding:6px; border:1px solid #e5e5e5; border-radius:10px; background:white; color:#262626; box-shadow:0 6px 24px #0002; }
+.social-post-options>div>a,.social-post-options>div>button { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; width:100%; border:0; border-radius:6px; background:none; font-size:12px; text-align:left; }
+.social-post-options>div>a:hover,.social-post-options>div>button:hover { background:#f5f5f5; }
+.social-vertical-post .social-post-options>div { top:auto; bottom:0; right:42px; }
+.social-app .story-tray { min-height:94px; align-items:flex-start; }
+.story-tray .story-search-trigger { width:90px; min-width:90px; padding:0; gap:8px; }
+.story-tray .story-search-trigger>span { display:grid; place-items:center; width:66px; height:66px; border:1px solid #ddd; background:#fafafa; color:#262626; }
+.story-tray .story-search-trigger small { font-size:10px; max-width:none; }
+.social-app .story-tray>form { align-self:center; padding:8px 12px; background:#fafafa; border-radius:10px; }
+.social-app .story-tray>form input { font-size:13px; }
+.social-app .social-feed-empty { min-height:360px; max-width:460px; gap:14px; margin:30px auto; }
+.social-feed-empty .social-empty-icon { width:68px; height:68px; border-color:#262626; }
+.social-app .social-feed-empty h2 { font-size:23px; letter-spacing:-.5px; }
+.social-app .social-feed-empty>p { margin:0; max-width:300px; }
+.social-app .social-empty-search { display:flex; align-items:center; gap:6px; color:var(--social-accent); font-size:13px; margin:0 0 5px; }
+.social-app .social-feed-empty>.social-primary:last-child { background:none; color:#737373; padding:0; font-weight:400; font-size:11px; }
+.social-empty-error { max-width:350px; color:#737373; border-top:1px solid #eee; padding-top:14px; }
+.social-app .social-empty-error p { font-size:11px; margin:0 0 8px; }
+.social-app .social-empty-error button { border:0; background:none; color:var(--social-accent); font-size:12px; }
+.social-app .social-search { max-width:900px; border-radius:24px; min-height:48px; }
+.social-app .social-search input { outline:none; }
+.social-app .social-search:focus-within { box-shadow:0 0 0 1px #bbb; }
+.social-app .social-search-results,.social-app .social-search-tabs { max-width:900px; }
+.social-app .social-profile { padding:20px 24px; max-width:960px; }
+.social-app .social-profile-tabs { padding-top:0; }
+.social-app .social-profile-tabs>button { min-height:48px; font-size:13px; }
+
+/* One viewport per reel. All vertical scrolling belongs to the video list. */
+.social-app.is-vertical { height:100dvh; min-height:0; overflow:hidden; }
+.social-app.is-vertical .social-body { height:100dvh; display:flex; flex-direction:column; position:relative; overflow:hidden; padding-bottom:20px; }
+.social-app.is-vertical .social-reel-viewer { flex:1; min-height:0; height:auto; margin:0 auto; width:min(100%,470px); }
+.social-app.is-vertical .social-page-end { display:none; }
+.social-app.is-vertical .social-source { position:absolute; left:calc(50% - 210px); top:69px; z-index:12; margin:0; background:#0006; color:#fff; }
+.social-app.is-vertical .social-loading { position:absolute; inset:45% 0 auto; z-index:10; color:#aaa; pointer-events:none; }
+.social-app .social-vertical-post .social-post-media { margin-right:0; }
+.social-app .social-vertical-post .social-post-actions { right:9px; bottom:90px; width:44px; gap:22px; padding:0; filter:drop-shadow(0 1px 3px #0007); }
+.social-app .social-vertical-post .social-video-caption { right:68px; bottom:25px; }
+.social-app .social-vertical-post .social-post-media::after { content:''; position:absolute; inset:65% 0 0; pointer-events:none; background:linear-gradient(transparent,#0008); }
+.social-app .social-vertical-post .social-video-caption { z-index:2; }
+.social-app .has-native-player .social-post-media::after,.social-app .has-native-player .social-video-caption { display:none; }
+.social-app .has-native-player .social-post-options { display:none; }
+.social-app .has-native-player .social-post-actions { flex-direction:row; gap:14px; top:auto; bottom:22px; right:auto; left:16px; width:auto; padding:8px 12px; border-radius:24px; background:#0008; }
+.social-app .has-native-player .social-post-actions>button:nth-child(1),.social-app .has-native-player .social-post-actions>button:nth-child(2),.social-app .has-native-player .social-post-actions>button:last-child { display:none; }
+.social-app .has-native-player .social-post-actions>button { flex-direction:row; gap:6px; }
+.social-app .has-native-player .social-post-actions svg { width:18px; height:18px; }
+.social-app .has-native-player .social-post-actions small { font-size:10px; }
+.tiktok-mode { --social-border:#272727; --social-muted:#999; background:#101010; color:#f5f5f5; }
+.tiktok-mode .social-sidebar { width:232px; }
+.tiktok-mode .social-video-tabs { margin-bottom:14px; min-height:38px; gap:24px; flex:none; }
+.tiktok-mode .social-search { background:#252525; color:#fafafa; }
+.tiktok-mode .social-source { background:#242424; color:#aaa; }
+.tiktok-mode .social-feed-empty .social-empty-icon { border-color:#555; }
+.tiktok-mode .social-empty-error { border-color:#333; }
+.tiktok-mode .social-grid-tile { border-radius:8px; }
+.tiktok-mode .social-post-grid { gap:16px 12px; }
+.social-app .social-scroll-controls { z-index:45; }
+
+@media(min-width:1200px) {
+ .social-app.is-vertical .social-body { padding-top:20px; }
+ .social-app.is-vertical .social-reel-viewer { width:min(470px,calc((100dvh - 80px)*.5625)); min-width:300px; }
+ .tiktok-mode.is-vertical .social-source { top:66px; left:calc(50% - 190px); }
+}
+@media(min-width:768px) and (max-width:1199px) {
+ .social-app .social-sidebar { width:80px; }
+ .social-app .social-sidebar .app-switcher [data-app-logo]>img { display:block; }
+ .instagram-mode:has(.social-home-feed) .social-body { padding-right:25px; }
+ .social-app.is-vertical .social-body { padding-top:18px; }
+}
+@media(max-width:767px) {
+ .social-app .social-body { margin:0; }
+ .social-app .social-mobile-header { height:56px; padding:0 16px; }
+ .social-app .social-mobile-header .app-switcher [data-app-logo]>span { font-size:26px; }
+ .instagram-mode .social-mobile-header .app-switcher { max-width:220px; }
+ .instagram-mode .social-feed-tabs { padding:14px 0 8px; margin:0 16px; font-size:15px; }
+ .instagram-mode:has(.social-home-feed) .social-body { padding:0; }
+ .social-app .story-tray { margin:0; padding:12px 16px 14px; border-bottom:1px solid #eee; }
+ .social-app .social-source { margin:9px 16px; padding:5px 9px; }
+ .social-app .social-home-feed { width:100%; max-width:520px; }
+ .social-app .social-post-content>header { padding:12px 14px; }
+ .social-app .social-post-actions { padding-left:14px; padding-right:14px; }
+ .social-app .social-search { margin:15px 16px; border-radius:12px; }
+ .social-app .social-feed-empty { min-height:340px; margin:14px auto; padding:28px 24px; }
+ .social-app .social-feed-empty h2 { font-size:21px; }
+ .social-app .social-bottom-nav { height:calc(56px + env(safe-area-inset-bottom)); background:#fff; }
+ .social-app .social-bottom-nav>a { min-height:50px; }
+ .social-app .social-bottom-nav>a[aria-current] svg { stroke-width:2.7; }
+ .social-app.is-vertical { padding:0; }
+ .social-app.is-vertical .social-body { height:calc(100dvh - 56px - env(safe-area-inset-bottom)); padding:0; }
+ .social-app.is-vertical .social-mobile-header { flex:none; }
+ .social-app.is-vertical .social-reel-viewer { width:100%; max-width:none; border-radius:0; }
+ .social-app.is-vertical .social-source { top:65px; left:14px; margin:0; font-size:9px; }
+ .social-app.is-vertical .social-page-heading { display:none; }
+ .tiktok-mode.is-vertical .social-mobile-header { position:relative; top:0; left:0; right:0; background:#000; border:0; color:white; }
+ .tiktok-mode.is-vertical .social-mobile-header .app-switcher [data-app-logo]>span { display:none; }
+ .tiktok-mode.is-vertical .social-mobile-header .app-switcher [data-app-logo]>img { width:25px; height:25px; }
+ .tiktok-mode.is-vertical .social-mobile-header>div { gap:14px; }
+ .tiktok-mode.is-vertical .social-mobile-header>div:last-child>button { display:none; }
+ .tiktok-mode.is-vertical .social-video-tabs { position:absolute; top:9px; left:86px; right:47px; z-index:66; gap:18px; margin:0; font-size:15px; min-height:36px; text-shadow:0 1px 5px #000; }
+ .tiktok-mode.is-vertical .social-video-tabs>a { white-space:nowrap; }
+ .tiktok-mode.is-vertical .social-video-tabs>button { display:none; }
+ .tiktok-mode.is-vertical .social-reel-viewer { height:100%; }
+ .tiktok-mode.is-vertical .social-source { display:none; }
+ .tiktok-mode .social-bottom-nav { background:#000; border-color:#252525; color:white; }
+ .tiktok-mode .social-post-grid { gap:3px; }
+ .tiktok-mode .social-grid-tile { border-radius:0; }
+ .social-app .social-vertical-post .social-post-actions { bottom:90px; }
+ .social-app .has-native-player .social-post-actions { bottom:62px; }
+ .social-app .social-vertical-post .social-media-frame>iframe { background:#000; }
+ .social-app.is-vertical .social-scroll-controls { display:flex; top:38%; right:9px; bottom:auto; gap:7px; }
+ .social-app.is-vertical .social-scroll-controls button { padding:8px; background:#0008; color:white; }
+ .social-app.is-vertical .social-scroll-controls svg { width:18px; height:18px; }
+}

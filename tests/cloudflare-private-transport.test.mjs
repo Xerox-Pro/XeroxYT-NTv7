@@ -1,4 +1,9 @@
 import test from 'node:test';import assert from 'node:assert/strict';
+test('personal feed POST remains a retryable read and preserves long cursors through gateway fallback',async t=>{
+ globalThis.localStorage={getItem:()=> 'post-reader'};const calls=[],body=JSON.stringify({continuation:'a'.repeat(20000)});
+ t.mock.method(globalThis,'fetch',async(url,options)=>{calls.push({url,options});if(url==='/api/account/cloudflare-session')return Response.json({token:'site-ticket',expiresAt:Date.now()+300000,origin:'https://private-api.workers.dev'});if(url.startsWith('https://'))throw Error('blocked direct connection');assert.equal(options.method,'POST');assert.equal(options.body,body);return Response.json({personalized:true});});
+ const {apiFetch}=await import('../src/lib/apiTransport.mjs?post-feed');assert.equal((await apiFetch('/api/user/feed/home',{method:'POST',headers:{'Content-Type':'application/json'},body})).status,200);assert.deepEqual(calls.map(c=>c.url),['/api/account/cloudflare-session','https://private-api.workers.dev/api/user/feed/home','/api/user/feed/home']);delete globalThis.localStorage;
+});
 test('Google reads and writes go directly to Cloudflare with a memory-only scoped ticket',async t=>{
  globalThis.localStorage={getItem:()=> 'alice'};const calls=[];t.mock.method(globalThis,'fetch',async(url,options)=>{calls.push({url,options});if(url==='/api/account/cloudflare-session')return Response.json({token:'site-ticket',expiresAt:Date.now()+300000,origin:'https://private-api.workers.dev'});return Response.json({ok:true});});
  const {apiFetch}=await import('../src/lib/apiTransport.mjs?private-test');await Promise.all([apiFetch('/api/auth/status'),apiFetch('/api/user/feed/home')]);await apiFetch('/api/user/action',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});

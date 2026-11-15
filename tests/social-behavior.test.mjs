@@ -69,7 +69,7 @@ test('account feed, DM, comments and notes use private routes; double submission
   };
   await act(async()=>root.render(React.createElement(MemoryRouter,{key:'public',initialEntries:['/instagram']},React.createElement(React.Fragment,null,React.createElement(App,{service:'instagram'}),React.createElement(Probe)))));await flush();
   assert.match(document.body.textContent,/Temporary public feed failure/);
-  await click(find('.social-alert button','再試行'));assert.equal(publicFeedCalls,2);assert.match(document.body.textContent,/Recovered public post/);
+  await click(find('.social-empty-error button','再試行'));assert.equal(publicFeedCalls,2);assert.match(document.body.textContent,/Recovered public post/);
   await act(async()=>navigate('/instagram/search'));await flush();await fill('[aria-label="Instagramを検索"]','@creator');await click(find('.social-search>button','検索'));
   await click(document.querySelector('.social-search-results>a'));assert.match(document.body.textContent,/Public profile post/);assert.ok(requests.some(r=>r.path==='/api/instagram/public/search?q=%40creator'));
 

@@ -666,7 +666,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       });
       if(pageNum===1)personalHomeCursor.current='';
       const personal=!!userInfo||localStorage.getItem('xerox_youtube_linked')==='1';
-      const result=await fetchJSON(personal?'/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current):`/api/recommendations?${queryParams}`,{signal:inactiveRequests.current.signal});
+      const result=await fetchJSON(personal?'/api/user/feed/home':`/api/recommendations?${queryParams}`,{...(personal?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({continuation:personalHomeCursor.current})}:{}),signal:inactiveRequests.current.signal});
       if (currentReqId !== recommendationRequestIdRef.current) return;
       if(personal){personalHomeCursor.current=result.continuation||'';setHasMore(!!result.hasMore);}
 
@@ -1069,7 +1069,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
 
         {/* メインコンテンツビュー */}
         <main
-          className="flex-1 transition-all duration-200 min-w-0"
+          className={`${isSocial?'social-host ':''}flex-1 transition-all duration-200 min-w-0`}
         >
           {/* Keep the same player mounted when navigating, preserving iframe playback. */}
           {currentVideoId && (
