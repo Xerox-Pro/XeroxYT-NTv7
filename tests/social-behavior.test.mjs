@@ -9,8 +9,8 @@ import {JSDOM} from 'jsdom';
 test('account feed, DM, comments and notes use private routes; double submissions and uncertain sends are blocked',async()=>{
  const dir=await mkdtemp(path.resolve('node_modules/.social-behavior-'));
  await build({entryPoints:['src/social/SocialApp.tsx'],outfile:path.join(dir,'app.mjs'),bundle:true,packages:'external',platform:'node',format:'esm',jsx:'automatic',loader:{'.css':'empty'},plugins:[{name:'api-boundary',setup(b){
-  b.onLoad({filter:/\/src\/components\/AccountGate\.tsx$/},()=>({loader:'js',contents:'export function useSiteAccount(){return {username:"QA"}}'}));
-  b.onLoad({filter:/\/src\/lib\/apiTransport\.mjs$/},()=>({loader:'js',contents:'export async function cloudflareOnlyFetch(path,options){return window.__api(path,options)}'}));
+  b.onLoad({filter:/[\\/]src[\\/]components[\\/]AccountGate\.tsx$/},()=>({loader:'js',contents:'export function useSiteAccount(){return {username:"QA"}}'}));
+  b.onLoad({filter:/[\\/]src[\\/]lib[\\/]apiTransport\.mjs$/},()=>({loader:'js',contents:'export async function cloudflareOnlyFetch(path,options){return window.__api(path,options)}'}));
  }}]});
  const dom=new JSDOM('<div id="root"></div>',{url:'https://site.test/instagram',pretendToBeVisual:true});
  const keys=['window','document','HTMLElement','Event','MouseEvent','CustomEvent','localStorage','sessionStorage','FormData','IntersectionObserver'],old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
@@ -56,7 +56,21 @@ test('account feed, DM, comments and notes use private routes; double submission
   await act(async()=>root.render(React.createElement(MemoryRouter,{key:'tiktok',initialEntries:['/tiktok']},React.createElement(React.Fragment,null,React.createElement(App,{service:'tiktok'}),React.createElement(Probe)))));await flush();assert.match(document.body.textContent,/For You item/);
   await act(async()=>navigate('/tiktok/following'));await flush();assert.ok(requests.some(row=>row.path==='/api/tiktok/following'));const titles=[...document.querySelectorAll('.social-video-caption>p')].map(node=>node.textContent);assert.deepEqual(titles,['Newest followed video','Old followed video']);
   await act(async()=>navigate('/tiktok/search'));await flush();await fill('[aria-label="TikTokを検索"]','cat');await click(find('.social-search>button','検索'));assert.match(document.body.textContent,/Semantic result without keyword/);
-  await click(find('.social-search-tabs>button','ユーザー'));assert.match(document.body.textContent,/found_user/);assert.equal(document.querySelector('.social-search-results>a').href,'https://www.tiktok.com/@found_user');
+  await click(find('.social-search-tabs>button','ユーザー'));assert.match(document.body.textContent,/found_user/);assert.equal(document.querySelector('.social-search-results>a').href,'https://site.test/tiktok/profile/found_user');
+
+  let publicFeedCalls=0;
+  window.__api=async(path,options={})=>{requests.push({path,options});
+   if(path.endsWith('/status'))return Response.json({connected:false,capabilities:{search:true}});
+   if(path.endsWith('/preferences'))return Response.json({signals:{}});
+   if(path==='/api/instagram/public/feed'){if(++publicFeedCalls===1)return Response.json({error:'Temporary public feed failure'},{status:502});return Response.json({items:[{id:'ig:public',kind:'image',service:'instagram',title:'Recovered public post',author:'creator',profileUsername:'creator',media:'https://image.test/p.jpg',url:'https://www.instagram.com/p/TestPost/'}]});}
+   if(path.startsWith('/api/instagram/public/search?'))return Response.json({users:[{id:'creator',username:'creator',name:'Public creator'}],items:[{id:'ig:profile',kind:'image',service:'instagram',title:'Public profile post',author:'creator',profileUsername:'creator',media:'https://image.test/profile.jpg',url:'https://www.instagram.com/p/ProfilePost/'}]});
+   throw Error('Unexpected public request '+path);
+  };
+  await act(async()=>root.render(React.createElement(MemoryRouter,{key:'public',initialEntries:['/instagram']},React.createElement(React.Fragment,null,React.createElement(App,{service:'instagram'}),React.createElement(Probe)))));await flush();
+  assert.match(document.body.textContent,/Temporary public feed failure/);
+  await click(find('.social-alert button','再試行'));assert.equal(publicFeedCalls,2);assert.match(document.body.textContent,/Recovered public post/);
+  await act(async()=>navigate('/instagram/search'));await flush();await fill('[aria-label="Instagramを検索"]','@creator');await click(find('.social-search>button','検索'));
+  await click(document.querySelector('.social-search-results>a'));assert.match(document.body.textContent,/Public profile post/);assert.ok(requests.some(r=>r.path==='/api/instagram/public/search?q=%40creator'));
 
  }finally{await act(async()=>root.unmount());dom.window.close();for(const[k,v]of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}delete globalThis.IS_REACT_ACT_ENVIRONMENT;await rm(dir,{recursive:true,force:true});}
 });

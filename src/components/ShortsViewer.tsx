@@ -166,7 +166,8 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
   onRecord: (video: Video) => void; onSelectChannel: (id: string) => void;
 }) {
   const youtubeLinked=useYouTubeLinked();
-  const personalized=youtubeLinked;
+  const [publicFallback,setPublicFallback]=useState(false);
+  const personalized=youtubeLinked&&!publicFallback;
   const navigate = useNavigate();
   const location = useLocation();
   const route = useRef(location); route.current = location;
@@ -245,7 +246,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
     }
     const excluded = [...regularRef.current.map(video => video.videoId!), ...readSeenShorts()];
     if(page===1)personalCursor.current='';
-    let request=discoveryRequest(withShortsInterests(query,page),page,session,excluded);
+    let request=discoveryRequest(withShortsInterests(query,page),page,session,excluded);if(publicFallback)request=request.replace('/api/user/feed/shorts?','/api/shorts?');
     if(personalized){const params=new URLSearchParams();if(personalCursor.current)params.set('continuation',personalCursor.current);else if(seed.current?.videoId)params.set('videoId',seed.current.videoId);request='/api/user/shorts-sequence?'+params;}
     fetchShortsPage(request, controller.signal).then(data => {
       if (cancelled) return;
@@ -254,7 +255,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
       const items:Video[]=personalized?excludeSeenShorts(fetched,readSeenShorts(),seed.current?.videoId):rankCandidates(excludeSeenShorts(fetched,readSeenShorts(),seed.current?.videoId),{short:true,seed:session,seen:readSeenShorts()});
       setRegular(previous => appendShortsInOrder(previous,items));
       setHasMore(Boolean(data.hasMore));
-    }).catch(reason => { if (!cancelled) setError(reason.message || 'ショートを読み込めませんでした。'); })
+    }).catch(reason => { if (!cancelled) {if(personalized&&!controller.signal.aborted&&!reason.isDailyLimit&&![400,403,404,429].includes(reason.status)){personalCursor.current='';setPage(1);setPublicFallback(true);}else setError(reason.message || 'ショートを読み込めませんでした。');} })
       .finally(() => { if (!cancelled) { pending.current = false; setLoading(false); } });
     return () => { cancelled = true; controller.abort(); };
   }, [query, page, session, attempt, personalized]);
@@ -376,6 +377,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, [move, commentsId, descriptionId]);
   return <section className={`shorts-viewer ${activeId && (commentsId === activeId || descriptionId === activeId) ? "shorts-has-panel" : ""}`} aria-label="ショート動画">
+    {publicFallback&&<p role="status" className="social-notice">個人向けショートを取得できないため、公開ショートを表示しています。</p>}
     <header className="shorts-mobile-header"><button aria-label="ショートを閉じる" onClick={()=>navigate('/')}><ArrowLeft size={27}/></button><div><button aria-label="検索" onClick={()=>navigate('/search')}><Search size={26}/></button><button aria-label="概要欄" onClick={()=>{setCommentsId('');setDescriptionId(activeId||'');}}><MoreVertical size={25}/></button></div></header>
     <div className="shorts-scroll" ref={scroll} tabIndex={0} aria-label="動画の外側を上下にスクロールして切り替え"
       onWheel={event => retryOnScroll(event.deltaY)}
