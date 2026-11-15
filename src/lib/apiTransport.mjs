@@ -1,3 +1,4 @@
+const googleRead=(path,options)=>!options.method||['GET','HEAD'].includes(options.method)||options.method==='POST'&&/^\/api\/user\/feed\/[^/?]+$/.test(path);
 const MODE_KEY='xerox_api_transport_v1',AUTO_KEY='xerox_api_auto_proxy_until_v1';
 let configured;
 export function readTransportState(){let mode='auto',automatic=false;try{const saved=localStorage.getItem(MODE_KEY);if(['auto','direct','proxy'].includes(saved))mode=saved;automatic=Number(localStorage.getItem(AUTO_KEY)||0)>Date.now();}catch{}return {mode,automatic};}
@@ -47,17 +48,17 @@ async function googleFetchRequest(path,options,directOnly=false){
  }
  options.signal?.throwIfAborted();
  const ticket=privateTicket,headers=new Headers(options.headers);headers.set('Authorization','XYT '+ticket.token);
- const readonly=!options.method||['GET','HEAD'].includes(options.method);const timeout=readonly?AbortSignal.timeout(8000):undefined;const signal=timeout?(options.signal?AbortSignal.any([options.signal,timeout]):timeout):options.signal;
- let response;try{response=await fetch(ticket.origin+path,{...options,signal,headers,credentials:'omit',mode:'cors',cache:'no-store',redirect:'error'});}catch(error){if(options.signal?.aborted)throw error;if(state.mode==='auto'&&(!options.method||['GET','HEAD'].includes(options.method)))return proxy();throw error;}
+ const readonly=googleRead(path,options);const timeout=readonly?AbortSignal.timeout(8000):undefined;const signal=timeout?(options.signal?AbortSignal.any([options.signal,timeout]):timeout):options.signal;
+ let response;try{response=await fetch(ticket.origin+path,{...options,signal,headers,credentials:'omit',mode:'cors',cache:'no-store',redirect:'error'});}catch(error){if(options.signal?.aborted)throw error;if(state.mode==='auto'&&googleRead(path,options))return proxy();throw error;}
  if(state.mode==='auto'&&readonly&&!response.headers.get('content-type')?.includes('application/json')){await response.body?.cancel();return proxy();}
  if(response.status===401&&response.headers.get('content-type')?.includes('application/json')){const data=await response.clone().json().catch(()=>null);if(data?.code==='SITE_SESSION_REQUIRED')privateTicket=undefined;}
  return response;
  }catch(error){if(options.signal?.aborted)throw error;if(state.mode==='auto'&&!privateTicket)return proxy();throw error;}
 }
 function googleFetch(path,options){
- const readonly=!options.method||options.method==='GET';
+ const readonly=googleRead(path,options);
  let scope='';try{scope=localStorage.getItem('xerox_last_account_id')||'';}catch{}
- const key=scope+'|'+path;
+ const key=scope+'|'+path+'|'+(options.body||'');
  const work=()=>{options.signal?.throwIfAborted();let current='';try{current=localStorage.getItem('xerox_last_account_id')||'';}catch{}if(current!==scope)throw new Error('ログイン状態が変わりました。');return googleFetchRequest(path,options);};
  if(!readonly||options.signal)return limitedPrivate(work);
  let task=privateReads.get(key);if(!task){task=limitedPrivate(work).finally(()=>{if(privateReads.get(key)===task)privateReads.delete(key);});privateReads.set(key,task);}

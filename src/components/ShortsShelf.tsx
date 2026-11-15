@@ -26,7 +26,9 @@ export function shortsQuery(context: ShortsContext) {
 export default function ShortsShelf({ context, onSelect, providedVideos, onVideosLoaded, offset=0 }: {
   context: ShortsContext; onSelect: (video: Video, context: ShortsContext) => void; providedVideos?: Video[]; onVideosLoaded?: (videos:Video[])=>void; offset?:number;
 }) {
-  const personalized=useYouTubeLinked()&&!['search','channel'].includes(context.source);
+  const linked=useYouTubeLinked();
+  const [publicFallback,setPublicFallback]=useState(false);
+  const personalized=linked&&!publicFallback&&!['search','channel'].includes(context.source);
   const account=useSiteAccount();const snapshotScope=(account?.username||'guest')+(personalized?':youtube':'');
   const report = useRef(onVideosLoaded); report.current = onVideosLoaded;
   const shelf = useRef<HTMLDivElement>(null);
@@ -41,8 +43,8 @@ export default function ShortsShelf({ context, onSelect, providedVideos, onVideo
     let cancelled = false;
     setLoading(true); setVideos([]); setError('');
     const seen = readSeenShorts();
-    Promise.allSettled([fetchJSON(discoveryRequest(withShortsInterests(query), 1, session, context.source==='home'?[]:seen)), (context.source === 'search'||personalized) ? Promise.resolve({ videos: [] }) : loadShortsRanking()]).then(([native, ranked]) => {
-      if (native.status === 'rejected' && !(ranked.status==='fulfilled'&&ranked.value.videos?.length)) throw native.reason;
+    Promise.allSettled([fetchJSON(publicFallback?discoveryRequest(withShortsInterests(query),1,session,context.source==='home'?[]:seen).replace('/api/user/feed/shorts?','/api/shorts?'):discoveryRequest(withShortsInterests(query),1,session,context.source==='home'?[]:seen)), (context.source === 'search'||personalized) ? Promise.resolve({ videos: [] }) : loadShortsRanking()]).then(([native, ranked]) => {
+      if (native.status === 'rejected' && !(ranked.status==='fulfilled'&&ranked.value.videos?.length)) {if(personalized&&!native.reason.isDailyLimit&&![400,403,404,429].includes(native.reason.status)){if(!cancelled)setPublicFallback(true);return;}throw native.reason;}
       const currentSeen = readSeenShorts();
       const fetched=(native.status==='fulfilled'?(native.value.videos||[]):[]).filter((v:Video)=>v.isShort);
       const candidates=context.source==='home'?unseenRankingFirst(fetched,currentSeen):excludeSeenShorts(fetched,currentSeen);
@@ -52,7 +54,7 @@ export default function ShortsShelf({ context, onSelect, providedVideos, onVideo
     }).catch(err => { if (!cancelled) {const saved=context.source==='home'&&!personalized?loadHomeSnapshot('shorts:'+query,snapshotScope):[];if(saved.length){const restored=shuffleShelfCandidates(saved,saved[0]?.videoId);setVideos(restored.slice(offset,offset+8));report.current?.(restored);setError('');}else setError(err.message || 'ショートを取得できませんでした');} })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [query, session, attempt, providedVideos, offset, snapshotScope]);
+  }, [query, session, attempt, providedVideos, offset, snapshotScope, publicFallback]);
   useEffect(() => {
     if (!shelf.current) return;
     const observer = new IntersectionObserver(entries => {

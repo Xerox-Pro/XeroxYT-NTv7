@@ -114,6 +114,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   // Auth state
   const [userInfo,setUserInfo]=useState<UserInfo|null>(()=>{try{if(localStorage.getItem('xerox_youtube_linked')==='1'){const user=JSON.parse(localStorage.getItem('xerox_user_info')||'null');if(typeof user?.name==='string')return user;}}catch{}return null;});
   const [googleStatusReady,setGoogleStatusReady]=useState(false);
+  const [homeRetryPage,setHomeRetryPage]=useState<number|null>(null);
   const homeSnapshotScope=(siteAccount?.username||'guest')+(userInfo?':youtube':'');
 
   const [loading, setLoading] = useState(true);
@@ -600,7 +601,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
     if(isSocial)return;
     let cancelled=false;youtubeGeneration.current++;
     setGoogleStatusReady(false);localStorage.removeItem('xerox_youtube_credentials');
-    fetchJSON('/api/auth/status',{signal:inactiveRequests.current.signal}).then(status=>{if(cancelled)return;if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else{localStorage.removeItem('xerox_youtube_linked');setUserInfo(null);}setGoogleStatusReady(true);}).catch(()=>{if(!cancelled){setAuthError('Google連携の状態を確認できませんでした。再読み込みしてください。');setError('連携状態を確認できないため、おすすめの読み込みを停止しています。再読み込みしてください。');setLoading(false);}});
+    fetchJSON('/api/auth/status',{signal:inactiveRequests.current.signal}).then(status=>{if(cancelled)return;if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else{localStorage.removeItem('xerox_youtube_linked');setUserInfo(null);}setGoogleStatusReady(true);}).catch(()=>{if(!cancelled){setAuthError(localStorage.getItem('xerox_youtube_linked')==='1'?'Google連携の確認に失敗しました。連携情報を保持して個人向けホームを再試行します。':'Google連携を確認できませんでした。未連携の公開ホームを表示しています。');setGoogleStatusReady(true);}});
     return()=>{cancelled=true;youtubeGeneration.current++;};
   },[siteAccount?.username,isSocial]);
   useEffect(()=>{if(isSocial||!googleStatusReady)return;if(userInfo)void fetchYoutubeAuthData();setHomeShorts({category:'',videos:[]});setSelectedCategory('すべて');setPage(1);if(googleStatusReady&&location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo,googleStatusReady,isSocial]);
@@ -640,6 +641,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   const fetchRecommendations = async (pageNum: number = 1, append: boolean = false) => {
     if(!googleStatusReady)return;
     const currentReqId = ++recommendationRequestIdRef.current;
+    setHomeRetryPage(null);
     if (append) {
       setLoadingMore(true);
     } else {
@@ -663,9 +665,10 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
         refreshNonce: Date.now().toString(),
       });
       if(pageNum===1)personalHomeCursor.current='';
-      const result = userInfo?await fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current),{signal:inactiveRequests.current.signal}):await fetchJSON(`/api/recommendations?${queryParams.toString()}`,{signal:inactiveRequests.current.signal});
+      const personal=!!userInfo||localStorage.getItem('xerox_youtube_linked')==='1';
+      const result=await fetchJSON(personal?'/api/user/feed/home':`/api/recommendations?${queryParams}`,{...(personal?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({continuation:personalHomeCursor.current})}:{}),signal:inactiveRequests.current.signal});
       if (currentReqId !== recommendationRequestIdRef.current) return;
-      if(userInfo){personalHomeCursor.current=result.continuation||'';setHasMore(!!result.hasMore);}
+      if(personal){personalHomeCursor.current=result.continuation||'';setHasMore(!!result.hasMore);}
 
       let publicData: Video[] = [];
       if (Array.isArray(result)) {
@@ -680,7 +683,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       }
 
       // フォールバック: 初回読み込みで動画が取得できなかった場合は人気動画(trending)を表示
-      if (!userInfo && publicData.length === 0 && data.length === 0 && pageNum === 1) {
+      if (!personal && publicData.length === 0 && data.length === 0 && pageNum === 1) {
         try {
           const trendingData = await fetchJSON('/api/trending');
           if (Array.isArray(trendingData) && trendingData.length > 0) {
@@ -705,23 +708,24 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
           uniqueMap.set(v.playlistId||v.videoId, v);
         }
       });
-      let finalData = spreadHome(userInfo?Array.from(uniqueMap.values()):prioritizeUnshown(Array.from(uniqueMap.values())));
+      const finalData: Video[] = personal?Array.from(uniqueMap.values()):spreadHome(prioritizeUnshown(Array.from(uniqueMap.values())));
 
       if (append) {
         setVideos(prev => {
           const existingIds = new Set(prev.map(v => v.playlistId||v.videoId));
           const newVideos = finalData.filter((v: Video) => v && (v.playlistId||v.videoId) && !existingIds.has(v.playlistId||v.videoId));
-          return [...prev, ...spreadHome(newVideos,prev)];
+          return [...prev, ...(personal?newVideos:spreadHome(newVideos,prev))];
         });
       } else {
         setVideos(finalData);
       }
-      setHasMore(userInfo?!!result.hasMore:finalData.length>0);
+      setHasMore(personal?!!result.hasMore:result.hasMore!==false&&finalData.length>0);
     } catch (err: any) {
       if (currentReqId !== recommendationRequestIdRef.current) return;
       console.error(err);
       setHasMore(false);
-      if (!append) setError(err.message || 'エラーが発生しました');
+      if(append){setPage(Math.max(1,pageNum-1));setHomeRetryPage(pageNum);}
+      setError(err.message || '個人向けホームを取得できませんでした。再試行してください。');
     } finally {
       if (currentReqId === recommendationRequestIdRef.current) {
         setLoading(false);
@@ -1065,7 +1069,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
 
         {/* メインコンテンツビュー */}
         <main
-          className="flex-1 transition-all duration-200 min-w-0"
+          className={`${isSocial?'social-host ':''}flex-1 transition-all duration-200 min-w-0`}
         >
           {/* Keep the same player mounted when navigating, preserving iframe playback. */}
           {currentVideoId && (
@@ -1284,6 +1288,8 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
                   {searchQuery ? '検索結果が見つかりませんでした。別のキーワードをお試しください。' : '上の検索ボックスにキーワードを入力してください。'}
                 </div>
               )}
+
+              {view==='home'&&homeRetryPage!==null&&!loadingMore&&<div role="alert" className="py-8 text-center text-sm text-gray-600"><p>{error}</p><button className="mt-3 rounded-full border px-5 py-2" onClick={()=>{const next=homeRetryPage;setPage(next);void fetchRecommendations(next,true);}}>個人向けホームの続きを再試行</button></div>}
 
               {/* 無限スクロールローディングスピナー */}
               {loadingMore && (

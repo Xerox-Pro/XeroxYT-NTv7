@@ -12,7 +12,7 @@ import {JSDOM} from 'jsdom';
 for(const source of ['home','related','search','channel'])test(`linked ${source} Shorts uses only the account sequence and skips previously displayed clips`,async()=>{
  const folder=await mkdtemp(path.resolve('node_modules/.shorts-sequence-'));
  const output=path.join(folder,'viewer.mjs');
- await build({entryPoints:['src/components/ShortsViewer.tsx'],outfile:output,bundle:true,packages:'external',platform:'node',format:'esm',jsx:'automatic',plugins:[{name:'network-boundary',setup(builder){builder.onLoad({filter:/\/src\/utils\.ts$/},()=>({contents:'export const fetchJSON=async(url,options)=>{const response=await fetch(url,options);if(!response.ok){const error=new Error("upstream failed");error.status=response.status;throw error;}return response.json()};export const formatNumberJP=n=>String(n);',loader:'js'}));}}]});
+ await build({entryPoints:['src/components/ShortsViewer.tsx'],outfile:output,bundle:true,packages:'external',platform:'node',format:'esm',jsx:'automatic',plugins:[{name:'network-boundary',setup(builder){builder.onLoad({filter:/[\\/]src[\\/]utils\.ts$/},()=>({contents:'export const fetchJSON=async(url,options)=>{const response=await fetch(url,options);if(!response.ok){const error=new Error("upstream failed");error.status=response.status;throw error;}return response.json()};export const formatNumberJP=n=>String(n);',loader:'js'}));}}]});
  const {default:ShortsViewer}=await import(pathToFileURL(output));
  const dom=new JSDOM('<div id="root"></div>',{url:'https://example.test/shorts',pretendToBeVisual:true});
  const properties=['window','document','HTMLElement','HTMLIFrameElement','Event','CustomEvent','MouseEvent','localStorage','sessionStorage','IntersectionObserver'];

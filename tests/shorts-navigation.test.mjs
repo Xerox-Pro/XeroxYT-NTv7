@@ -12,7 +12,7 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 test('shorts can leave for home, search, history, channel and browser back during exit; only native embed remains',async()=>{
  const temporary=await mkdtemp(path.resolve('node_modules/.shorts-navigation-'));
  const outfile=path.join(temporary,'viewer.mjs');
- await build({entryPoints:['src/components/ShortsViewer.tsx'],outfile,bundle:true,packages:'external',platform:'node',format:'esm',jsx:'automatic',plugins:[{name:'network-boundary',setup(builder){builder.onLoad({filter:/\/src\/utils\.ts$/},()=>({contents:'export const fetchJSON=async(url)=>{const r=await fetch(url);if(!r.ok)throw new Error("failed");return r.json()};export const formatNumberJP=n=>String(n);',loader:'js'}));}}]});
+ await build({entryPoints:['src/components/ShortsViewer.tsx'],outfile,bundle:true,packages:'external',platform:'node',format:'esm',jsx:'automatic',plugins:[{name:'network-boundary',setup(builder){builder.onLoad({filter:/[\\/]src[\\/]utils\.ts$/},()=>({contents:'export const fetchJSON=async(url)=>{const r=await fetch(url);if(!r.ok)throw new Error("failed");return r.json()};export const formatNumberJP=n=>String(n);',loader:'js'}));}}]});
  const {default:Viewer}=await import(pathToFileURL(outfile));
  const dom=new JSDOM('<div id="root"></div>',{url:'https://example.test/',pretendToBeVisual:true});
  for(const key of ['window','document','HTMLElement','HTMLIFrameElement','Event','MouseEvent','localStorage','sessionStorage']) Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
