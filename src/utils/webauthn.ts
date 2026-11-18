@@ -16,7 +16,7 @@ export async function registerPasskey(): Promise<string> {
 
   const options: PublicKeyCredentialCreationOptions = {
     challenge,
-    rp: { name: "XeroxYT", id: window.location.hostname },
+    rp: { name: "XeroxYT-NTv7 for GAS", id: window.location.hostname },
     user: {
       id: userId,
       name: "user",

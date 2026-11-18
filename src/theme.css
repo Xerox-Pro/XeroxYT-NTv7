@@ -1,0 +1,34 @@
+:root{--surface-base:#f7f7f7;--surface-panel:#fff;--surface-raised:#f2f2f2;--text-primary:#0f0f0f;--text-secondary:#606060;--border-subtle:#dedede}
+:root[data-theme=dark]{color-scheme:dark;--surface-base:#0f0f0f;--surface-panel:#181818;--surface-raised:#272727;--text-primary:#f1f1f1;--text-secondary:#aaa;--border-subtle:#343434;background:var(--surface-base);color:var(--text-primary)}
+html[data-theme=dark] body{background:#0f0f0f;color:#f1f1f1}
+html[data-theme=dark] :is(.app-navbar,.mobile-bottom-nav,.social-sidebar,.messages-inbox){background:#0f0f0f!important;color:#f1f1f1;border-color:#303030!important}
+html[data-theme=dark] :is(.navbar-brand,.navbar-brand span,.navbar-brand a,.navbar-menu,.navbar-actions,.mobile-search-toggle){color:#f1f1f1!important}
+html[data-theme=dark] :is(.bg-white,[class~="bg-white/95"],[class~="bg-white/90"],.my-page,.profile-dialog,.playlist-workspace,.transport-settings,.social-app,.social-post,.social-dialog,.messages-page,.messages-conversation,.messages-send,.messages-actions>div,.search-suggestions,.google-link-announcement){background-color:#181818!important;color:#f1f1f1}
+html[data-theme=dark] :is(.bg-gray-50,.bg-slate-50){background-color:#0f0f0f!important;color:#f1f1f1}
+html[data-theme=dark] :is(.bg-gray-100,.bg-gray-200,.bg-gray-300,.bg-slate-100,.bg-slate-200,.my-settings,.my-account-actions button,.youtube-feed-tabs button,.youtube-personal-list>button,.google-link-announcement button,.messages-thread:hover,.messages-search input,.messages-compose,.messages-bubble:not(.mine)){background-color:#272727!important;color:#f1f1f1!important}
+html[data-theme=dark] :is(.text-black,.text-gray-900,.text-gray-800,.text-gray-700,.my-profile,.my-profile-text,.my-section-heading,.my-section h2,.messages-chat-header h2,.messages-empty h2){color:#f1f1f1!important}
+html[data-theme=dark] :is(.text-gray-600,.text-gray-500,.text-gray-400,.messages-thread small,.messages-chat-header p,.google-link-announcement p){color:#aaa!important}
+html[data-theme=dark] :is(.border-gray-50,.border-gray-100,.border-gray-200,.border-gray-300,.border-gray-400,.border-purple-200,.border-indigo-100,.border-indigo-200,.messages-inbox,.messages-chat-header,.messages-tabs,.messages-inbox-footer,.transport-settings,.my-section,.my-section-heading){border-color:#343434!important}
+html[data-theme=dark] :is(input,textarea,select,dialog){background-color:#121212;color:#f1f1f1;border-color:#3b3b3b}
+html[data-theme=dark] input::placeholder,html[data-theme=dark] textarea::placeholder{color:#858585;opacity:1}
+html[data-theme=dark] :is(input,select,textarea):focus-visible{outline:2px solid #8ab4f8;outline-offset:2px}
+html[data-theme=dark] .search-input-shell{background:#121212!important;border-color:#303030!important;box-shadow:none}
+html[data-theme=dark] .search-input-shell input{background:transparent!important;color:#f1f1f1}
+html[data-theme=dark] :is(.search-input-shell>button,.navbar-search>button){background:#272727!important;color:#f1f1f1}
+html[data-theme=dark] :is(.bg-purple-100,.bg-purple-200,.bg-indigo-100,.bg-indigo-200,.messages-thread.selected,.messages-tabs button[aria-selected=true],button[aria-pressed=true][class*="bg-purple"]){background-color:#352a4b!important;color:#e5d4ff!important;border-color:#796593!important}
+html[data-theme=dark] :is(.bg-amber-50,.bg-amber-100,.bg-yellow-100,.messages-report,.messages-notice){background-color:#382d18!important;color:#f4d993!important}
+html[data-theme=dark] :is(.bg-red-50,.bg-red-100){background-color:#3c2020!important;color:#ffb4b0!important}
+html[data-theme=dark] :is(.bg-green-100){background-color:#19382a!important;color:#a2e3bc!important}
+html[data-theme=dark] :is(.bg-blue-50,.bg-blue-100){background-color:#1c3045!important;color:#b5d8ff!important}
+html[data-theme=dark] :is(.text-red-600,.text-red-700){color:#ff9b95!important}
+html[data-theme=dark] :is(.text-blue-600,.text-indigo-800,.text-purple-600){color:#a5bfff!important}
+html[data-theme=dark] :is(.bg-gray-900,.bg-gray-800){background-color:#303030!important;color:#fff}
+html[data-theme=dark] .messages-chat-body{background:#121212}
+html[data-theme=dark] .social-app{--social-border:#343434;--social-muted:#aaa}
+html[data-theme=dark] :is(.social-grid-tile,.social-post-caption,.social-notice,.social-account-panel,.social-comments,.social-modal,.social-compose,.social-page-heading,.my-video-card,.my-profile-edit,.playlist-card,.playlist-detail,.playlist-editor){background-color:#181818;color:#f1f1f1;border-color:#343434}
+html[data-theme=dark] :is(.hover\:bg-gray-100:hover,.hover\:bg-gray-200:hover){background-color:#353535!important}
+html[data-theme=dark] :is(button,select,input,textarea){box-shadow:none}
+html[data-theme=dark] button:disabled{opacity:.45}
+html[data-theme=dark] :is(.my-section table th,.my-section table td){border-color:#343434}
+html[data-theme=dark] .my-section table th{color:#aaa}
+html[data-theme=dark] .my-section table td{color:#eee}

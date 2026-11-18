@@ -1,0 +1,22 @@
+html[data-theme=dark] :is(.persistent-mini-player,.shorts-comments-inline,.shorts-info-panel,.video-comments-section.mobile-comments-open,.video-description-sheet,.shorts-feed-retry .compact-error,.subscription-manage-backdrop>section,.mobile-search-filters,.playlist-queue-panel,.playlist-options>div,.playback-settings-dialog,.search-filter-panel,.search-filter-panel footer,.youtube-link-panel,.social-mobile-header,.social-bottom-nav,.social-media-error,.app-picker){background:#181818!important;color:#f1f1f1!important;border-color:#343434!important}
+html[data-theme=dark] :is(.shorts-channel-status button,.shorts-embed-error .compact-error-line>button,.playlist-detail-actions>button.playlist-play-all,.navbar-google-login,.navbar-google-mobile,.tiktok-mode .social-create-button){background:#272727!important;color:#f1f1f1!important;border-color:#404040!important}
+html[data-theme=dark] :is(.playlist-edit-form input,.playlist-edit-form textarea,.transport-settings select){background:#121212!important;color:#f1f1f1!important;border-color:#404040!important}
+html[data-theme=dark] :is(.video-description-sheet p,.shorts-info-panel p,.youtube-link-panel p){color:#aaa!important}
+html[data-theme=dark] .app-picker button{color:#f1f1f1}
+html[data-theme=dark] .app-picker button:hover{background:#303030}
+html[data-theme=dark] :is(.video-description-preview,.video-description-inline,.description-full-text){background:#272727!important;color:#f1f1f1!important}
+html[data-theme=dark] .video-description-preview:hover{background:#343434!important}
+html[data-theme=dark] :is(.description-sheet-inner,.description-sheet-scroll,.playback-settings-dialog>header,.playback-settings-scroll,.playback-settings-dialog footer){background:#181818!important;color:#f1f1f1!important}
+html[data-theme=dark] :is(.description-channel,.description-channel strong,.description-details h4,.description-details p strong,.description-stats strong,.mobile-title-details strong,.playback-settings-scroll h3,.playback-toggle,.playback-range){color:#f1f1f1!important}
+html[data-theme=dark] :is(.description-stats span,.description-channel small,.description-details p,.mobile-title-details,.playback-settings-dialog>header p,.playback-range output,.settings-note,.settings-reset,.playback-settings-dialog footer){color:#aaa!important}
+html[data-theme=dark] :is(.description-full-text a,.description-channel-inline){color:#8ab4f8!important}
+html[data-theme=dark] :is(.sheet-heading,.description-channel-large,.playback-settings-dialog>header,.playback-settings-scroll section,.playback-settings-dialog footer){border-color:#383838!important}
+html[data-theme=dark] :is(.effect-presets button,.sleep-status,.playback-settings-dialog>header button){background:#303030!important;color:#f1f1f1!important;border-color:#444!important}
+html[data-theme=dark] .effect-presets button:hover{background:#414141!important}
+html[data-theme=dark] .effect-presets button[aria-pressed=true]{background:#f1f1f1!important;color:#171717!important;border-color:#f1f1f1!important}
+html[data-theme=dark] :is(.sheet-drag-handle,.toggle-track){background:#626262!important}
+html[data-theme=dark] .playback-toggle[aria-checked=true] .toggle-track{background:#82b4ff!important}
+html[data-theme=dark] .playback-range input{accent-color:#82b4ff}
+html[data-theme=dark] .playback-settings-trigger{background:#272727;color:#f1f1f1;border-color:#404040}
+html[data-theme=dark] .playback-settings-trigger:hover{background:#393939}
+html[data-theme=dark] .thumbnail-frame{border-width:0}
