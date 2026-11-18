@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useRef, useState, createContext, useContext, type ReactNode, type FormEvent } from 'react';
+import VisualModes from './VisualModes';
+import DirectMessages from './DirectMessages';
+import MessageNotifications from './MessageNotifications';
+import TermsGate,{RegistrationTerms} from './TermsAgreement';
+import '../terms.css';
 
 type Item = { videoId: string; timestamp?: number; [key: string]: unknown };
-type User = { id: string; username: string };
+type User = { id: string; username: string; admin?: boolean; termsAccepted?: boolean };
 type Cache = { history: Item[]; version: number; dirty: boolean };
-export const AccountContext = createContext<{ username: string; logout: () => Promise<void> } | null>(null);
+type BanRecord = { userId?: string; username?: string; detectedAt: number };
+export const AccountContext = createContext<{ username: string; isMaster?: boolean; logout: () => Promise<void> } | null>(null);
 export const useSiteAccount = () => useContext(AccountContext);
 const LEGACY_KEY = 'xerox_watch_history';
 const SESSION_HINT_KEY = 'xerox_site_session_hint';
+const BAN_LOCK_KEY = 'xerox_device_ban_v2';
 const accountKey = (id: string) => `xerox_account_history_${id}`;
 // These values are device-local; keep them separate when accounts share a browser.
 const deviceKeys = ['xerox_youtube_linked', 'xerox_short_history', 'xerox_youtube_credentials', 'xerox_user_info', 'xerox_subscriptions', 'xerox_user_playlists', 'xerox_ai_interests', 'xerox_video_cache'];
@@ -35,21 +42,25 @@ const merge = (...lists: Item[][]): Item[] => {
 async function api(path: string, method = 'GET', body?: unknown) {
   const response = await fetch(`/api/account${path}`, { method, credentials: 'same-origin', cache: 'no-store', ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(data.error || '通信に失敗しました。'), { status: response.status });
+  if (!response.ok) {
+    const error=Object.assign(new Error(data.error || '通信に失敗しました。'), { status: response.status, code:data.code });
+    if(data.code==='ACCOUNT_BANNED')window.dispatchEvent(new CustomEvent('xerox-account-banned'));
+    throw error;
+  }
   return data;
 }
 
-function enterGuestStorage(){
- switchDeviceAccount('guest');localStorage.setItem('xerox_last_account_id','guest');
- localStorage.setItem(LEGACY_KEY,JSON.stringify(read<Cache>(accountKey('guest'),{history:[],version:0,dirty:false}).history));
- sessionStorage.setItem('xerox_guest','true');
-}
-export default function AccountGate({ children, allowGuest=false }: { children: ReactNode; allowGuest?:boolean }) {
-  const [cachedUser] = useState<User | null>(() => { const hint = read<User | null>(SESSION_HINT_KEY, null); return hint && typeof hint.id === 'string' && typeof hint.username === 'string' && localStorage.getItem('xerox_last_account_id') === hint.id ? hint : null; });
-  const [guest,setGuest]=useState(()=>{const value=!cachedUser&&(allowGuest||sessionStorage.getItem('xerox_guest')==='true');if(value)enterGuestStorage();return value;});
+export default function AccountGate({ children }: { children: ReactNode }) {
+  const [timeoutUntil,setTimeoutUntil]=useState(0);
+  useEffect(()=>{const listener=(event:Event)=>setTimeoutUntil(Number((event as CustomEvent).detail?.suspendedUntil)||Date.now()+600000);window.addEventListener('xerox-account-timeout',listener);const timer=setInterval(()=>setTimeoutUntil(value=>value&&value<=Date.now()?0:value),1000);return()=>{window.removeEventListener('xerox-account-timeout',listener);clearInterval(timer);};},[]);
+  const [initialBan] = useState<BanRecord | null>(()=>read<BanRecord|null>(BAN_LOCK_KEY,null));
+  const [cachedUser] = useState<User | null>(() => { const handoff=(window as any).__XEROX_ACCOUNT_HANDOFF__;if(handoff&&Date.now()-handoff.savedAt<30000&&handoff.user?.id&&handoff.user?.username)return handoff.user;const hint = read<User | null>(SESSION_HINT_KEY, null); return hint && typeof hint.id === 'string' && typeof hint.username === 'string' && localStorage.getItem('xerox_last_account_id') === hint.id ? hint : null; });
   const [user, setUser] = useState<User | null>(cachedUser);
-  const [phase, setPhase] = useState<'checking' | 'login' | 'loading' | 'ready' | 'error'>(cachedUser ? 'ready' : 'login');
+  const [phase, setPhase] = useState<'checking' | 'login' | 'loading' | 'ready' | 'error' | 'banned'>(initialBan?'banned':cachedUser ? 'ready' : 'login');
+  const [banRecord,setBanRecord]=useState<BanRecord|null>(initialBan);
+  const banRef=useRef(banRecord);banRef.current=banRecord;
   const [register, setRegister] = useState(false);
+  const [agreedVersion,setAgreedVersion]=useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -59,15 +70,25 @@ export default function AccountGate({ children, allowGuest=false }: { children: 
   const active = useRef<User | null>(cachedUser);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sending = useRef(false);
+  const serverAuthenticated=useRef(false);
   const authEpoch = useRef(0);
   const sync = useRef<() => Promise<void>>(async () => {});
+  useEffect(()=>{const prepare=async()=>{if(cache.current.dirty){await sync.current();if(cache.current.dirty)return false;}const current=active.current;if(current)(window as any).__XEROX_ACCOUNT_HANDOFF__={user:current,savedAt:Date.now()};return true;};(window as any).__XEROX_GAS_BEFORE_UPDATE__=prepare;return()=>{if((window as any).__XEROX_GAS_BEFORE_UPDATE__===prepare)delete (window as any).__XEROX_GAS_BEFORE_UPDATE__;};},[]);
+  const lockBanned=useCallback(()=>{
+    const current=active.current||cachedUser;
+    const record={...(current?.id?{userId:current.id}:{}),...(current?.username?{username:current.username}:{}),detectedAt:Date.now()};
+    localStorage.setItem(BAN_LOCK_KEY,JSON.stringify(record));setBanRecord(record);setPhase('banned');serverAuthenticated.current=false;
+  },[cachedUser]);
 
-  const persist = (u: User) => localStorage.setItem(accountKey(u.id), JSON.stringify(cache.current));
+  useEffect(()=>{const banned=()=>lockBanned();window.addEventListener('xerox-account-banned',banned);return()=>window.removeEventListener('xerox-account-banned',banned);},[lockBanned]);
+
+  const persist = (u: User) => localStorage.setItem(accountKey(u.id), JSON.stringify({...cache.current, savedAt: new Date().toISOString()}));
   const initialize = useCallback(async (u: User, importLegacy = false, background = false) => {
     if (!background) setPhase('loading'); setMessage('');
     const epoch = authEpoch.current;
     try {
       const remote = await api('/history');
+      u = { ...u, termsAccepted: true };
       if (epoch !== authEpoch.current) return;
       const saved = active.current?.id === u.id ? cache.current : read<Cache | null>(accountKey(u.id), null);
       let history: Item[] = Array.isArray(remote.history) ? remote.history : [];
@@ -90,7 +111,9 @@ export default function AccountGate({ children, allowGuest=false }: { children: 
       if (background) window.dispatchEvent(new CustomEvent('xerox-history-remote', { detail: history }));
       if (dirty) setTimeout(() => void sync.current(), 0);
     } catch (err: any) {
-      if (err.status === 401) { active.current = null; localStorage.removeItem(SESSION_HINT_KEY); setUser(null); setPhase('login'); setMessage('ログインの有効期限が切れました。'); }
+      if(err.code==='TERMS_REQUIRED'){if(active.current?.id!==u.id)cache.current=read<Cache>(accountKey(u.id),{history:[],version:0,dirty:false});const pending={...u,termsAccepted:false};active.current=pending;localStorage.setItem(SESSION_HINT_KEY,JSON.stringify(pending));setUser(pending);setPhase('ready');return;}
+      if (err.status === 401 && background) { serverAuthenticated.current=false;setMessage('サーバーの認証を確認できません。端末内のデータを保持して表示しています。'); }
+      else if (err.status === 401) { setMessage('認証を確認できませんでした。もう一度ログインしてください。');setPhase('login'); }
       else if (background) { setMessage('クラウドの履歴を確認できません。端末内の履歴を表示しています。'); }
       else { setUser(u); setMessage(err instanceof Error ? err.message : '履歴を読み込めませんでした。'); setPhase('error'); }
     }
@@ -98,7 +121,7 @@ export default function AccountGate({ children, allowGuest=false }: { children: 
 
   sync.current = async () => {
     const u = active.current;
-    if (!u || sending.current || !cache.current.dirty) return;
+    if (!u || !serverAuthenticated.current || sending.current || !cache.current.dirty) return;
     sending.current = true;
     const snapshot = cache.current;
     try {
@@ -106,6 +129,7 @@ export default function AccountGate({ children, allowGuest=false }: { children: 
       cache.current = { ...cache.current, version: result.version, dirty: cache.current.history !== snapshot.history };
       persist(u); setMessage('');
     } catch (err: any) {
+      if(err.status===401)serverAuthenticated.current=false;
       if (err.status === 409) {
         try {
           const remote = await api('/history');
@@ -117,22 +141,39 @@ export default function AccountGate({ children, allowGuest=false }: { children: 
       } else setMessage('履歴は端末に保存されています。同期を再試行します。');
     } finally {
       sending.current = false;
-      if (cache.current.dirty && active.current) timer.current = setTimeout(() => void sync.current(), 5000);
+      if (cache.current.dirty && active.current && serverAuthenticated.current) timer.current = setTimeout(() => void sync.current(), 5000);
     }
   };
 
   useEffect(() => {
-    if(guest){active.current=null;return;}
-    if (cachedUser) active.current = cachedUser;
-    const epoch = authEpoch.current;
-    api('/session').then(({ user: existing }) => { if (authEpoch.current === epoch) return initialize(existing, false, cachedUser?.id === existing.id); }).catch((err) => {
-      if (authEpoch.current !== epoch) return;
-      if (err.status === 401) { active.current = null; localStorage.removeItem(SESSION_HINT_KEY); setUser(null); setPhase('login'); }
-      else if (cachedUser) setMessage('接続を確認できません。端末内の履歴を表示しています。');
-      else { setMessage('ログイン状態を確認できません。通信環境を確認してください。'); setPhase('error'); }
-    });
-    return () => { active.current = null; if (timer.current) clearTimeout(timer.current); };
-  }, [initialize, cachedUser,guest]);
+    if(cachedUser)active.current=cachedUser;
+    let cancelled=false,busy=false,lastCheck=0;
+    const verify=async(force=false)=>{
+      if(cancelled||busy||(!force&&Date.now()-lastCheck<60000))return;
+      busy=true;lastCheck=Date.now();const epoch=authEpoch.current;
+      try{
+        const {user:existing}=await api('/session');
+        if(cancelled||authEpoch.current!==epoch)return;
+        if(!existing?.id)throw new Error('Invalid session response');
+        if(banRef.current){localStorage.removeItem(BAN_LOCK_KEY);setBanRecord(null);}
+        serverAuthenticated.current=true;
+        await initialize(existing,false,active.current?.id===existing.id);
+      }catch(err:any){
+        if(cancelled||authEpoch.current!==epoch)return;
+        serverAuthenticated.current=false;
+        if(err.code==='ACCOUNT_BANNED'){lockBanned();return;}
+        if(err.status===401&&banRef.current){setMessage('解除状況の確認には、同じアカウントで本人確認してください。');setPhase('login');return;}
+        if(active.current||cachedUser)setMessage('接続・認証を確認できません。端末内のデータを保持して表示しています。');
+        else if(err.status===401){setPhase('login');}
+        else{setMessage('ログイン状態を確認できません。通信環境を確認してください。');setPhase('error');}
+      }finally{busy=false;}
+    };
+    const resume=()=>{if(!document.hidden)void verify();};
+    void verify(true);
+    const interval=setInterval(resume,30000);
+    window.addEventListener('online',resume);window.addEventListener('focus',resume);document.addEventListener('visibilitychange',resume);
+    return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resume);window.removeEventListener('focus',resume);document.removeEventListener('visibilitychange',resume);if(timer.current)clearTimeout(timer.current);};
+  },[initialize,cachedUser,lockBanned]);
 
   useEffect(() => {
     const changed = (event: Event) => {
@@ -149,23 +190,26 @@ export default function AccountGate({ children, allowGuest=false }: { children: 
     return () => window.removeEventListener('xerox-history-change', changed);
   }, []);
 
+  if(timeoutUntil>Date.now()&&phase!=='banned')return <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-5"><section role="alert" className="max-w-md rounded-3xl border border-amber-700 bg-gray-900 p-8 text-center"><h1 className="text-2xl font-bold">警告：一時的に利用を停止しています</h1><p className="mt-4 text-sm">過剰なリクエストを検出しました。{new Date(timeoutUntil).toLocaleTimeString('ja-JP')}までお待ちください。解除後に再発するとBANされます。</p></section></main>;
   async function submit(e: FormEvent) {
     e.preventDefault(); setMessage('');
     if (register && password !== confirm) { setMessage('パスワードが一致しません。'); return; }
+    if(register&&!agreedVersion){setMessage('利用規約を確認し、同意してください。');return;}
     try {
       setPhase('loading');
       sessionStorage.removeItem('xerox_guest');
-      const result = await api(register ? '/register' : '/login', 'POST', { username, password });
-      setPassword(''); setConfirm(''); await initialize(result.user, migrate);
-    } catch (err) { setMessage(err instanceof Error ? err.message : 'ログインに失敗しました。'); setPhase('login'); }
+      const result = await api(register ? '/register' : '/login', 'POST', { username, password, ...(register?{termsAccepted:true,termsVersion:agreedVersion}:{}) });
+      serverAuthenticated.current=true;setPassword(''); setConfirm(''); await initialize(result.user, migrate);
+    } catch (err:any) { if(err?.code==='ACCOUNT_BANNED'){lockBanned();return;}setMessage(err instanceof Error ? err.message : 'ログインに失敗しました。'); setPhase('login'); }
   }
-  async function logout() {
-    if (cache.current.dirty) { await sync.current(); if (cache.current.dirty) { setMessage('履歴の同期が完了していません。端末内には保存されています。'); return; } }
-    try { authEpoch.current++; await api('/logout', 'POST', {}); active.current = null; localStorage.removeItem(SESSION_HINT_KEY); setUser(null); setPhase('login'); setMessage(''); }
+  async function logout(skipSync=false) {
+    if (!skipSync&&cache.current.dirty) { await sync.current(); if (cache.current.dirty) { setMessage('履歴の同期が完了していません。端末内には保存されています。'); return; } }
+    try { authEpoch.current++; await api('/logout', 'POST', {});serverAuthenticated.current=false; active.current = null; localStorage.removeItem(SESSION_HINT_KEY); setUser(null); setPhase('login'); setMessage(''); }
     catch { setMessage('ログアウトできませんでした。'); }
   }
-  if(guest)return <AccountContext.Provider value={{username:'ゲスト',logout:async()=>{sessionStorage.removeItem('xerox_guest');setGuest(false);setPhase('login');}}}>{children}</AccountContext.Provider>;
-  if (phase === 'ready' && user) return <AccountContext.Provider value={{ username: user.username, logout }}>{children}{message && <div role="status" className="fixed top-16 right-4 z-[200] bg-gray-900 text-white text-xs p-3 rounded-xl max-w-xs shadow-lg">{message}</div>}</AccountContext.Provider>;
+  if (phase === 'ready' && user) return <AccountContext.Provider value={{ username: user.username, ...(user.admin?{isMaster:true}:{}), logout }}><TermsGate key={user.id} alreadyAccepted={user.termsAccepted===true} onAccepted={()=>{if(active.current)void initialize(active.current,false,true);}} onLogout={()=>void logout(true)}><VisualModes/><MessageNotifications/>{children}{message && <div role="status" className="fixed top-16 right-4 z-[200] bg-gray-900 text-white text-xs p-3 rounded-xl max-w-xs shadow-lg">{message}{!serverAuthenticated.current&&<button type="button" className="block mt-2 underline" onClick={()=>{setPassword('');setConfirm('');setPhase('login');setMessage('端末内のデータを保持したまま再接続します。');}}>再ログインして同期を再開</button>}</div>}</TermsGate></AccountContext.Provider>;
 
-  return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><section className="w-full max-w-md bg-white rounded-3xl shadow-lg border border-gray-100 p-7 sm:p-9"><button type="button" onClick={()=>{authEpoch.current++;active.current=null;enterGuestStorage();setGuest(true);}} className="mb-6 w-full rounded-xl border border-gray-300 py-3">ログインせずに使う</button><h1 className="text-2xl font-bold text-gray-900">XeroxYT-NTv7</h1><p className="text-sm text-gray-500 mt-2">アカウントにログインして、視聴履歴を端末とクラウドに保存します。</p>{phase === 'error' ? <><p className="mt-6 text-red-700" role="alert">{message}</p><button className="mt-4 rounded-xl bg-gray-900 text-white px-4 py-2" onClick={() => user ? void initialize(user) : window.location.reload()}>再試行</button></> : <form onSubmit={submit} className="mt-7 space-y-4"><h2 className="text-lg font-semibold">{register ? '新規アカウント作成' : 'ログイン'}</h2><label className="block text-sm">ユーザー名<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="英数字と _" /></label><label className="block text-sm">パスワード<input type="password" autoComplete={register ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={12} maxLength={128} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="12文字以上" /></label>{register && <label className="block text-sm">パスワード（確認）<input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" /></label>}{!localStorage.getItem('xerox_last_account_id') && <label className="flex items-start gap-2 text-sm text-gray-600"><input type="checkbox" checked={migrate} onChange={e => setMigrate(e.target.checked)} className="mt-1" />この端末にある以前の視聴履歴を取り込む</label>}{message && <p className="text-sm text-red-700" role="alert">{message}</p>}<button disabled={phase === 'loading'} className="w-full bg-gray-900 disabled:opacity-60 text-white rounded-xl py-3 font-semibold">{phase === 'loading' ? '処理中…' : register ? 'アカウントを作成' : 'ログイン'}</button><button type="button" onClick={() => { setRegister(!register); setMessage(''); }} className="w-full text-sm text-blue-700 py-2">{register ? 'すでにアカウントを持っている' : '新規アカウントを作成'}</button>{register && <p className="text-xs text-gray-500">パスワード再設定機能はまだありません。忘れないよう安全に保管してください。</p>}</form>}</section></main>;
+  if(phase==='banned')return <TermsGate onAccepted={()=>{}} onLogout={()=>void logout(true)}><DirectMessages appealOnly/><main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-5"><section className="w-full max-w-md rounded-3xl border border-red-900 bg-gray-900 p-8 text-center shadow-2xl" role="alert"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-950 text-3xl" aria-hidden="true">!</div><h1 className="mt-5 text-2xl font-bold">このアカウントはBANされています</h1><p className="mt-3 text-sm leading-6 text-gray-300">この端末では、新しいアカウントの作成、ログアウト、アカウント切り替えなどの操作はできません。</p>{banRecord?.username&&<p className="mt-4 text-xs text-gray-500">対象アカウント: @{banRecord.username}</p>}<p className="mt-5 text-xs text-gray-500">BANが解除された場合は、この画面を開いたままにするか、しばらくしてから再読み込みしてください。</p></section></main></TermsGate>;
+
+  return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><section className="w-full max-w-md bg-white rounded-3xl shadow-lg border border-gray-100 p-7 sm:p-9"><h1 className="text-2xl font-bold text-gray-900">XeroxYT-NTv7 for GAS</h1><p className="text-sm text-gray-500 mt-2">アカウントにログインして、視聴履歴を端末とクラウドに保存します。</p>{phase === 'error' ? <><p className="mt-6 text-red-700" role="alert">{message}</p><button className="mt-4 rounded-xl bg-gray-900 text-white px-4 py-2" onClick={() => user ? void initialize(user) : window.location.reload()}>再試行</button></> : <form onSubmit={submit} className="mt-7 space-y-4"><h2 className="text-lg font-semibold">{register ? '新規アカウント作成' : 'ログイン'}</h2><label className="block text-sm">ユーザー名<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="英数字と _" /></label><label className="block text-sm">パスワード<input type="password" autoComplete={register ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={12} maxLength={128} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="12文字以上" /></label>{register && <label className="block text-sm">パスワード（確認）<input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" /></label>}{!localStorage.getItem('xerox_last_account_id') && <label className="flex items-start gap-2 text-sm text-gray-600"><input type="checkbox" checked={migrate} onChange={e => setMigrate(e.target.checked)} className="mt-1" />この端末にある以前の視聴履歴を取り込む</label>}{register&&<RegistrationTerms onChange={setAgreedVersion}/>} {message && <p className="text-sm text-red-700" role="alert">{message}</p>}<button disabled={phase === 'loading'||(register&&!agreedVersion)} className="w-full bg-gray-900 disabled:opacity-60 text-white rounded-xl py-3 font-semibold">{phase === 'loading' ? '処理中…' : register ? 'アカウントを作成' : 'ログイン'}</button><button type="button" onClick={() => { setRegister(!register);setAgreedVersion('');setMessage(''); }} className="w-full text-sm text-blue-700 py-2">{register ? 'すでにアカウントを持っている' : '新規アカウントを作成'}</button>{register && <p className="text-xs text-gray-500">パスワード再設定機能はまだありません。忘れないよう安全に保管してください。</p>}</form>}</section></main>;
 }

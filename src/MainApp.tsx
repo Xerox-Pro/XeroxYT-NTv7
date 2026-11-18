@@ -1,4 +1,6 @@
-import GoogleLinkAnnouncement from './components/GoogleLinkAnnouncement';
+import DisplaySettings from './components/DisplaySettings';
+import Announcements from './components/Announcements';
+import {useDisplayPreferences} from './lib/displayPreferences';
 import YouTubeAccountPanel from './components/YouTubeAccountPanel';
 import SearchFilters from './components/SearchFilters';
 import {searchFilterParams} from '../search-filters.mjs';
@@ -35,6 +37,8 @@ import MyPage from './components/MyPage';
 import { useDeviceProfile } from './lib/deviceProfile';
 import HistoryPage from './components/HistoryPage';
 import DebugAPI from './components/DebugAPI';
+import AdminPanel from './components/AdminPanel';
+import DirectMessages from './components/DirectMessages';
 import LicensePage from './components/LicensePage';
 import AddToPlaylistModal from './components/AddToPlaylistModal';
 import DetectedSearchHeader from './components/DetectedSearchHeader';
@@ -59,8 +63,10 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  const [view, setView] = useState<'home' | 'search' | 'video' | 'shorts' | 'channel' | 'subscriptions' | 'library' | 'history' | 'debug' | 'license'>('home');
+  const [view, setView] = useState<'home' | 'search' | 'video' | 'shorts' | 'channel' | 'subscriptions' | 'library' | 'history' | 'debug' | 'system' | 'messages' | 'license' | 'settings' | 'announcements'>('home');
+  const displayPrefs=useDisplayPreferences();
   const siteAccount = useSiteAccount();
+  useEffect(()=>{if(!siteAccount?.isMaster)return;const open=(event:Event)=>{const target=(event as CustomEvent).detail?.target;if(typeof target==='string'){sessionStorage.setItem('xerox_dm_compose',target);navigate('/messages');}};window.addEventListener('xerox-open-dm',open);return()=>window.removeEventListener('xerox-open-dm',open);},[siteAccount?.isMaster,navigate]);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileSearchFilter,setMobileSearchFilter] = useState('すべて');
   const [phoneLayout,setPhoneLayout] = useState(()=>window.innerWidth<=640);
@@ -113,8 +119,9 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
 
   // Auth state
   const [userInfo,setUserInfo]=useState<UserInfo|null>(()=>{try{if(localStorage.getItem('xerox_youtube_linked')==='1'){const user=JSON.parse(localStorage.getItem('xerox_user_info')||'null');if(typeof user?.name==='string')return user;}}catch{}return null;});
+  const [sharedRecommendations,setSharedRecommendations]=useState(()=>localStorage.getItem('xerox_shared_recommendations')==='1');
   const [googleStatusReady,setGoogleStatusReady]=useState(false);
-  const homeSnapshotScope=(siteAccount?.username||'guest')+(userInfo?':youtube':'');
+  const homeSnapshotScope=(siteAccount?.username||'guest')+(userInfo?':youtube':sharedRecommendations?':shared':'');
 
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -122,7 +129,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   const [isSidebarOpen, setIsSidebarOpen] = useState(
     window.innerWidth >= 1280
   );
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768 && !window.matchMedia('(orientation: landscape)').matches);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const searchContinuation=useRef({key:'',next:''});
   const recommendationRequestIdRef = useRef(0);
@@ -181,10 +188,19 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       setView('subscriptions');
     } else if (path === '/feed/library') {
       setView('library');
+    } else if (path === '/settings') {
+      setView('settings');
+    } else if (path === '/announcements') {
+      setView('announcements');
+    } else if (path === '/messages') {
+      setView('messages');
     } else if (path === '/feed/history') {
       setView('history');
     } else if (path === '/debug/api') {
       setView('debug');
+    } else if (path === '/system/settings') {
+      if (siteAccount?.isMaster) setView('system');
+      else navigate('/', { replace: true });
     } else if (path === '/aistudio') {
       navigate('/', { replace: true });
     } else if (path === '/license') {
@@ -198,19 +214,25 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
 
   useEffect(() => {
     if (view === 'search' && searchQuery) {
-      document.title = `${searchQuery} - XeroxYT-NTv7`;
+      document.title = `${searchQuery} - XeroxYT-NTv7 for GAS`;
     } else if (view === 'shorts') {
-      document.title = 'ショート - XeroxYT-NTv7';
+      document.title = 'ショート - XeroxYT-NTv7 for GAS';
     } else if (view === 'home') {
-      document.title = 'XeroxYT-NTv7';
+      document.title = 'XeroxYT-NTv7 for GAS';
     } else if (view === 'subscriptions') {
-      document.title = '登録チャンネル - XeroxYT-NTv7';
+      document.title = '登録チャンネル - XeroxYT-NTv7 for GAS';
     } else if (view === 'library') {
-      document.title = 'ライブラリ - XeroxYT-NTv7';
+      document.title = 'ライブラリ - XeroxYT-NTv7 for GAS';
     } else if (view === 'history') {
-      document.title = '履歴 - XeroxYT-NTv7';
+      document.title = '履歴 - XeroxYT-NTv7 for GAS';
+    } else if (view === 'system') {
+      document.title = 'システム設定 - XeroxYT-NTv7 for GAS';
+    } else if (view === 'settings') {
+      document.title = '表示・再生設定 - XeroxYT-NTv7 for GAS';
+    } else if (view === 'announcements') {
+      document.title = 'お知らせ - XeroxYT-NTv7 for GAS';
     } else if (view === 'license') {
-      document.title = 'ライセンス & 製作者クレジット - XeroxYT-NTv7';
+      document.title = 'ライセンス & 製作者クレジット - XeroxYT-NTv7 for GAS';
     }
   }, [view, searchQuery]);
 
@@ -231,7 +253,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
     const handleResize = () => {
       const width = window.innerWidth;
       const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-      const mobile = width < 768 && !isLandscape;
+      const mobile = width < 768;
       setIsMobile(mobile);
       if (view === 'home') {
         if (width >= 1280) {
@@ -250,6 +272,9 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   // 無限スクロール用ページ制御
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [moreError,setMoreError]=useState('');
+  const loadMoreMarker=useRef<HTMLDivElement>(null);
+  const homeSeed=useRef(Date.now().toString());
   const isFetchingMore = useRef(false);
 
   // モーダル
@@ -600,10 +625,10 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
     if(isSocial)return;
     let cancelled=false;youtubeGeneration.current++;
     setGoogleStatusReady(false);localStorage.removeItem('xerox_youtube_credentials');
-    fetchJSON('/api/auth/status',{signal:inactiveRequests.current.signal}).then(status=>{if(cancelled)return;if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else{localStorage.removeItem('xerox_youtube_linked');setUserInfo(null);}setGoogleStatusReady(true);}).catch(()=>{if(!cancelled){setAuthError('Google連携の状態を確認できませんでした。再読み込みしてください。');setError('連携状態を確認できないため、おすすめの読み込みを停止しています。再読み込みしてください。');setLoading(false);}});
+    fetchJSON('/api/auth/status',{signal:inactiveRequests.current.signal}).then(status=>{if(cancelled)return;const shared=!status.connected&&status.recommendationSource===true;setSharedRecommendations(shared);if(shared)localStorage.setItem('xerox_shared_recommendations','1');else localStorage.removeItem('xerox_shared_recommendations');if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else{localStorage.removeItem('xerox_youtube_linked');setUserInfo(null);}setGoogleStatusReady(true);}).catch(()=>{if(!cancelled){setAuthError('Google連携の状態を確認できませんでした。再読み込みしてください。');setGoogleStatusReady(true);}});
     return()=>{cancelled=true;youtubeGeneration.current++;};
   },[siteAccount?.username,isSocial]);
-  useEffect(()=>{if(isSocial||!googleStatusReady)return;if(userInfo)void fetchYoutubeAuthData();setHomeShorts({category:'',videos:[]});setSelectedCategory('すべて');setPage(1);if(googleStatusReady&&location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo,googleStatusReady,isSocial]);
+  useEffect(()=>{if(isSocial||!googleStatusReady)return;if(userInfo)void fetchYoutubeAuthData();setHomeShorts({category:'',videos:[]});setSelectedCategory('すべて');setPage(1);if(googleStatusReady&&location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo,sharedRecommendations,googleStatusReady,isSocial]);
   const cancelGoogleLink=async()=>{isPollingRef.current=false;setIsPolling(false);setAuthFlow(null);setAuthError(null);try{await fetchJSON('/api/auth/cancel',{method:'POST'});}catch(error:any){setAuthError(error.message);}};
 
   const handleLogout = async () => {
@@ -640,6 +665,8 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   const fetchRecommendations = async (pageNum: number = 1, append: boolean = false) => {
     if(!googleStatusReady)return;
     const currentReqId = ++recommendationRequestIdRef.current;
+    setMoreError('');
+    if(pageNum===1)homeSeed.current=Date.now().toString();
     if (append) {
       setLoadingMore(true);
     } else {
@@ -652,7 +679,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       const keywords = [...learnedTerms(false, 5), getHistoryKeywords()].filter(Boolean).join(' ');
       const historyIds = watchHistory.slice(0, 20).map(h => h.videoId).join(',');
       const userHashtags = JSON.stringify(localAI.getHashtagsMap());
-      let data = [];
+      let data:Video[] = [];
 
       // Every home visit starts a fresh provider request.
       const queryParams = new URLSearchParams({
@@ -660,12 +687,18 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
         historyIds,
         userHashtags,
         page: pageNum.toString(),
-        refreshNonce: Date.now().toString(),
+        refreshNonce: homeSeed.current,
       });
       if(pageNum===1)personalHomeCursor.current='';
-      const result = userInfo?await fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current),{signal:inactiveRequests.current.signal}):await fetchJSON(`/api/recommendations?${queryParams.toString()}`,{signal:inactiveRequests.current.signal});
+      let result:any;
+      if(userInfo)result=await fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current),{signal:inactiveRequests.current.signal}).catch(()=>fetchJSON(`/api/recommendations?${queryParams.toString()}`,{signal:inactiveRequests.current.signal}).catch(error=>{if(pageNum!==1)throw error;return [];}));
+      else if(sharedRecommendations){
+        const [shared,inferred]=await Promise.allSettled([fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current),{signal:inactiveRequests.current.signal}),fetchJSON(`/api/recommendations?${queryParams.toString()}`,{signal:inactiveRequests.current.signal})]);
+        result=shared.status==='fulfilled'?shared.value:{videos:[],hasMore:false};
+        const inference=inferred.status==='fulfilled'?inferred.value:[];data=Array.isArray(inference)?inference:Array.isArray(inference?.videos)?inference.videos:[];
+      }else result=await fetchJSON(`/api/recommendations?${queryParams.toString()}`,{signal:inactiveRequests.current.signal}).catch(error=>{if(pageNum!==1)throw error;return [];});
       if (currentReqId !== recommendationRequestIdRef.current) return;
-      if(userInfo){personalHomeCursor.current=result.continuation||'';setHasMore(!!result.hasMore);}
+      if(userInfo||sharedRecommendations){personalHomeCursor.current=result?.continuation||'';setHasMore(!!result?.hasMore);}
 
       let publicData: Video[] = [];
       if (Array.isArray(result)) {
@@ -680,7 +713,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       }
 
       // フォールバック: 初回読み込みで動画が取得できなかった場合は人気動画(trending)を表示
-      if (!userInfo && publicData.length === 0 && data.length === 0 && pageNum === 1) {
+      if (publicData.length === 0 && data.length === 0 && pageNum === 1) {
         try {
           const trendingData = await fetchJSON('/api/trending');
           if (Array.isArray(trendingData) && trendingData.length > 0) {
@@ -708,6 +741,8 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       let finalData = spreadHome(userInfo?Array.from(uniqueMap.values()):prioritizeUnshown(Array.from(uniqueMap.values())));
 
       if (append) {
+        const existing=new Set(videos.map(v=>v.playlistId||v.videoId));
+        if(!finalData.some(v=>!existing.has(v.playlistId||v.videoId)))setMoreError('新しいおすすめがまだありません。もう一度読み込めます。');
         setVideos(prev => {
           const existingIds = new Set(prev.map(v => v.playlistId||v.videoId));
           const newVideos = finalData.filter((v: Video) => v && (v.playlistId||v.videoId) && !existingIds.has(v.playlistId||v.videoId));
@@ -716,12 +751,13 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       } else {
         setVideos(finalData);
       }
-      setHasMore(userInfo?!!result.hasMore:finalData.length>0);
+      setHasMore(userInfo||sharedRecommendations?!!result.hasMore||data.length>0:finalData.length>0);
+      setPage(pageNum);
     } catch (err: any) {
       if (currentReqId !== recommendationRequestIdRef.current) return;
       console.error(err);
-      setHasMore(false);
-      if (!append) setError(err.message || 'エラーが発生しました');
+      if(append)setMoreError(err.message||'次のおすすめを取得できませんでした。');
+      else{setHasMore(false);setError(err.message||'エラーが発生しました');}
     } finally {
       if (currentReqId === recommendationRequestIdRef.current) {
         setLoading(false);
@@ -734,11 +770,11 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   // Use the selected chip's actual YouTube home feed.
   const fetchHomeCategory = async (category: string, pageNum = 1, append = false) => {
     if(!googleStatusReady)return;
-    if(userInfo){await fetchRecommendations(pageNum,append);return;}
+    if(userInfo||sharedRecommendations){await fetchRecommendations(pageNum,append);return;}
     const requestId = ++recommendationRequestIdRef.current;
     if (append) setLoadingMore(true);
     else { setLoading(true); setVideos([]); }
-    setError('');
+    setError('');setMoreError('');
     try {
       const params = new URLSearchParams({ name: category, page: String(pageNum) });
       const data = await fetchJSON(`/api/home/category?${params}`);
@@ -753,11 +789,11 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
           return [...previous, ...result.filter(video => video.videoId && !seen.has(video.videoId) && (seen.add(video.videoId), true))];
         });
       } else setVideos(result);
-      setHasMore(!!data.hasMore);
+      setHasMore(!!data.hasMore);setPage(pageNum);
     } catch (error: any) {
       if (requestId === recommendationRequestIdRef.current) {
         if (!append) {const saved=loadHomeSnapshot(category,homeSnapshotScope);if(saved.length){setVideos(saved);updateCache(saved);setError('');}else setError(error.message || 'カテゴリのおすすめを取得できませんでした。');}
-        setHasMore(false);
+        if(append)setMoreError(error.message||'続きの取得に失敗しました。');else setHasMore(false);
       }
     } finally {
       if (requestId === recommendationRequestIdRef.current) {
@@ -785,7 +821,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       }
       setView('search');
     }
-    setError('');
+    setError('');setMoreError('');
 
     try {
       const filters=searchFilterParams(new URLSearchParams(window.location.search));
@@ -811,9 +847,10 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       } else {
         setVideos(newVideos);
       }
-      setHasMore(typeof data.hasMore==='boolean'?data.hasMore:newVideos.length > 0);
+      setHasMore(typeof data.hasMore==='boolean'?data.hasMore:newVideos.length > 0);setPage(pageNum);
     } catch (err: any) {
       console.error(err);
+      if(requestId===recommendationRequestIdRef.current&&append)setMoreError(err.message||'続きの取得に失敗しました。');
       if (requestId === recommendationRequestIdRef.current && !append) setError(err.message || 'エラーが発生しました');
     } finally {
       if (requestId === recommendationRequestIdRef.current) {
@@ -825,20 +862,19 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   };
 
   // 無限スクロール検知
-  const handleScroll = useCallback(() => {
+  const handleScroll = useCallback((force:boolean|'retry'|Event=false) => {
     if (isSocial || (view !== 'home' && view !== 'search')) return;
     if (view === 'search' && !searchQuery.trim()) return;
-    if (loading || loadingMore || !hasMore || isFetchingMore.current) return;
+    if (loading || loadingMore || !hasMore || isFetchingMore.current || (moreError&&force!=='retry')) return;
 
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
     const windowHeight = window.innerHeight;
     const totalHeight = document.documentElement.scrollHeight;
 
     // スクロール位置が下部近辺（1000px以内）に達したら次のページを事前取得
-    if (scrollTop + windowHeight >= totalHeight - 1000) {
+    if (force===true||force==='retry'||scrollTop + windowHeight >= totalHeight - 1000) {
       isFetchingMore.current = true;
       const nextPage = page + 1;
-      setPage(nextPage);
 
       if (view === 'home') {
         if (selectedCategory === 'すべて') fetchRecommendations(nextPage, true);
@@ -847,12 +883,16 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
         fetchSearch(searchQuery, nextPage, true);
       }
     }
-  }, [view, loading, loadingMore, hasMore, page, searchQuery, selectedCategory, location.search,isSocial]);
+  }, [view, loading, loadingMore, hasMore, page, searchQuery, selectedCategory, location.search,isSocial,moreError]);
 
   useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [handleScroll,isSocial]);
+    const detect=()=>handleScroll();
+    window.addEventListener('scroll',detect,{passive:true});
+    document.addEventListener('scroll',detect,{passive:true,capture:true});
+    const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting))handleScroll(true);},{rootMargin:'1000px 0px'});
+    if(loadMoreMarker.current)observer.observe(loadMoreMarker.current);
+    return ()=>{window.removeEventListener('scroll',detect);document.removeEventListener('scroll',detect,true);observer.disconnect();};
+  }, [handleScroll,isSocial,videos.length]);
 
   const handleSearch = (q: string) => {
     saveShortsInterest(q);
@@ -1031,7 +1071,6 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   },[activeMix?.cursor,playlistQueueIndex,currentPlaylistQueue.length,mixBusy]);
   return (
     <div className={`${view === 'search' ? 'is-search-page ' : ''}${view === 'shorts' ? 'is-shorts-page ' : ''}min-h-screen bg-white text-gray-900 flex flex-col font-sans antialiased selection:bg-red-100 selection:text-red-800`}>
-      {!isSocial&&<GoogleLinkAnnouncement onOpen={()=>navigate('/feed/library')}/>}
       {youtubeActionError&&<div role="alert" className="youtube-action-toast">{youtubeActionError}<button onClick={()=>setYoutubeActionError('')}>閉じる</button></div>}
       {openingMix&&<div role="status" aria-live="polite" className="youtube-action-toast"><span className="inline-block h-4 w-4 shrink-0 rounded-full border-2 border-white/30 border-t-white motion-safe:animate-spin" aria-hidden="true"/><span>ミックスリストを読み込み中…<span className="block max-w-64 truncate text-white/70">{openingMix}</span></span></div>}
       <TopProgressBar isLoading={loading || loadingMore || !!openingMix} />
@@ -1061,6 +1100,8 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
           ownChannel={userInfo?.sub?.startsWith('UC')?{id:userInfo.sub,title:userInfo.name,avatar:userInfo.picture}:undefined}
           onSelectChannel={handleSelectChannel}
           onDebugAPI={() => navigate('/debug/api')}
+          onSystemSettings={() => navigate('/system/settings')}
+          showSystemSettings={!!siteAccount?.isMaster}
         />}
 
         {/* メインコンテンツビュー */}
@@ -1108,7 +1149,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
             >
               {view==='search'&&searchQuery&&<div className="mobile-search-filters no-scrollbar" aria-label="検索結果の絞り込み">{['すべて','ショート','未視聴','視聴済み','動画'].map(filter=><button type="button" key={filter} aria-pressed={filter==='ショート'?searchParams.get('type')==='shorts':filter==='動画'?searchParams.get('type')==='video':filter==='すべて'?(!searchParams.get('type')&&mobileSearchFilter==='すべて'):mobileSearchFilter===filter} onClick={()=>{if(filter==='ショート'||filter==='動画'||filter==='すべて'){const next=new URLSearchParams(searchParams);if(filter==='すべて')next.delete('type');else next.set('type',filter==='ショート'?'shorts':'video');navigate('/results?'+next);}else setMobileSearchFilter(filter);}}>{filter}</button>)}</div>}
               {/* カテゴリーバー（ホーム ＆ 検索画面のみ） */}
-              {view === 'home' && googleStatusReady && !userInfo && (
+              {view === 'home' && googleStatusReady && !userInfo && !displayPrefs.hideCategories && (
                 <CategoryBar
                   selectedCategory={selectedCategory}
                   onSelectCategory={handleSelectCategory}
@@ -1116,7 +1157,9 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
               )}
 
           {/* ビュー分岐 */}
-          {view === 'video' ? null : view === 'shorts' ? (
+          {view === 'video' ? null : view === 'shorts' && displayPrefs.hideShorts ? (
+            <div className="p-8 text-center"><p>ショートは表示設定で非表示になっています。</p><Link className="underline" to="/settings">設定を変更する</Link></div>
+          ) : view === 'shorts' ? (
             <ShortsViewer
               key={['shorts',userInfo?'youtube':'local', searchParams.get('source'), searchParams.get('q'), searchParams.get('videoId'), searchParams.get('channelId')].join(':')}
               initialVideo={videoCache[location.pathname.split('/')[2]] as Video | undefined}
@@ -1203,6 +1246,19 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
             )
           ) : view === 'debug' ? (
             <DebugAPI />
+          ) : view === 'settings' ? (
+            <DisplaySettings/>
+          ) : view === 'announcements' ? (
+            <Announcements/>
+          ) : view === 'messages' ? (
+            <DirectMessages/>
+          ) : view === 'system' ? (
+            <div className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6 lg:px-8">
+              <div className="mx-auto max-w-[1500px]">
+                <header className="mb-6"><h1 className="text-2xl font-bold text-gray-900">システム設定</h1><p className="mt-1 text-sm text-gray-500">アカウント管理と推薦用Googleアカウントを設定します。</p></header>
+                <AdminPanel />
+              </div>
+            </div>
           ) : view === 'license' ? (
             <LicensePage onBack={handleGoHome} />
           ) : loading ? (
@@ -1212,7 +1268,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
 
           ) : (
             /* ホーム ＆ 検索結果 グリッド ＆ 無限スクロール */
-            <div data-search-filter={phoneLayout?mobileSearchFilter:'すべて'} className={`results-content ${view==='search'?'search-results-content':''} p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto bg-white min-h-screen`}>
+            <div data-search-filter={phoneLayout?mobileSearchFilter:'すべて'} className={`video-grid-region results-content ${view==='search'?'search-results-content':''} p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto bg-white min-h-screen`}>
               {view === 'search' && searchQuery && (
                 <>
                   <DetectedSearchHeader
@@ -1244,7 +1300,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
                 </div>
               )}
 
-              {(view!=='home'||googleStatusReady)&&!(view==='search'&&hasSearchFilters)&&<ShortsShelf
+              {!displayPrefs.hideShorts&&(view!=='home'||googleStatusReady)&&!(view==='search'&&hasSearchFilters)&&<ShortsShelf
                 onVideosLoaded={view==='home' ? data=>setHomeShorts({category:selectedCategory,videos:data}) : undefined}
                 context={view === 'search' ? { source: 'search', q: searchQuery } : { source: 'home', q: selectedCategory === 'すべて' ? undefined : selectedCategory }}
                 onSelect={handleShortSelect}
@@ -1272,7 +1328,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
                       <span className="result-save-label">+ 保存</span><Folder className="result-save-icon" size={18}/>
                     </button>
                   </div>
-                  {view==='home' && (idx+1)%12===0 && homeShorts.category===selectedCategory && homeShorts.videos.length>Math.floor((idx+1)/12)*8 && <div className="col-span-full"><ShortsShelf context={{source:'home',q:selectedCategory==='すべて'?undefined:selectedCategory}} providedVideos={homeShorts.videos} offset={Math.floor((idx+1)/12)*8} onSelect={handleShortSelect}/></div>}
+                  {!displayPrefs.hideShorts && view==='home' && (idx+1)%12===0 && homeShorts.category===selectedCategory && homeShorts.videos.length>Math.floor((idx+1)/12)*8 && <div className="col-span-full"><ShortsShelf context={{source:'home',q:selectedCategory==='すべて'?undefined:selectedCategory}} providedVideos={homeShorts.videos} offset={Math.floor((idx+1)/12)*8} onSelect={handleShortSelect}/></div>}
                   </React.Fragment>
 
                 ))}
@@ -1285,6 +1341,10 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
                 </div>
               )}
 
+              {(view==='home'||view==='search')&&hasMore&&!loading&&<div ref={loadMoreMarker} className="py-5 text-center">
+                {moreError&&<p role="alert" className="mb-3 text-sm text-red-700">{moreError}</p>}
+                <button type="button" disabled={loadingMore} onClick={()=>handleScroll('retry')} className="rounded-full border border-gray-300 px-6 py-3 text-sm font-semibold disabled:opacity-50">{loadingMore?'読み込み中…':moreError?'再試行':'さらに読み込む'}</button>
+              </div>}
               {/* 無限スクロールローディングスピナー */}
               {loadingMore && (
                 <div className="flex items-center justify-center py-10 gap-3 text-gray-600">

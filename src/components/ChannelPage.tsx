@@ -150,7 +150,7 @@ export default function ChannelPage({
         const data = await fetchJSON(`/api/channel/${encodeURIComponent(channelId)}?v=2`);
         setChannelData(data);
         if (data && data.title) {
-          document.title = `${data.title} - XeroxYT-NTv7`;
+          document.title = `${data.title} - XeroxYT-NTv7 for GAS`;
         }
         setVideoList(data.videos || []);
         setShortList((data.shortVideos || []).filter((v: Video) => v.isShort));
@@ -660,7 +660,7 @@ export default function ChannelPage({
                     onClick={() => onVideoSelect(live.videoId)}
                     className="group cursor-pointer flex flex-col gap-2"
                   >
-                    <div className="aspect-video rounded-xl overflow-hidden bg-black relative border border-gray-200 shadow-2xs">
+                    <div className="thumbnail-frame aspect-video rounded-xl overflow-hidden bg-black relative border border-gray-200 shadow-2xs">
                       <img
                         src={live.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${live.videoId}/hqdefault.jpg`}
                         alt={live.title}
@@ -817,7 +817,7 @@ export default function ChannelPage({
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {(channelData.playlists || []).map((pl) => (
               <div key={pl.id} className="group cursor-pointer flex flex-col gap-2">
-                <div className="aspect-video rounded-xl overflow-hidden bg-gray-100 relative border border-gray-200 shadow-2xs">
+                <div className="thumbnail-frame aspect-video rounded-xl overflow-hidden bg-gray-100 relative border border-gray-200 shadow-2xs">
                   <img
                     src={pl.thumbnail}
                     alt={pl.title}

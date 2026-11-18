@@ -5,9 +5,15 @@ import {serviceForPath,services} from './social/services.mjs';
 const SocialApp=lazy(()=>import('./social/SocialApp'));
 import AccountGate from './components/AccountGate';
 import PWAUpdateIndicator from './components/PWAUpdateIndicator';
+import PrivateModeGate from './components/PrivateModeGate';
+import {watchTheme} from './lib/theme.mjs';
+import './theme.css';
+import './theme-surfaces.css';
+import './display-settings.css';
 
 class ServiceBoundary extends Component<{children:ReactNode},{failed:boolean}>{state={failed:false};static getDerivedStateFromError(){return {failed:true};}render(){return this.state.failed?<section role="alert" className="p-10 text-center"><p>アプリを読み込めませんでした。通信環境を確認してください。</p><button className="m-4 underline" onClick={()=>window.location.reload()}>再読み込み</button><Link className="underline" to="/">YouTubeに戻る</Link></section>:this.props.children;}}
 export default function App() {
+  useEffect(()=>watchTheme(),[]);
   const location = useLocation();
   const service=serviceForPath(location.pathname);
 
@@ -27,7 +33,7 @@ export default function App() {
     <>
       <PWAUpdateIndicator />
       <Routes>
-        <Route path="/*" element={<AccountGate allowGuest={service!=='youtube'}><MainApp socialContent={service==='youtube'?undefined:<ServiceBoundary key={service}><Suspense fallback={<div role="status" className="p-10 text-center text-gray-500">アプリを読み込み中…</div>}><SocialApp key={service} service={service}/></Suspense></ServiceBoundary>}/></AccountGate>} />
+        <Route path="/*" element={<PrivateModeGate><AccountGate><MainApp socialContent={service==='youtube'?undefined:<ServiceBoundary key={service}><Suspense fallback={<div role="status" className="p-10 text-center text-gray-500">アプリを読み込み中…</div>}><SocialApp key={service} service={service}/></Suspense></ServiceBoundary>}/></AccountGate></PrivateModeGate>} />
       </Routes>
     </>
   );

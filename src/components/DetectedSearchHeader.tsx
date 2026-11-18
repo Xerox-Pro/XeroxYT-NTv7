@@ -117,7 +117,7 @@ export default function DetectedSearchHeader({
           className="flex flex-col sm:flex-row gap-4 p-3 bg-gray-50/50 hover:bg-gray-50 rounded-xl border border-gray-200/80 hover:border-gray-300 transition-colors cursor-pointer group"
         >
           {/* サムネイル */}
-          <div className="relative w-full sm:w-60 aspect-video bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-100">
+          <div className="thumbnail-frame relative w-full sm:w-60 aspect-video bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-100">
             <img
               src={`https://i.ytimg.com/vi/${detected.id}/hqdefault.jpg`}
               alt="動画サムネイル"
