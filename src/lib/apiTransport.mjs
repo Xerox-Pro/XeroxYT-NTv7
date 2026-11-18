@@ -16,7 +16,18 @@ export function apiFetch(path,options={}){
       &&/^\/api\/(auth|user)(\/|$)/.test(target)){
     return Promise.resolve(Response.json({error:'アカウント連携にはログインしてください。',code:'SITE_SESSION_REQUIRED'},{status:401}));
   }
-  return fetch(target,{...options,credentials:'same-origin'});
+  const headers=new Headers(options.headers);
+  const method=(options.method||'GET').toUpperCase();
+  if(method==='GET'&&/^\/api\/(?:recommendations|trending|search|suggestions|video|channel|channels|home|mix|shorts|shorts-ranking|user|playlists|playlist|sync)(?:[/?]|$)/.test(target))headers.set('X-XeroxYT-Sidecar','1');
+  return fetch(target,{...options,headers,credentials:'same-origin'}).then(response=>{
+    const sidecar=response.headers.get('X-XeroxYT-Sidecar');
+    if(sidecar){try{window.dispatchEvent(new CustomEvent('xerox-api-sidecar',{detail:JSON.parse(decodeURIComponent(sidecar))}));}catch{}}
+    if(response.status===403||response.status===429){void response.clone().json().then(data=>{
+      if(data?.code==='ACCOUNT_BANNED')window.dispatchEvent(new CustomEvent('xerox-account-banned'));
+      if(data?.code==='ACCOUNT_TIMEOUT')window.dispatchEvent(new CustomEvent('xerox-account-timeout',{detail:data}));
+    }).catch(()=>{});}
+    return response;
+  });
 }
 
 // Legacy name retained for the social clients; requests never go to Cloudflare

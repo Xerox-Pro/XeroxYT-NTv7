@@ -1,9 +1,9 @@
 import {useEffect,useState} from 'react';
-import {Link,useLocation} from 'react-router-dom';
+import {Link,useLocation,useNavigate} from 'react-router-dom';
 import {useSiteAccount} from './AccountGate';
 type Sidecar={threads?:Array<{id:string;status:string;incoming?:boolean;updatedAt:number;lastMine?:boolean;label:string}>;rooms?:Array<{id:string;status:string;lastAt:number;lastMine?:boolean;name:string}>};
 export default function MessageNotifications(){
- const username=useSiteAccount()?.username,location=useLocation(),[toast,setToast]=useState('');
+ const username=useSiteAccount()?.username,location=useLocation(),navigate=useNavigate(),[toast,setToast]=useState('');
  useEffect(()=>{if(location.pathname==='/messages'){window.dispatchEvent(new CustomEvent('xerox-dm-unread',{detail:0}));setToast('');}},[location.pathname]);
  useEffect(()=>{
   let initialized=false,unread=0;
@@ -28,12 +28,12 @@ export default function MessageNotifications(){
     hide=setTimeout(()=>setToast(''),6000);
     if('Notification' in window&&Notification.permission==='granted'){
      const notification=new Notification('新着メッセージ',{body:'DMに新しいメッセージがあります。',tag:'xerox-dm'});
-     notification.onclick=()=>{window.focus();window.location.hash='/messages';notification.close();};
+     notification.onclick=()=>{window.focus();navigate('/messages');notification.close();};
     }
    }
   };
-  window.addEventListener('xerox-gas-sidecar',receive);
-  return()=>{window.removeEventListener('xerox-gas-sidecar',receive);clearTimeout(hide);};
- },[username]);
+  window.addEventListener('xerox-api-sidecar',receive);
+  return()=>{window.removeEventListener('xerox-api-sidecar',receive);clearTimeout(hide);};
+ },[username,navigate]);
  return toast?<Link to="/messages" role="status" data-effect-controls className="fixed right-4 top-20 z-[310] max-w-xs rounded-2xl border border-purple-100 bg-white px-5 py-4 text-sm text-gray-900 shadow-xl">{toast}<span className="mt-1 block text-xs text-purple-600">会話を開く →</span></Link>:null;
 }

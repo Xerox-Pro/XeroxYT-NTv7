@@ -16,8 +16,8 @@ export default function VisualModes(){
    const next=(event as CustomEvent<{mode?:string}>).detail?.mode;
    if(typeof next==='string')setMode(['chaos','chaos2','jelly','spin'].includes(next)?next as Mode:'off');
   };
-  window.addEventListener('xerox-gas-sidecar',apply);
-  return()=>window.removeEventListener('xerox-gas-sidecar',apply);
+  window.addEventListener('xerox-api-sidecar',apply);
+  return()=>window.removeEventListener('xerox-api-sidecar',apply);
  },[username]);
  useEffect(()=>{
   if(mode==='off')return;
@@ -30,7 +30,7 @@ export default function VisualModes(){
    if(!constructors.length){setSensorMessage('この端末には傾きセンサーがありません。「揺らす」を使えます。');return;}
    const results=await Promise.all(constructors.map(type=>typeof type.requestPermission==='function'?type.requestPermission():Promise.resolve('granted')));
    setSensorGranted(results.some(value=>value==='granted'));setSensorMessage(results.some(value=>value==='granted')?'センサーを有効にしました。端末を傾けたり、軽く振ってください。':'センサーの利用が許可されませんでした。「揺らす」を使えます。');
-  }catch{setSensorMessage('ブラウザまたはGASの制限によりセンサーを使えません。「揺らす」を使えます。');}
+  }catch{setSensorMessage('ブラウザの制限によりセンサーを使えません。「揺らす」を使えます。');}
  };
  if(mode==='off'||mode==='jelly'||mode==='spin'||!requiresPermission||sensorGranted)return null;
  return <aside data-effect-controls className="fixed bottom-3 right-3 z-[290] max-w-xs rounded-xl bg-white p-2 text-xs shadow"><button onClick={()=>void enableSensors()}>傾き操作を許可</button>{sensorMessage&&<p role="status">{sensorMessage}</p>}</aside>;

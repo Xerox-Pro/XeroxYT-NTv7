@@ -214,25 +214,25 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
 
   useEffect(() => {
     if (view === 'search' && searchQuery) {
-      document.title = `${searchQuery} - XeroxYT-NTv7 for GAS`;
+      document.title = `${searchQuery} - XeroxYT-NTv7`;
     } else if (view === 'shorts') {
-      document.title = 'ショート - XeroxYT-NTv7 for GAS';
+      document.title = 'ショート - XeroxYT-NTv7';
     } else if (view === 'home') {
-      document.title = 'XeroxYT-NTv7 for GAS';
+      document.title = 'XeroxYT-NTv7';
     } else if (view === 'subscriptions') {
-      document.title = '登録チャンネル - XeroxYT-NTv7 for GAS';
+      document.title = '登録チャンネル - XeroxYT-NTv7';
     } else if (view === 'library') {
-      document.title = 'ライブラリ - XeroxYT-NTv7 for GAS';
+      document.title = 'ライブラリ - XeroxYT-NTv7';
     } else if (view === 'history') {
-      document.title = '履歴 - XeroxYT-NTv7 for GAS';
+      document.title = '履歴 - XeroxYT-NTv7';
     } else if (view === 'system') {
-      document.title = 'システム設定 - XeroxYT-NTv7 for GAS';
+      document.title = 'システム設定 - XeroxYT-NTv7';
     } else if (view === 'settings') {
-      document.title = '表示・再生設定 - XeroxYT-NTv7 for GAS';
+      document.title = '表示・再生設定 - XeroxYT-NTv7';
     } else if (view === 'announcements') {
-      document.title = 'お知らせ - XeroxYT-NTv7 for GAS';
+      document.title = 'お知らせ - XeroxYT-NTv7';
     } else if (view === 'license') {
-      document.title = 'ライセンス & 製作者クレジット - XeroxYT-NTv7 for GAS';
+      document.title = 'ライセンス & 製作者クレジット - XeroxYT-NTv7';
     }
   }, [view, searchQuery]);
 
