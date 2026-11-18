@@ -4,6 +4,11 @@ let lastParams='';
 let refreshedAt=0;
 let inFlight=null;
 const CONFIG_TTL=15*60*1000;
+const CONFIG_KEY='xerox_gas_public_embed_config_v1';
+try{
+ const saved=JSON.parse(localStorage.getItem(CONFIG_KEY)||'null');
+ if(saved&&typeof saved.params==='string'&&saved.params.length<64000&&!/[<>]/.test(saved.params)&&saved.params.includes('=')&&Number.isFinite(saved.at)&&saved.at<=Date.now()&&Date.now()-saved.at<CONFIG_TTL){lastParams=saved.params;refreshedAt=saved.at;}
+}catch{}
 function withCancellation(task,signal){
   if(!signal)return task;
   signal.throwIfAborted();
@@ -24,10 +29,13 @@ async function playerParams(signal){
     if(text.startsWith('{')){const data=JSON.parse(text);if(typeof data.params!=='string')throw new Error('Invalid configuration');text=data.params.replace(/&amp;/g,'&').trim();}
     const index=text.indexOf('?');if(index>=0)text=text.slice(index+1);else text=text.replace(/^[?&]/,'');
     if(!text||/[<>]/.test(text)||!text.includes('='))throw new Error('Invalid configuration');
-    lastParams=text;refreshedAt=Date.now();return text;
+    lastParams=text;refreshedAt=Date.now();
+    try{localStorage.setItem(CONFIG_KEY,JSON.stringify({params:lastParams,at:refreshedAt}));}catch{}
+    return text;
   })().finally(()=>{inFlight=null;});
   try{return await withCancellation(inFlight,signal);}catch(error){if(signal?.aborted)throw error;return lastParams;}
 }
+export function warmDeviceEmbedConfig(){void playerParams().catch(()=>{});}
 export async function getDeviceEmbedUrl(id,signal) {
   signal?.throwIfAborted();
   const params=await playerParams(signal);
@@ -36,4 +44,4 @@ export async function getDeviceEmbedUrl(id,signal) {
   return url.toString();
 }
 
-export function invalidateDeviceEmbedConfig(){refreshedAt=0;lastParams='';}
+export function invalidateDeviceEmbedConfig(){refreshedAt=0;lastParams='';try{localStorage.removeItem(CONFIG_KEY);}catch{}}

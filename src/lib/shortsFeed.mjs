@@ -50,8 +50,8 @@ export function discoveryRequest(query, page, session, excluded = []) {
   params.set('page', String(page)); params.set('session', session);
   const ids = [...new Set(excluded.filter(id => /^[\w-]{11}$/.test(id)))].slice(0, 300);
   if (ids.length) params.set('exclude', ids.join(','));
-  let personalized=false;try{personalized=localStorage.getItem('xerox_youtube_linked')==='1'&&!['search','channel'].includes(params.get('source'));}catch{}
-  return `${personalized?'/api/user/feed/shorts':'/api/shorts'}?${params}`;
+  let recommended=false;try{recommended=(localStorage.getItem('xerox_youtube_linked')==='1'||localStorage.getItem('xerox_shared_recommendations')==='1')&&!['search','channel'].includes(params.get('source'));}catch{}
+  return `${recommended?'/api/user/feed/shorts':'/api/shorts'}?${params}`;
 }
 export function unseenRankingFirst(videos, seenIds, keepId, seed) {
   if (seed) {
