@@ -348,7 +348,7 @@ export default function LibraryPage({
                 onClick={() => onVideoSelect(item.videoId)}
                 className="group cursor-pointer flex flex-col gap-1.5"
               >
-                <div className="aspect-video rounded-xl overflow-hidden bg-gray-100 relative border border-gray-200">
+                <div className="thumbnail-frame aspect-video rounded-xl overflow-hidden bg-gray-100 relative border border-gray-200">
                   <VideoThumbnail videoId={item.videoId} fallback={item.thumbnailUrl} sizes="240px"/>
                 </div>
                 <h4 className="text-xs font-bold text-gray-900 line-clamp-1 group-hover:text-red-600 transition-colors">
@@ -571,7 +571,7 @@ export default function LibraryPage({
                             className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
                           >
                             <span className="text-xs font-bold text-gray-400 w-6 text-center shrink-0">{idx + 1}</span>
-                            <div className="w-20 aspect-video rounded-lg overflow-hidden bg-gray-100 relative shrink-0 border border-gray-100">
+                            <div className="thumbnail-frame w-20 aspect-video rounded-lg overflow-hidden bg-gray-100 relative shrink-0 border border-gray-100">
                               <VideoThumbnail videoId={video.videoId} fallback={video.videoThumbnails?.[0]?.url} sizes="160px"/>
                             </div>
                             <div className="flex-1 min-w-0">
@@ -650,7 +650,7 @@ export default function LibraryPage({
                       onClick={() => onVideoSelect(video.videoId!, video)}
                       className="flex items-center gap-3 p-2 bg-white rounded-xl border border-gray-100 hover:border-gray-200 cursor-pointer transition-all hover:shadow-xs group"
                     >
-                      <div className="w-16 aspect-video rounded-lg overflow-hidden bg-gray-100 relative shrink-0 border border-gray-100">
+                      <div className="thumbnail-frame w-16 aspect-video rounded-lg overflow-hidden bg-gray-100 relative shrink-0 border border-gray-100">
                         <VideoThumbnail videoId={video.videoId} fallback={video.videoThumbnails?.[0]?.url} sizes="160px"/>
                       </div>
                       <div className="flex-1 min-w-0">
@@ -712,7 +712,7 @@ export default function LibraryPage({
                       }}
                       className="flex items-center gap-3.5 p-2 bg-white rounded-xl border border-gray-100 hover:border-red-100 cursor-pointer transition-all hover:shadow-xs group"
                     >
-                      <div className="w-16 aspect-video rounded-lg overflow-hidden bg-gray-100 relative shrink-0 border border-gray-100">
+                      <div className="thumbnail-frame w-16 aspect-video rounded-lg overflow-hidden bg-gray-100 relative shrink-0 border border-gray-100">
                         {pl.thumbnails ? (
                           <img
                             src={pl.thumbnails}

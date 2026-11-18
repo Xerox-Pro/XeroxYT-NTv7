@@ -488,7 +488,7 @@ export default function Navbar({
 
                 <div className="flex gap-3 items-center">
                   {/* 動画サムネイル */}
-                  <div className="relative w-28 sm:w-36 aspect-video bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-100">
+                  <div className="thumbnail-frame relative w-28 sm:w-36 aspect-video bg-gray-100 rounded-lg overflow-hidden shrink-0 border border-gray-100">
                     <img
                       src={`https://i.ytimg.com/vi/${detectedLink.id}/hqdefault.jpg`}
                       alt="サムネイル"

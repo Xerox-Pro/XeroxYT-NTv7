@@ -10,8 +10,11 @@ export default function PWAUpdateIndicator() {
     };
 
     window.addEventListener('pwa-updating', handleUpdating);
+    const finished=()=>setIsUpdating(false);
+    window.addEventListener('pwa-update-finished',finished);
     return () => {
       window.removeEventListener('pwa-updating', handleUpdating);
+      window.removeEventListener('pwa-update-finished',finished);
     };
   }, []);
 

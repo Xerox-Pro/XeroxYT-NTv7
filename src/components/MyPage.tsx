@@ -2,6 +2,8 @@ import {useYouTubeLinked} from '../lib/youtubeConnection';
 import VideoThumbnail from "./VideoThumbnail";
 import RecommendationDebug from "./RecommendationDebug";
 import TransportSettings from "./TransportSettings";
+import ThemeSettings from "./ThemeSettings";
+import LocalDataPanel from "./LocalDataPanel";
 import {
   useEffect,
   useRef,
@@ -21,7 +23,7 @@ import {
   History,
   Plus,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useSiteAccount } from "./AccountGate";
 import { useDeviceProfile, readProfileImage } from "../lib/deviceProfile";
 import type LibraryPage from "./LibraryPage";
@@ -88,6 +90,7 @@ export default function MyPage(props: Props) {
         </button>
       </section>
       {props.youtubeConnection}
+      <LocalDataPanel />
       <div className="my-account-actions">
         <button type="button" onClick={() => setDebugOpen(true)}>おすすめ分析（デバッグ）</button>
         <button onClick={() => void account?.logout()}>
@@ -199,6 +202,8 @@ export default function MyPage(props: Props) {
         </section>
       )}
       <TransportSettings />
+      <ThemeSettings />
+      <p className="my-4"><Link className="underline" to="/settings">表示・再生設定（サイズ・ショートなど10項目）</Link> · <Link className="underline" to="/announcements">お知らせ</Link></p>
       <dialog
         ref={dialog}
         className="profile-dialog"

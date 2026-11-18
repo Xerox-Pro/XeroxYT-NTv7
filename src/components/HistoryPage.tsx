@@ -129,7 +129,7 @@ export default function HistoryPage({
               {/* サムネイル */}
               <div
                 onClick={() => onVideoSelect(item.videoId)}
-                className="w-full sm:w-60 aspect-video rounded-xl overflow-hidden bg-gray-100 relative cursor-pointer shrink-0 border border-gray-200 shadow-2xs group-hover:shadow-sm"
+                className="thumbnail-frame w-full sm:w-60 aspect-video rounded-xl overflow-hidden bg-gray-100 relative cursor-pointer shrink-0 border border-gray-200 shadow-2xs group-hover:shadow-sm"
               >
                 <VideoThumbnail videoId={item.videoId} fallback={item.thumbnailUrl} sizes="240px"/>
                 {item.lengthSeconds && (
