@@ -3,8 +3,8 @@ import {createPortal} from 'react-dom';
 import {useLocation,useNavigate} from 'react-router-dom';
 import {ChevronDown,Check,X} from 'lucide-react';
 import {services,serviceForPath} from '../social/services.mjs';
-const logos={youtube:'/app-icons/youtube.png',instagram:'/app-icons/instagram.png',tiktok:'/app-icons/tiktok.png'};
-function ServiceIcon({service}:{service:string}){return service==='youtube'?<><img className="app-icon-light" src={logos.youtube} alt=""/><img className="app-icon-dark" src={'/app-icons/youtube-dark.png'} alt=""/></>:<img src={logos[service as keyof typeof logos]} alt=""/>;}
+const logos={youtube:'/app-icons/youtube.jpeg',instagram:'/app-icons/instagram.png',tiktok:'/app-icons/tiktok.png'};
+function ServiceIcon({service}:{service:string}){return service==='youtube'?<><img className="app-icon-light" src={logos.youtube} alt=""/><img className="app-icon-dark" src={'/app-icons/youtube.jpeg'} alt=""/></>:<img src={logos[service as keyof typeof logos]} alt=""/>;}
 const DOUBLE_TAP_MS=500;
 export default function AppSwitcher({compact=false}:{compact?:boolean}){
  const location=useLocation(),navigate=useNavigate(),active=serviceForPath(location.pathname);
@@ -20,7 +20,7 @@ export default function AppSwitcher({compact=false}:{compact?:boolean}){
  onPointerUp={event=>{if(event.pointerType==='touch'){lastTouch.current=Date.now();tap();}}}
  onClick={event=>{if(Date.now()-lastTouch.current<600)return;tap();}}
  onDoubleClick={showPicker} onKeyDown={event=>{if(event.key==='ArrowDown'){event.preventDefault();showPicker();}}}>
- <ServiceIcon service={active}/><span>{active==='youtube'?'XeroxYT-NTv7 for GAS':services.find(service=>service.id===active)?.name}</span></button><button type="button" className="app-picker-trigger" aria-label="アプリ一覧を開く" onClick={showPicker}><ChevronDown size={16}/></button>
+ <ServiceIcon service={active}/><span>{active==='youtube'?'XeroxYT-NTv7':services.find(service=>service.id===active)?.name}</span></button><button type="button" className="app-picker-trigger" aria-label="アプリ一覧を開く" onClick={showPicker}><ChevronDown size={16}/></button>
  {open&&createPortal(<dialog ref={dialog} className="app-picker" aria-labelledby="app-picker-title" onCancel={()=>setOpen(false)} onClick={event=>{if(event.target===event.currentTarget)setOpen(false);}}><div className="app-picker-content"><header><div><small>Xerox apps</small><h2 id="app-picker-title">アプリを選択</h2></div><button aria-label="閉じる" onClick={()=>setOpen(false)}><X size={22}/></button></header><div className="app-picker-grid">{services.map(service=><button key={service.id} aria-current={active===service.id?'page':undefined} onClick={()=>{setOpen(false);if(service.id!==active){window.dispatchEvent(new CustomEvent('xerox-service-switch',{detail:service.id}));navigate(service.home);}}}><ServiceIcon service={service.id}/><span>{service.name}</span>{active===service.id&&<Check size={17}/>}</button>)}</div><p>Instagram・TikTok・YouTubeの非公式クライアントです。</p></div></dialog>,document.body)}
  </div>;
 }

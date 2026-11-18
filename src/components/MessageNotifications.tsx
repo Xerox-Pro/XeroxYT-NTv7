@@ -21,7 +21,7 @@ export default function MessageNotifications(){
     if(initialized&&!item.mine&&item.time>previous){unread++;latest=item.label;}
    }
    initialized=true;
-   if(latest&&!window.location.hash.startsWith('#/messages')){
+   if(latest&&location.pathname!=='/messages'){
     setToast(latest+'に新着メッセージがあります');
     window.dispatchEvent(new CustomEvent('xerox-dm-unread',{detail:unread}));
     clearTimeout(hide);
@@ -34,6 +34,6 @@ export default function MessageNotifications(){
   };
   window.addEventListener('xerox-api-sidecar',receive);
   return()=>{window.removeEventListener('xerox-api-sidecar',receive);clearTimeout(hide);};
- },[username,navigate]);
+ },[username,navigate,location.pathname]);
  return toast?<Link to="/messages" role="status" data-effect-controls className="fixed right-4 top-20 z-[310] max-w-xs rounded-2xl border border-purple-100 bg-white px-5 py-4 text-sm text-gray-900 shadow-xl">{toast}<span className="mt-1 block text-xs text-purple-600">会話を開く →</span></Link>:null;
 }
