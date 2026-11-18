@@ -78,10 +78,6 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
     const controller = new AbortController();
     setUrl(''); setError(''); detail.current = null;
     detail.current = video;
-    // Metadata is optional: it must never block the device-built player.
-    fetchJSON(`/api/shorts/${video.videoId}?title=${encodeURIComponent(video.title.slice(0, 160))}&details=2`, {signal:controller.signal}).then(metadata=>{
-      if(!cancelled&&metadata){detail.current=metadata;callbacks.current.onMetadata(metadata);}
-    }).catch(()=>{});
     getShortEmbedUrl(video.videoId,controller.signal,attempt>0).then(rawUrl=>{
       if(cancelled)return;
       const parsed = new URL(rawUrl);
@@ -96,6 +92,17 @@ function ShortEmbed({ video, onRecord, onMetadata, onEnded, autoScroll, children
     }).catch(reason => { if (!cancelled) setError(reason.message || '動画を読み込めませんでした。'); });
     return () => { cancelled = true; controller.abort(); };
   }, [video.videoId, attempt]);
+  // Fetch optional metadata only for the active slide after it settles.
+  useEffect(() => {
+    if (!active) return;
+    const controller=new AbortController();
+    const timer=window.setTimeout(()=>{
+      fetchJSON(`/api/shorts/${video.videoId}?title=${encodeURIComponent(video.title.slice(0,160))}&details=2`,{signal:controller.signal}).then(metadata=>{
+        if(!controller.signal.aborted&&metadata){detail.current=metadata;callbacks.current.onMetadata(metadata);}
+      }).catch(()=>{});
+    },350);
+    return ()=>{clearTimeout(timer);controller.abort();};
+  },[active,video.videoId]);
   useEffect(() => {
     let hiddenAt = document.hidden ? Date.now() : 0;
     const resume = () => {

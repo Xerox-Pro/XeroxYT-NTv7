@@ -50,18 +50,18 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onClick, onSelectChannel, 
   };
 
   return (
-    <motion.div 
+    <motion.div data-physics-piece
       viewport={{ once: true, amount: 0.6 }}
       onViewportEnter={() => { if (!video.isShort) recordImpression(video.videoId); }}
       whileHover={{ y: -3 }}
       whileTap={{ scale: 0.98 }}
       transition={{ duration: 0.18, ease: "easeOut" }}
-      className="group cursor-pointer flex flex-col select-none"
+      className="video-card group cursor-pointer flex flex-col select-none"
     >
       {/* 16:9 サムネイルカード */}
       <div 
         onClick={onClick}
-        className="relative aspect-video rounded-xl overflow-hidden bg-gray-100 border border-gray-200/80 shadow-2xs group-hover:shadow-md transition-shadow duration-300"
+        className="thumbnail-frame relative aspect-video rounded-xl overflow-hidden bg-gray-100 border border-gray-200/80 shadow-2xs group-hover:shadow-md transition-shadow duration-300"
       >
         {imgSrc ? (
           <VideoThumbnail preferMaxResolution={preferMaxResolution||video.isShort} videoId={video.videoId} fallback={imgSrc} alt={video.title} className="transition-transform duration-300 ease-out group-hover:scale-105"/>
@@ -96,7 +96,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onClick, onSelectChannel, 
         {!hideChannelInfo && (
           <button 
             onClick={handleChannelClick}
-            className="shrink-0 hover:scale-105 active:scale-95 transition-transform duration-150 mt-0.5"
+            className="video-card-avatar shrink-0 hover:scale-105 active:scale-95 transition-transform duration-150 mt-0.5"
             title={`${authorName}のチャンネルを開く`}
           >
             <Avatar 
@@ -132,7 +132,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onClick, onSelectChannel, 
               </span>
             )}
             <span onClick={onClick} className="text-gray-500 text-xs mt-0.5">
-              {formatNumberJP(video.viewCount)}回視聴 • {video.publishedText}
+              <span className="video-card-views">{formatNumberJP(video.viewCount)}回視聴 </span><span className="video-card-date">{video.publishedText}</span>
             </span>
           </div>
         </div>

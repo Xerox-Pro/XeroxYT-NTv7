@@ -1,8 +1,8 @@
 import AppSwitcher from './AppSwitcher';
-import React from 'react';
+import React,{useEffect,useState} from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Home, Zap, PlaySquare, Folder, History, ThumbsUp, Wrench } from 'lucide-react';
+import { Home, Zap, PlaySquare, Folder, History, ThumbsUp, Wrench, ShieldCheck, MessageCircle, Bell, Settings } from 'lucide-react';
 import { ChannelSubscription } from '../types';
 import Avatar from './Avatar';
 
@@ -15,6 +15,8 @@ interface SidebarProps {
   onLibrary?: () => void;
   onHistory?: () => void;
   onDebugAPI?: () => void;
+  onSystemSettings?: () => void;
+  showSystemSettings?: boolean;
   subscriptions?: ChannelSubscription[];
   ownChannel?: ChannelSubscription;
   onSelectChannel?: (channelId: string) => void;
@@ -28,7 +30,10 @@ const section1 = [
 
 const section2 = [
   { icon: Folder, label: 'ライブラリ', activeValue: 'library', path: '/feed/library' },
+  { icon: MessageCircle, label: 'DM', activeValue: 'messages', path: '/messages' },
   { icon: History, label: '履歴', activeValue: 'history', path: '/feed/history' },
+  { icon: Bell, label: 'お知らせ', activeValue: 'announcements', path: '/announcements' },
+  { icon: Settings, label: '設定', activeValue: 'settings', path: '/settings' },
 ];
 
 export default function Sidebar({ 
@@ -40,10 +45,14 @@ export default function Sidebar({
   onLibrary,
   onHistory,
   onDebugAPI,
+  onSystemSettings,
+  showSystemSettings = false,
   subscriptions = [],
   ownChannel, 
   onSelectChannel 
 }: SidebarProps) {
+  const [unread,setUnread]=useState(0);
+  useEffect(()=>{const changed=(event:Event)=>setUnread(Number((event as CustomEvent).detail)||0);window.addEventListener('xerox-dm-unread',changed);return()=>window.removeEventListener('xerox-dm-unread',changed);},[]);
   
   const handleClick = (activeValue: string) => {
     if (activeValue === 'toggle' && onClose) {
@@ -61,6 +70,8 @@ export default function Sidebar({
       onHistory();
     } else if (activeValue === 'debug' && onDebugAPI) {
       onDebugAPI();
+    } else if (activeValue === 'system' && onSystemSettings) {
+      onSystemSettings();
     }
 
     if (window.innerWidth < 1280 && onClose) {
@@ -90,7 +101,7 @@ export default function Sidebar({
             className={`shrink-0`} 
           />
           <span className={isOpen ? 'text-[14px] truncate' : 'text-[10px] text-center truncate w-full'}>
-            {link.label}
+            {link.label}{link.activeValue==='messages'&&unread>0&&<span className="ml-1 rounded-full bg-purple-600 px-1.5 text-[10px] text-white">{unread>99?'99+':unread}</span>}
           </span>
         </Link>
       </motion.div>
@@ -150,6 +161,14 @@ export default function Sidebar({
                   APIデバッグ
                 </span>
               </Link>
+              {showSystemSettings && <Link
+                to="/system/settings"
+                onClick={() => handleClick('system')}
+                className={`w-full flex items-center gap-4 px-3 py-2 rounded-xl transition-colors ${currentView === 'system' ? 'bg-gray-100 text-black font-semibold' : 'text-gray-800 hover:bg-gray-100 font-normal'}`}
+              >
+                <ShieldCheck size={22} strokeWidth={currentView === 'system' ? 2.2 : 1.8} className="shrink-0 text-red-600" />
+                <span className="text-[14px] truncate">システム設定</span>
+              </Link>}
             </div>
 
             {/* セクション 3 (登録チャンネル) */}
@@ -188,6 +207,7 @@ export default function Sidebar({
           <>
             <hr className="border-gray-200 my-1.5" />
             <div className="flex flex-col gap-1">
+              {section2.filter(link=>link.activeValue==='announcements'||link.activeValue==='settings').map(renderLink)}
               <Link
                 to="/feed/library"
                 onClick={() => handleClick('library')}
@@ -197,6 +217,12 @@ export default function Sidebar({
                 <Folder size={20} strokeWidth={1.8} />
                 <span className="text-[10px] text-center truncate w-full">ライブラリ</span>
               </Link>
+              <Link
+                to="/messages"
+                onClick={() => handleClick('messages')}
+                className="w-full flex flex-col items-center justify-center py-2.5 px-1 rounded-lg gap-1 text-gray-800 hover:bg-gray-100"
+                title="DM"
+              ><MessageCircle size={20}/><span className="text-[10px] text-center w-full">DM</span></Link>
               <Link
                 to="/feed/history"
                 onClick={() => handleClick('history')}

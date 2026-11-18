@@ -295,10 +295,10 @@ export default function VideoPlayer({
     }
   };
 
-  // ドキュメントタイトルの更新 (動画表示時: タイトル - XeroxYT-NTv7)
+  // ドキュメントタイトルの更新 (動画表示時: タイトル - XeroxYT-NTv7 for GAS)
   useEffect(() => {
     if (!isMini && activeVideo && activeVideo.title) {
-      document.title = `${activeVideo.title} - XeroxYT-NTv7`;
+      document.title = `${activeVideo.title} - XeroxYT-NTv7 for GAS`;
     }
   }, [activeVideo.title, isMini]);
 
@@ -1180,6 +1180,7 @@ export default function VideoPlayer({
       <div className="flex-1 min-w-0 md:flex-[1_1_72%] lg:flex-[1_1_75%] xl:flex-[1_1_78%]">
         <div
           ref={playerContainerRef}
+          data-physics-piece
           tabIndex={0}
           className="w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-xl border border-gray-200 relative max-h-[85vh] group outline-hidden focus:ring-2 focus:ring-blue-500/20"
         >
@@ -1377,6 +1378,7 @@ export default function VideoPlayer({
                 </motion.button>
               )}
 
+              
               <motion.button
                 aria-label="共有"
                 title="共有"
@@ -1632,7 +1634,7 @@ export default function VideoPlayer({
                 className="flex gap-2.5 group cursor-pointer"
                 onClick={() => onVideoSelect(recVideo.videoId || '', recVideo)}
               >
-                <div className="w-[160px] shrink-0 relative aspect-video rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                <div className="thumbnail-frame w-[160px] shrink-0 relative aspect-video rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
                   <img
                     src={recVideo.videoThumbnails?.[0]?.url || (recVideo.videoId ? `https://i.ytimg.com/vi/${recVideo.videoId}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=320&auto=format&fit=crop')}
                     alt={recVideo.title}

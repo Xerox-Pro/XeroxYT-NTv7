@@ -1,0 +1,3 @@
+import {useEffect,useState} from 'react';
+import {readTheme,setTheme} from '../lib/theme.mjs';
+export default function ThemeSettings(){const [mode,setMode]=useState(readTheme);useEffect(()=>{const changed=()=>setMode(readTheme());window.addEventListener('xerox-theme-changed',changed);return()=>window.removeEventListener('xerox-theme-changed',changed);},[]);return <section className="transport-settings"><label htmlFor="appearance-theme">表示テーマ</label><select id="appearance-theme" value={mode} onChange={event=>setTheme(event.target.value)}><option value="system">デバイスに合わせる（標準）</option><option value="light">ライトモード</option><option value="dark">ダークモード</option></select><p>デバイスに合わせる場合、端末のダーク／ライト設定の変更にも自動で追従します。</p></section>;}
