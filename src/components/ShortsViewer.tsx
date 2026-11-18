@@ -17,6 +17,7 @@ import type { ReactNode } from 'react';
 import Avatar from './Avatar';
 import { Video } from '../types';
 import { fetchJSON, formatNumberJP } from '../utils';
+import { loadShortsWithFallback } from '../lib/shortsFallback.mjs';
 import { appendShortsInOrder, excludeSeenShorts, isShortsLocation, MAX_SHORT_PAGES, mixShorts, createShortsSession, readSeenShorts, recordSeenShort, discoveryRequest, unseenRankingFirst } from '../lib/shortsFeed.mjs';
 import ShortsComments from './ShortsComments';
 import { getShortEmbedUrl } from '../lib/shortsEmbedCache.mjs';
@@ -185,6 +186,7 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
   const [session] = useState(createShortsSession);
   const [seenOnEntry] = useState(readSeenShorts);
   const personalCursor=useRef('');
+  const personalFallback=useRef(false);
   const regularRef = useRef<Video[]>([]);
   const [regular, setRegular] = useState<Video[]>(channelMode && channelStart ? [...channelStart.videos] : seed.current ? [seed.current] : []);
   const [ranking, setRanking] = useState<Video[]>([]);
@@ -244,12 +246,16 @@ export default function ShortsViewer({ initialId, initialVideo, context, onRecor
       return () => { cancelled = true; controller.abort(); };
     }
     const excluded = [...regularRef.current.map(video => video.videoId!), ...readSeenShorts()];
-    if(page===1)personalCursor.current='';
+    if(page===1){personalCursor.current='';personalFallback.current=false;}
+    const publicRequest=discoveryRequest(withShortsInterests(query,page),page,session,excluded).replace(/^\/api\/user\/feed\/shorts/, '/api/shorts');
     let request=discoveryRequest(withShortsInterests(query,page),page,session,excluded);
     if(personalized){const params=new URLSearchParams();if(personalCursor.current)params.set('continuation',personalCursor.current);else if(seed.current?.videoId)params.set('videoId',seed.current.videoId);request='/api/user/shorts-sequence?'+params;}
-    fetchShortsPage(request, controller.signal).then(data => {
+    loadShortsWithFallback({
+      personalized, fallbackActive:personalFallback.current, primaryUrl:request, publicUrl:publicRequest,
+      load:url=>fetchShortsPage(url,controller.signal),
+    }).then(({data,usedFallback}) => {
       if (cancelled) return;
-      if(personalized)personalCursor.current=data.continuation||'';
+      if(personalized){personalFallback.current=usedFallback;if(!usedFallback)personalCursor.current=data.continuation||'';}
       const fetched=(data.videos||[]).filter((video:Video)=>video.isShort);
       const items:Video[]=personalized?excludeSeenShorts(fetched,readSeenShorts(),seed.current?.videoId):rankCandidates(excludeSeenShorts(fetched,readSeenShorts(),seed.current?.videoId),{short:true,seed:session,seen:readSeenShorts()});
       setRegular(previous => appendShortsInOrder(previous,items));

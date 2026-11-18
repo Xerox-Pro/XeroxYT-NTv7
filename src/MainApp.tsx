@@ -83,6 +83,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   const [youtubeActionError,setYoutubeActionError]=useState('');
   useEffect(()=>{const show=(event:Event)=>setYoutubeActionError(String((event as CustomEvent).detail||''));window.addEventListener('xerox-youtube-action-error',show);return()=>window.removeEventListener('xerox-youtube-action-error',show);},[]);
   const personalHomeCursor=useRef('');
+  const publicHomeFallback=useRef(false);
   const [activeMix,setActiveMix]=useState<{id:string;cursor:string;linked:boolean}|null>(null);
   const mixLoading=useRef(false);
   const activeMixRef=useRef(activeMix);activeMixRef.current=activeMix;
@@ -662,10 +663,27 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
         page: pageNum.toString(),
         refreshNonce: Date.now().toString(),
       });
-      if(pageNum===1)personalHomeCursor.current='';
-      const result = userInfo?await fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current),{signal:inactiveRequests.current.signal}):await fetchJSON(`/api/recommendations?${queryParams.toString()}`,{signal:inactiveRequests.current.signal});
+      if(pageNum===1){personalHomeCursor.current='';publicHomeFallback.current=false;}
+      const publicUrl = `/api/recommendations?${queryParams.toString()}`;
+      let personalResult = Boolean(userInfo && !publicHomeFallback.current);
+      let result: any;
+      if(personalResult){
+        try {
+          result=await fetchJSON('/api/user/feed/home?continuation='+encodeURIComponent(personalHomeCursor.current),{signal:inactiveRequests.current.signal});
+          if(!Array.isArray(result?.videos)||result.videos.length===0){
+            result=await fetchJSON(publicUrl,{signal:inactiveRequests.current.signal});
+            publicHomeFallback.current=true;
+            personalResult=false;
+          }
+        }catch(error:any){
+          if(error?.isDailyLimit||[400,401,403,404,429].includes(error?.status))throw error;
+          result=await fetchJSON(publicUrl,{signal:inactiveRequests.current.signal});
+          publicHomeFallback.current=true;
+          personalResult=false;
+        }
+      }else result=await fetchJSON(publicUrl,{signal:inactiveRequests.current.signal});
       if (currentReqId !== recommendationRequestIdRef.current) return;
-      if(userInfo){personalHomeCursor.current=result.continuation||'';setHasMore(!!result.hasMore);}
+      if(personalResult){personalHomeCursor.current=result.continuation||'';setHasMore(!!result.hasMore);}
 
       let publicData: Video[] = [];
       if (Array.isArray(result)) {
@@ -680,7 +698,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       }
 
       // フォールバック: 初回読み込みで動画が取得できなかった場合は人気動画(trending)を表示
-      if (!userInfo && publicData.length === 0 && data.length === 0 && pageNum === 1) {
+      if (!personalResult && publicData.length === 0 && data.length === 0 && pageNum === 1) {
         try {
           const trendingData = await fetchJSON('/api/trending');
           if (Array.isArray(trendingData) && trendingData.length > 0) {
@@ -705,7 +723,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
           uniqueMap.set(v.playlistId||v.videoId, v);
         }
       });
-      let finalData = spreadHome(userInfo?Array.from(uniqueMap.values()):prioritizeUnshown(Array.from(uniqueMap.values())));
+      let finalData = spreadHome(personalResult?Array.from(uniqueMap.values()):prioritizeUnshown(Array.from(uniqueMap.values())));
 
       if (append) {
         setVideos(prev => {
@@ -716,7 +734,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       } else {
         setVideos(finalData);
       }
-      setHasMore(userInfo?!!result.hasMore:finalData.length>0);
+      setHasMore(personalResult?!!result.hasMore:finalData.length>0);
     } catch (err: any) {
       if (currentReqId !== recommendationRequestIdRef.current) return;
       console.error(err);
