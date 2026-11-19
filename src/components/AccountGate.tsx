@@ -171,10 +171,11 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     const resume=()=>{if(!document.hidden)void verify();};
     // Refresh newly granted/revoked roles when returning to the app, without increasing background polling.
     const resumeNow=()=>{if(!document.hidden)void verify(true);};
+    const checkBanNow=()=>{lastCheck=0;void verify(true);};
     void verify(true);
     const interval=setInterval(resume,30000);
-    window.addEventListener('online',resumeNow);window.addEventListener('focus',resumeNow);window.addEventListener('xerox-ban-check',resumeNow);document.addEventListener('visibilitychange',resumeNow);
-    return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);window.removeEventListener('xerox-ban-check',resumeNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
+    window.addEventListener('online',resumeNow);window.addEventListener('focus',resumeNow);window.addEventListener('xerox-ban-check',checkBanNow);document.addEventListener('visibilitychange',resumeNow);
+    return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);window.removeEventListener('xerox-ban-check',checkBanNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
   },[initialize,cachedUser,lockBanned]);
 
   // Each visible browser tab reports its own presence. Background tabs do not count.
