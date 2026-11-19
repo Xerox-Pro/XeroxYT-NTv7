@@ -224,7 +224,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       if(cancelled||busy||Date.now()-lastCheck<(force?5000:300000))return;
       busy=true;lastCheck=Date.now();const epoch=authEpoch.current;
       try{
-        const {user:existing}=await api('/session');
+        const {user:existing,historyVersion}=await api('/session');
         if(cancelled||authEpoch.current!==epoch)return;
         if(!existing?.id)throw new Error('Invalid session response');
         if(banRef.current){localStorage.removeItem(BAN_LOCK_KEY);setBanRecord(null);}
@@ -234,7 +234,12 @@ export default function AccountGate({ children }: { children: ReactNode }) {
         // Stay on the current page during routine rechecks. On first load,
         // keep the app gated invisibly until the server has verified the cookie.
         if(wasAuthenticated&&!sameAccount)setPhase('checking');
-        await initialize(existing,false,wasAuthenticated&&sameAccount,true);
+        // The session already carries the server's history version. If unchanged,
+        // update roles and auth state without fetching the same history again.
+        if(wasAuthenticated&&sameAccount&&!cache.current.dirty&&Number.isSafeInteger(historyVersion)&&historyVersion===cache.current.version){
+          active.current=existing;setUser(existing);
+          localStorage.setItem(SESSION_HINT_KEY,JSON.stringify(existing));
+        }else await initialize(existing,false,wasAuthenticated&&sameAccount,true);
       }catch(err:any){
         if(cancelled||authEpoch.current!==epoch)return;
         if(err.code==='ACCOUNT_BANNED'){lockBanned();return;}
