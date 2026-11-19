@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, createContext, useContext, type ReactNode, type FormEvent } from 'react';
+import {useLocation} from 'react-router-dom';
 import VisualModes from './VisualModes';
 import DirectMessages from './DirectMessages';
 import MessageNotifications from './MessageNotifications';
@@ -15,6 +16,30 @@ const LEGACY_KEY = 'xerox_watch_history';
 const SESSION_HINT_KEY = 'xerox_site_session_hint';
 const BAN_LOCK_KEY = 'xerox_device_ban_v2';
 const accountKey = (id: string) => `xerox_account_history_${id}`;
+// Share only an in-app section and, for watch pages, a public video title.
+// Never send full URLs, search queries, message text or other private page content.
+function presencePage(path:string):{page:string;title:string}{
+ if(path.startsWith('/instagram')||path.startsWith('/tiktok')){
+  const service=path.startsWith('/instagram')?'Instagram':'TikTok';
+  const section=path.split('/')[2]||'home';
+  const labels:Record<string,string>={home:'ホーム',following:'フォロー中',reels:'リール',explore:'発見',search:'検索',messages:'メッセージ',inbox:'受信箱',profile:'プロフィール',login:'ログイン'};
+  return {page:service+' / '+(labels[section]||'その他'),title:''};
+ }
+ const labels:Record<string,string>={
+  '/':'ホーム','/watch':'動画','/shorts':'ショート','/results':'検索結果','/search':'検索',
+  '/feed/subscriptions':'登録チャンネル','/feed/library':'ライブラリ','/feed/history':'履歴',
+  '/settings':'設定','/announcements':'お知らせ','/messages':'メッセージ',
+  '/debug/api':'API情報','/system/settings':'システム管理','/license':'ライセンス',
+ };
+ const section=path.startsWith('/shorts/')?'ショート':path.startsWith('/channel/')?'チャンネル':labels[path]||'その他';
+ let title='';
+ if(path==='/watch'){
+  const current=document.title||'';
+  const match=/^(.{1,120}?) - XeroxYT-NTv7(?: for GAS)?$/.exec(current);
+  if(match&&match[1]!=='ショート'&&match[1]!=='XeroxYT-NTv7')title=match[1].replace(/[\x00-\x1f\x7f]/g,'').trim().slice(0,120);
+ }
+ return {page:'YouTube / '+section,title};
+}
 // These values are device-local; keep them separate when accounts share a browser.
 const deviceKeys = ['xerox_youtube_linked', 'xerox_short_history', 'xerox_youtube_credentials', 'xerox_user_info', 'xerox_subscriptions', 'xerox_user_playlists', 'xerox_ai_interests', 'xerox_video_cache'];
 function switchDeviceAccount(id: string) {
@@ -51,6 +76,9 @@ async function api(path: string, method = 'GET', body?: unknown) {
 }
 
 export default function AccountGate({ children }: { children: ReactNode }) {
+  const location=useLocation();
+  const pagePath=useRef(location.pathname);pagePath.current=location.pathname;
+  useEffect(()=>{window.dispatchEvent(new Event('xerox-presence-page-changed'));},[location.pathname]);
   const [timeoutUntil,setTimeoutUntil]=useState(0);
   useEffect(()=>{const listener=(event:Event)=>setTimeoutUntil(Number((event as CustomEvent).detail?.suspendedUntil)||Date.now()+600000);window.addEventListener('xerox-account-timeout',listener);const timer=setInterval(()=>setTimeoutUntil(value=>value&&value<=Date.now()?0:value),1000);return()=>{window.removeEventListener('xerox-account-timeout',listener);clearInterval(timer);};},[]);
   const [initialBan] = useState<BanRecord | null>(()=>read<BanRecord|null>(BAN_LOCK_KEY,null));
@@ -178,26 +206,78 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);window.removeEventListener('xerox-ban-check',checkBanNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
   },[initialize,cachedUser,lockBanned]);
 
-  // Each visible browser tab reports its own presence. Background tabs do not count.
+  // A light, foreground-only BAN check makes an existing page lock within ~4 seconds.
+  // This is intentionally separate from session/history synchronization.
+  useEffect(()=>{
+    if(phase!=='ready'||!user?.id)return;
+    let stopped=false,inFlight=false;
+    const check=async()=>{
+      if(stopped||inFlight||document.hidden)return;
+      inFlight=true;
+      try{
+        const response=await fetch('/api/account/ban-status',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(7000)});
+        if(!stopped&&response.status===403){
+          const data=await response.json().catch(()=>({}));
+          if(data.code==='ACCOUNT_BANNED')window.dispatchEvent(new Event('xerox-account-banned'));
+        }
+      }catch{}finally{inFlight=false;}
+    };
+    void check();
+    const interval=setInterval(()=>void check(),4000);
+    const resume=()=>void check();
+    document.addEventListener('visibilitychange',resume);
+    window.addEventListener('focus',resume);
+    window.addEventListener('online',resume);
+    return()=>{stopped=true;clearInterval(interval);document.removeEventListener('visibilitychange',resume);window.removeEventListener('focus',resume);window.removeEventListener('online',resume);};
+  },[phase,user?.id]);
+
+  // Each foreground tab reports its current in-site section. The video title is
+  // sent only for a watch page; search terms, DMs and external URLs stay private.
   useEffect(() => {
     if(phase!=='ready'||!user?.id)return;
     const tabId=crypto.randomUUID().replace(/-/g,'');
-    let stopped=false;
-    const send=(visible:boolean)=>{
+    let stopped=false,scheduled:ReturnType<typeof setTimeout>|undefined;
+    let lastSent='';
+    const send=(visible:boolean,force=false)=>{
       if(stopped&&visible)return;
+      const page=visible?presencePage(pagePath.current):{page:'',title:''};
+      const payload={tabId,visible,...page};
+      const serialized=JSON.stringify(payload);
+      if(visible&&!force&&serialized===lastSent)return;
+      if(visible)lastSent=serialized;
       void fetch('/api/account/presence',{
-        method:'POST',credentials:'same-origin',cache:'no-store',keepalive:true,
+        method:'POST',credentials:'same-origin',cache:'no-store',keepalive:!visible,
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({tabId,visible})
+        body:serialized,
+      }).then(async response=>{
+        if(!stopped&&response.status===403){
+          const data=await response.json().catch(()=>({}));
+          if(data.code==='ACCOUNT_BANNED')window.dispatchEvent(new Event('xerox-account-banned'));
+        }
       }).catch(()=>{});
     };
-    const onVisibility=()=>send(!document.hidden);
-    const onPageHide=()=>send(false);
-    if(!document.hidden)send(true);
-    const interval=setInterval(()=>{if(!document.hidden)send(true);},30000);
+    const schedule=()=>{
+      if(document.hidden)return;
+      if(scheduled)clearTimeout(scheduled);
+      scheduled=setTimeout(()=>send(true),300);
+    };
+    const onVisibility=()=>send(!document.hidden,true);
+    const onPageHide=()=>send(false,true);
+    const titleNode=document.querySelector('title');
+    const observer=titleNode?new MutationObserver(schedule):null;
+    if(titleNode)observer?.observe(titleNode,{childList:true,characterData:true,subtree:true});
+    if(!document.hidden)send(true,true);
+    const interval=setInterval(()=>{if(!document.hidden)send(true,true);},30000);
     document.addEventListener('visibilitychange',onVisibility);
     window.addEventListener('pagehide',onPageHide);
-    return()=>{stopped=true;clearInterval(interval);document.removeEventListener('visibilitychange',onVisibility);window.removeEventListener('pagehide',onPageHide);send(false);};
+    window.addEventListener('xerox-presence-page-changed',schedule);
+    return()=>{
+      stopped=true;clearInterval(interval);if(scheduled)clearTimeout(scheduled);observer?.disconnect();
+      document.removeEventListener('visibilitychange',onVisibility);
+      window.removeEventListener('pagehide',onPageHide);
+      window.removeEventListener('xerox-presence-page-changed',schedule);
+      send(false,true);
+    };
   },[phase,user?.id]);
 
   useEffect(() => {
