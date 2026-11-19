@@ -221,7 +221,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     if(cachedUser)active.current=cachedUser;
     let cancelled=false,busy=false,lastCheck=0;
     const verify=async(force=false)=>{
-      if(cancelled||busy||Date.now()-lastCheck<(force?5000:60000))return;
+      if(cancelled||busy||Date.now()-lastCheck<(force?5000:300000))return;
       busy=true;lastCheck=Date.now();const epoch=authEpoch.current;
       try{
         const {user:existing}=await api('/session');
@@ -256,10 +256,10 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     };
     const resume=()=>{if(!document.hidden)void verify();};
     // Refresh newly granted/revoked roles when returning to the app, without increasing background polling.
-    const resumeNow=()=>{if(!document.hidden)void verify(true);};
+    const resumeNow=()=>{if(!document.hidden)void verify();};
     const checkBanNow=()=>{lastCheck=0;void verify(true);};
     void verify(true);
-    const interval=setInterval(resume,30000);
+    const interval=setInterval(resume,300000);
     window.addEventListener('online',resumeNow);window.addEventListener('focus',resumeNow);window.addEventListener('xerox-ban-check',checkBanNow);document.addEventListener('visibilitychange',resumeNow);
     return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);window.removeEventListener('xerox-ban-check',checkBanNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
   },[initialize,cachedUser,lockBanned]);
@@ -317,8 +317,8 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     const observer=titleNode?new MutationObserver(schedule):null;
     if(titleNode)observer?.observe(titleNode,{childList:true,characterData:true,subtree:true});
     if(!document.hidden)send(true,true);
-    // One presence request also checks BAN and refreshes visual mode.
-    const interval=setInterval(()=>{if(!document.hidden)send(true,true);},20000);
+    // A five-minute fallback presence request checks BAN and visual mode; foreground API reads provide faster updates.
+    const interval=setInterval(()=>{if(!document.hidden)send(true,true);},300000);
     document.addEventListener('visibilitychange',onVisibility);
     window.addEventListener('focus',schedule);
     window.addEventListener('pagehide',onPageHide);
