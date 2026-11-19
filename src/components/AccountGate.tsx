@@ -264,40 +264,15 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);window.removeEventListener('xerox-ban-check',checkBanNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
   },[initialize,cachedUser,lockBanned]);
 
-  // A light, foreground-only BAN check makes an existing page lock within ~4 seconds.
-  // This is intentionally separate from session/history synchronization.
+  // No standalone BAN polling. Account/session and presence responses, plus the
+  // sidecar on normal YouTube API reads, enforce BAN without extra status requests.
   useEffect(()=>{
-    if(phase!=='ready'||!user?.id)return;
-    let stopped=false,inFlight=false;
-    const hasPlayer=()=>!!document.querySelector('video,audio,iframe[allow*="autoplay"],iframe[allow*="picture-in-picture"]');
-    const check=async()=>{
-      // Keep checking a playing iframe even when the tab is backgrounded (e.g. picture-in-picture).
-      if(stopped||inFlight||(document.hidden&&!hasPlayer()))return;
-      inFlight=true;
-      try{
-        const response=await fetch('/api/account/ban-status',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(7000)});
-        if(!stopped&&response.status===403){
-          const data=await response.json().catch(()=>({}));
-          if(data.code==='ACCOUNT_BANNED')window.dispatchEvent(new Event('xerox-account-banned'));
-        }
-      }catch{}finally{inFlight=false;}
+    const onSidecar=(event:Event)=>{
+      if((event as CustomEvent).detail?.banned===true)window.dispatchEvent(new Event('xerox-account-banned'));
     };
-    void check();
-    // Check more often while a video/iframe is mounted; otherwise keep background API usage low.
-    let lastIdleCheck=Date.now();
-    const interval=setInterval(()=>{
-      const playing=hasPlayer();
-      if(document.hidden&&!playing)return;
-      if(!playing&&Date.now()-lastIdleCheck<4000)return;
-      lastIdleCheck=Date.now();
-      void check();
-    },1500);
-    const resume=()=>void check();
-    document.addEventListener('visibilitychange',resume);
-    window.addEventListener('focus',resume);
-    window.addEventListener('online',resume);
-    return()=>{stopped=true;clearInterval(interval);document.removeEventListener('visibilitychange',resume);window.removeEventListener('focus',resume);window.removeEventListener('online',resume);};
-  },[phase,user?.id]);
+    window.addEventListener('xerox-api-sidecar',onSidecar);
+    return()=>window.removeEventListener('xerox-api-sidecar',onSidecar);
+  },[]);
 
   // Each foreground tab reports its current in-site section. The video title is
   // sent only for a watch page; search terms, DMs and external URLs stay private.
