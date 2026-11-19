@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, createContext, useContext, type ReactNode, type FormEvent } from 'react';
 import {useLocation} from 'react-router-dom';
+import {flushSync} from 'react-dom';
 import VisualModes from './VisualModes';
 import DirectMessages from './DirectMessages';
 import MessageNotifications from './MessageNotifications';
@@ -54,6 +55,30 @@ function switchDeviceAccount(id: string) {
 }
 
 const read = <T,>(key: string, fallback: T): T => { try { return JSON.parse(localStorage.getItem(key) || '') as T; } catch { return fallback; } };
+// A ban must stop existing media immediately, not merely prevent the next API request.
+// In particular, an iframe can keep playing audio after its containing page is hidden.
+function stopAllPlaybackNow(){
+  try{
+    for(const media of document.querySelectorAll<HTMLMediaElement>('video,audio')){
+      try{
+        media.pause();
+        media.muted=true;
+        if('srcObject' in media)media.srcObject=null;
+        media.removeAttribute('src');
+        media.querySelectorAll('source').forEach(source=>source.removeAttribute('src'));
+        media.load();
+      }catch{}
+    }
+    for(const frame of document.querySelectorAll<HTMLIFrameElement>('iframe')){
+      try{frame.src='about:blank';}catch{}
+    }
+    if(document.pictureInPictureElement)void document.exitPictureInPicture().catch(()=>{});
+    if(document.fullscreenElement)void document.exitFullscreen().catch(()=>{});
+    const iosVideo=document.querySelector('video') as (HTMLVideoElement & {webkitExitFullscreen?:()=>void;webkitSetPresentationMode?:(mode:'inline')=>void})|null;
+    try{iosVideo?.webkitExitFullscreen?.();iosVideo?.webkitSetPresentationMode?.('inline');}catch{}
+  }catch{}
+}
+
 const merge = (...lists: Item[][]): Item[] => {
   const seen = new Map<string, Item>();
   lists.flat().forEach(item => {
@@ -103,12 +128,29 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   const sync = useRef<() => Promise<void>>(async () => {});
   useEffect(()=>{const prepare=async()=>{if(cache.current.dirty){await sync.current();if(cache.current.dirty)return false;}const current=active.current;if(current)(window as any).__XEROX_ACCOUNT_HANDOFF__={user:current,savedAt:Date.now()};return true;};(window as any).__XEROX_GAS_BEFORE_UPDATE__=prepare;return()=>{if((window as any).__XEROX_GAS_BEFORE_UPDATE__===prepare)delete (window as any).__XEROX_GAS_BEFORE_UPDATE__;};},[]);
   const lockBanned=useCallback(()=>{
+    // Stop sound and blank embedded players synchronously, before React replaces the UI.
+    stopAllPlaybackNow();
+    authEpoch.current++; // Ignore any in-flight session/history response that predates this BAN.
     const current=active.current||cachedUser;
     const record={...(current?.id?{userId:current.id}:{}),...(current?.username?{username:current.username}:{}),detectedAt:Date.now()};
-    localStorage.setItem(BAN_LOCK_KEY,JSON.stringify(record));setBanRecord(record);setPhase('banned');serverAuthenticated.current=false;
+    localStorage.setItem(BAN_LOCK_KEY,JSON.stringify(record));
+    serverAuthenticated.current=false;
+    flushSync(()=>{setBanRecord(record);setPhase('banned');});
   },[cachedUser]);
 
-  useEffect(()=>{const banned=()=>lockBanned();window.addEventListener('xerox-account-banned',banned);return()=>window.removeEventListener('xerox-account-banned',banned);},[lockBanned]);
+  useEffect(()=>{
+    const banned=()=>lockBanned();
+    const storage=(event:StorageEvent)=>{
+      if(event.key!==BAN_LOCK_KEY||!event.newValue)return;
+      try{
+        const record=JSON.parse(event.newValue) as BanRecord;
+        if(record.userId&&record.userId===active.current?.id)lockBanned();
+      }catch{}
+    };
+    window.addEventListener('xerox-account-banned',banned);
+    window.addEventListener('storage',storage);
+    return()=>{window.removeEventListener('xerox-account-banned',banned);window.removeEventListener('storage',storage);};
+  },[lockBanned]);
 
   const persist = (u: User) => localStorage.setItem(accountKey(u.id), JSON.stringify({...cache.current, savedAt: new Date().toISOString()}));
   const initialize = useCallback(async (u: User, importLegacy = false, background = false) => {
@@ -192,6 +234,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
         if(err.code==='ACCOUNT_BANNED'){lockBanned();return;}
         if(err.status===401){
           serverAuthenticated.current=false;
+          stopAllPlaybackNow();
           setPhase('login');
           setMessage(banRef.current?'解除状況の確認には、同じアカウントで本人確認してください。':'ログインが必要です。アカウントにログインしてください。');
           return;
@@ -232,7 +275,15 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       }catch{}finally{inFlight=false;}
     };
     void check();
-    const interval=setInterval(()=>void check(),4000);
+    // Check more often while a video/iframe is mounted; otherwise keep background API usage low.
+    let lastIdleCheck=Date.now();
+    const interval=setInterval(()=>{
+      if(document.hidden)return;
+      const hasPlayer=!!document.querySelector('video,iframe[src]:not([src="about:blank"])');
+      if(!hasPlayer&&Date.now()-lastIdleCheck<4000)return;
+      lastIdleCheck=Date.now();
+      void check();
+    },1500);
     const resume=()=>void check();
     document.addEventListener('visibilitychange',resume);
     window.addEventListener('focus',resume);
