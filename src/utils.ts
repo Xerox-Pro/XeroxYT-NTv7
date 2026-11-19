@@ -1,4 +1,5 @@
 import {createInflightJson} from './lib/inflightJson.mjs';
+import {getPublicCachePolicy,isPublicCacheFresh} from './lib/publicCachePolicy.mjs';
 import { apiFetch } from './lib/apiTransport.mjs';
 import { get, set } from 'idb-keyval';
 import { DailyUsageLimits } from './types';
@@ -175,17 +176,6 @@ export function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-const CACHE_TTL_DEFAULT = 30 * 60 * 1000; // 30 minutes
-
-// エンドポイント別のキャッシュ保持時間 (ms)
-function getCacheTTL(url: string): number {
-  if (url.includes('/api/recommendations')) return 5 * 60 * 1000; // 5 minutes
-  if (url.includes('/api/trending')) return 15 * 60 * 1000; // 15 minutes
-  if (url.includes('/api/search') || url.includes('/api/suggestions')) return 10 * 60 * 1000; // 10 minutes
-  if (url.includes('/api/video/') || url.includes('/api/channel/')) return 30 * 60 * 1000; // 30 minutes
-  return CACHE_TTL_DEFAULT;
-}
-
 function hasValidContent(data: any): boolean {
   if (!data || data.isPlayerOnly) return false;
   if (Array.isArray(data)) return data.length > 0;
@@ -197,33 +187,27 @@ async function fetchJSONRequest(url: string, options?: RequestInit) {
   try {
     const isGet = !options || !options.method || options.method === 'GET';
     const isApiCall = url.startsWith('/api/') || url.startsWith('/stream') || url.startsWith('/edu');
-    const isTimeSensitive = 
-      url.startsWith('/api/user/') ||
-      url.startsWith('/api/recommendations') ||
-      url.startsWith('/api/mix/') ||
-      url.startsWith('/api/shorts?') ||
-      url.startsWith('/api/shorts-ranking') ||
-      url.startsWith('/api/home/') ||
-      /^\/api\/channel\/[^/]+\/search(?:\?|$)/.test(url) ||
-      url.includes('/sync/') || 
-      url.includes('/auth/') || 
-      url.includes('/stream');
+    const cachePolicy = isGet ? getPublicCachePolicy(url) : null;
+    const bypassCache = options?.cache === 'no-store' || options?.cache === 'reload';
 
     const isVideoReq = (url.startsWith('/api/video/') && !url.includes('/comments') && !url.includes('/related')) || url.startsWith('/stream') || url.startsWith('/edu');
     const isSearchReq = url.startsWith('/api/search');
     
-    // Check IndexedDB cache for GET requests
-    if (isGet && isApiCall && !isTimeSensitive) {
+    // IndexedDB keeps public metadata across reloads and browser restarts.
+    // Never reuse account, BAN, DM, personalized feeds, or live video responses.
+    if (cachePolicy && !bypassCache) {
       try {
-        const cached = await get(url);
-        const ttl = getCacheTTL(url);
-        if (cached && cached.timestamp && (Date.now() - cached.timestamp < ttl) && hasValidContent(cached.data)) {
+        const cached = await get(cachePolicy.key);
+        if (options?.signal?.aborted) throw new DOMException('Aborted','AbortError');
+        if (isPublicCacheFresh(cached,cachePolicy) && hasValidContent(cached.data)
+            && getPublicCachePolicy(url,cached.data)) {
           if (isVideoReq) incrementClientUsage('video');
           else if (isSearchReq) incrementClientUsage('search');
           else incrementClientUsage('total');
           return cached.data;
         }
       } catch (e) {
+        if (options?.signal?.aborted) throw e;
         console.warn('Cache read error:', e);
       }
     }
@@ -306,10 +290,12 @@ async function fetchJSONRequest(url: string, options?: RequestInit) {
 
     const data = await res.json();
     
-    // Save to IndexedDB cache (only if valid content)
-    if (isGet && isApiCall && !isTimeSensitive && hasValidContent(data)) {
+    // Permanent for ordinary video/Shorts details; bounded freshness for
+    // channel profiles, recommendations, search, and comments.
+    if (cachePolicy && options?.cache !== 'no-store' && hasValidContent(data)
+        && getPublicCachePolicy(url,data)) {
       try {
-        await set(url, { timestamp: Date.now(), data });
+        await set(cachePolicy.key, { timestamp: Date.now(), data });
       } catch (e) {
         console.warn('Cache write error:', e);
       }
@@ -322,17 +308,15 @@ async function fetchJSONRequest(url: string, options?: RequestInit) {
       throw new Error('サーバーからの応答を解析できませんでした。');
     }
     
-    // Fallback to cache if network fails and cache exists (Offline mode)
-    const isGet = !options || !options.method || options.method === 'GET';
-    if (isGet && !url.startsWith('/api/user/') && !url.startsWith('/api/auth/')) {
-       try {
-         const cached = await get(url);
-         if (cached && hasValidContent(cached.data)) {
-           return cached.data;
-         }
-       } catch (e) {
-         // ignore
-       }
+    // Offline fallback is public-only. Never bypass a failed auth/BAN check.
+    const fallbackPolicy = (!options?.method || options.method === 'GET')
+      ? getPublicCachePolicy(url) : null;
+    if (fallbackPolicy && options?.cache !== 'no-store') {
+      try {
+        const cached = await get(fallbackPolicy.key);
+        if (cached && hasValidContent(cached.data) && getPublicCachePolicy(url,cached.data))
+          return cached.data;
+      } catch {}
     }
     throw err;
   }
