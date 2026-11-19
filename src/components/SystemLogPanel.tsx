@@ -12,6 +12,9 @@ export default function SystemLogPanel({
  accounts:AccountOption[];selectedUserId:string;onUserChange:(id:string)=>void;
 }){
  const [logs,setLogs]=useState<LogEntry[]>([]);
+ const [enabled,setEnabled]=useState(false);
+ const [statusLoading,setStatusLoading]=useState(true);
+ const [saving,setSaving]=useState(false);
  const [paused,setPaused]=useState(false);
  const [errorsOnly,setErrorsOnly]=useState(false);
  const [methodFilter,setMethodFilter]=useState('all');
@@ -21,12 +24,50 @@ export default function SystemLogPanel({
  const [loading,setLoading]=useState(true);
  const cursor=useRef(0);
 
+ // The switch is global, stored on Cloudflare, and OFF by default.
+ // Merely opening the admin panel must not start live polling.
  useEffect(()=>{
-  cursor.current=0;setLogs([]);setLoading(true);setError('');
- },[selectedUserId,errorsOnly]);
+  let cancelled=false;
+  void fetch('/api/account/admin/system-monitor',{
+   credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000),
+  }).then(async response=>{
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(data.error||'監視設定を取得できませんでした。');
+   if(!cancelled){setEnabled(data.enabled===true);setError('');}
+  }).catch(cause=>{
+   if(!cancelled)setError(cause instanceof Error?cause.message:'監視設定を取得できませんでした。');
+  }).finally(()=>{if(!cancelled)setStatusLoading(false);});
+  return()=>{cancelled=true;};
+ },[]);
+
+ const toggleMonitor=async()=>{
+  if(saving||statusLoading)return;
+  const next=!enabled;
+  setSaving(true);setError('');
+  try{
+   const response=await fetch('/api/account/admin/system-monitor',{
+    method:'POST',credentials:'same-origin',cache:'no-store',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({enabled:next}),
+    signal:AbortSignal.timeout(10000),
+   });
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(data.error||'監視設定を変更できませんでした。');
+   if(data.enabled!==next)throw new Error('サーバーの監視状態を確認できませんでした。');
+   setEnabled(next);setPaused(false);
+   if(next){cursor.current=0;setLogs([]);setLoading(true);}
+   else setLoading(false);
+  }catch(cause){
+   setError(cause instanceof Error?cause.message:'監視設定を変更できませんでした。');
+  }finally{setSaving(false);}
+ };
 
  useEffect(()=>{
-  if(paused||!expanded)return;
+  cursor.current=0;setLogs([]);setLoading(enabled);setError('');
+ },[selectedUserId,errorsOnly,enabled]);
+
+ useEffect(()=>{
+  if(!enabled||statusLoading||paused||!expanded)return;
   let closed=false,inFlight=false;
   const poll=async()=>{
    if(closed||inFlight||document.hidden)return;
@@ -62,23 +103,25 @@ export default function SystemLogPanel({
   const visibility=()=>{if(!document.hidden)void poll();};
   document.addEventListener('visibilitychange',visibility);
   return()=>{closed=true;clearInterval(interval);document.removeEventListener('visibilitychange',visibility);};
- },[paused,expanded,selectedUserId,errorsOnly]);
+ },[enabled,statusLoading,paused,expanded,selectedUserId,errorsOnly]);
 
  const displayed=logs.filter(log=>methodFilter==='all'||log.method===methodFilter);
  return <section id="system-live-logs" className="mt-6 rounded-2xl border border-gray-200 p-4" aria-label="システム全体のリアルタイム通信ログ">
   <div className="flex flex-wrap items-center justify-between gap-3">
    <div>
     <h3 className="text-base font-bold">リアルタイム通信モニター</h3>
-    <p className="mt-1 text-xs text-gray-500">サイトのAPI通信を約2秒間隔で更新。ログ画面を閉じている間は取得しません。</p>
+    <p className="mt-1 text-xs text-gray-500">初期状態は無効。マスターが有効にしたときだけCloudflareで通信を記録し、約2秒間隔で表示を更新します。</p>
    </div>
    <div className="flex items-center gap-2 text-xs">
-    <span className={paused?'text-gray-500':error?'text-red-700':'text-emerald-700'} role="status">
-     {paused?'● 一時停止':error?'● 取得エラー':loading?'● 接続中':'● 監視中'}
+    <span className={!enabled?'text-gray-500':paused?'text-gray-500':error?'text-red-700':'text-emerald-700'} role="status">
+     {statusLoading?'設定確認中':saving?'設定変更中':!enabled?'● 監視OFF':paused?'● 表示一時停止':error?'● 取得エラー':loading?'● 接続中':'● 監視ON'}
     </span>
+    <button type="button" disabled={statusLoading||saving} aria-pressed={enabled} className={enabled?'rounded-lg bg-red-50 px-3 py-1.5 text-red-700 disabled:opacity-50':'rounded-lg bg-gray-900 px-3 py-1.5 text-white disabled:opacity-50'} onClick={()=>void toggleMonitor()}>{enabled?'監視を無効にする':'監視を有効にする'}</button>
     <button type="button" className="rounded-lg border px-3 py-1.5" onClick={()=>setExpanded(value=>!value)}>{expanded?'折りたたむ':'開く'}</button>
    </div>
   </div>
   {expanded&&<>
+   {!enabled&&<p className="mt-3 text-sm text-gray-500">監視は停止中です。「監視を有効にする」を押すと記録と自動更新が始まります。過去に記録したログは保持されます。</p>}
    <div className="mt-4 flex flex-wrap items-end gap-3 rounded-xl bg-gray-50 p-3 text-sm">
     <label className="flex min-w-[180px] flex-1 flex-col gap-1">ユーザー
      <select value={selectedUserId} onChange={event=>onUserChange(event.target.value)} className="rounded-lg border bg-white p-2">
@@ -95,7 +138,7 @@ export default function SystemLogPanel({
      <input type="checkbox" checked={errorsOnly} onChange={event=>setErrorsOnly(event.target.checked)}/>
      エラーのみ（400以上）
     </label>
-    <button type="button" className="rounded-lg border bg-white px-3 py-2" onClick={()=>setPaused(value=>!value)}>{paused?'監視再開':'一時停止'}</button>
+    <button type="button" disabled={!enabled} className="rounded-lg border bg-white px-3 py-2 disabled:opacity-40" onClick={()=>setPaused(value=>!value)}>{paused?'表示再開':'表示を一時停止'}</button>
     <button type="button" className="rounded-lg border bg-white px-3 py-2" onClick={()=>setLogs([])}>表示をクリア</button>
    </div>
    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
@@ -115,9 +158,9 @@ export default function SystemLogPanel({
       <td className="whitespace-nowrap p-2">{log.duration_ms} ms</td>
      </tr>)}</tbody>
     </table>
-    {!displayed.length&&!error&&<p className="p-5 text-center text-sm text-gray-500">{loading?'通信ログを読み込んでいます。':'条件に合う通信はまだありません。'}</p>}
+    {!displayed.length&&!error&&<p className="p-5 text-center text-sm text-gray-500">{!enabled?'監視が無効です。':loading?'通信ログを読み込んでいます。':'条件に合う通信はまだありません。'}</p>}
    </div>
-   <p className="mt-3 text-xs text-gray-500">Cloudflare APIに到達した通信のメタデータだけを記録します。検索語句、DM本文、Cookie、IPアドレス、パスワードは記録しません。履歴は7日を超えると表示されません。</p>
+   <p className="mt-3 text-xs text-gray-500">有効・無効は全マスター共通です。切り替えは数秒以内にCloudflare全体へ反映されます。Cloudflare APIに到達した通信のメタデータだけを記録します。検索語句、DM本文、Cookie、IPアドレス、パスワードは記録しません。履歴は7日を超えると表示されません。</p>
   </>}
  </section>;
 }
