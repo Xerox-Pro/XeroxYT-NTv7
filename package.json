@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "node scripts/check-env.mjs && node scripts/prepare-browser.mjs && vite build",
+    "dev": "node scripts/generate-icons.mjs && vite",
+    "build": "node scripts/check-env.mjs && node scripts/prepare-browser.mjs && node scripts/generate-icons.mjs && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "start": "vite --host 0.0.0.0",

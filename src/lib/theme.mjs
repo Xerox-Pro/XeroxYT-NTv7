@@ -3,7 +3,7 @@ export function readTheme(){try{const value=localStorage.getItem(key);return ['l
 export function applyTheme(mode=readTheme()){
  const dark=mode==='dark'||mode==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches;
  document.documentElement.dataset.theme=dark?'dark':'light';document.documentElement.style.colorScheme=dark?'dark':'light';
- const icon=dark?'/app-icons/youtube-dark.png':'/app-icons/youtube.png';
+ const icon=dark?'/pwa-dark-192x192.png':'/pwa-192x192.png';
  const favicon=document.getElementById('site-favicon');
  if(favicon&&favicon.getAttribute('href')!==icon)favicon.setAttribute('href',icon);
  const themeColor=document.querySelector('meta[name="theme-color"]');
