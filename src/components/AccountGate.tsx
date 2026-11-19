@@ -90,7 +90,7 @@ const merge = (...lists: Item[][]): Item[] => {
   return [...sorted.filter(item => item.type !== 'short').slice(0, 50), ...sorted.filter(item => item.type === 'short').slice(0, 50)];
 };
 async function api(path: string, method = 'GET', body?: unknown) {
-  const response = await fetch(`/api/account${path}`, { method, credentials: 'same-origin', cache: 'no-store', ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
+  const response = await fetch(`/api/account${path}`, { method, credentials: 'same-origin', cache: 'no-store', ...(path === '/session' ? { signal: AbortSignal.timeout(7000) } : {}), ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error=Object.assign(new Error(data.error || '通信に失敗しました。'), { status: response.status, code:data.code });
@@ -195,20 +195,25 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     if (!u || !serverAuthenticated.current || sending.current || !cache.current.dirty) return;
     sending.current = true;
     const snapshot = cache.current;
+    const epoch = authEpoch.current;
+    const isCurrent = () => authEpoch.current === epoch && active.current?.id === u.id;
     try {
       const result = await api('/history', 'PUT', { history: snapshot.history, version: snapshot.version });
+      if (!isCurrent()) return;
       cache.current = { ...cache.current, version: result.version, dirty: cache.current.history !== snapshot.history };
       persist(u); setMessage('');
     } catch (err: any) {
+      if (!isCurrent()) return;
       if(err.status===401)serverAuthenticated.current=false;
       if (err.status === 409) {
         try {
           const remote = await api('/history');
+          if (!isCurrent()) return;
           cache.current = { history: merge(cache.current.history, remote.history), version: remote.version, dirty: true };
           localStorage.setItem(LEGACY_KEY, JSON.stringify(cache.current.history)); persist(u);
           window.dispatchEvent(new CustomEvent('xerox-history-remote', { detail: cache.current.history }));
           setMessage('他の端末の履歴と統合しました。更新すると表示に反映されます。');
-        } catch { setMessage('履歴は端末に保存されています。同期を再試行します。'); }
+        } catch { if (isCurrent()) setMessage('履歴は端末に保存されています。同期を再試行します。'); }
       } else setMessage('履歴は端末に保存されています。同期を再試行します。');
     } finally {
       sending.current = false;
@@ -259,18 +264,17 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);window.removeEventListener('xerox-ban-check',checkBanNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
   },[initialize,cachedUser,lockBanned]);
 
-  // A light, foreground-only BAN check makes an existing page lock within ~4 seconds.
-  // This is intentionally separate from session/history synchronization.
+  // Check playback sessions between the normal session and presence updates.
   useEffect(()=>{
     if(phase!=='ready'||!user?.id)return;
     let stopped=false,inFlight=false;
     const hasPlayer=()=>!!document.querySelector('video,audio,iframe[allow*="autoplay"],iframe[allow*="picture-in-picture"]');
     const check=async()=>{
       // Keep checking a playing iframe even when the tab is backgrounded (e.g. picture-in-picture).
-      if(stopped||inFlight||(document.hidden&&!hasPlayer()))return;
+      if(stopped||inFlight||!hasPlayer())return;
       inFlight=true;
       try{
-        const response=await fetch('/api/account/ban-status',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(7000)});
+        const response=await fetch('/api/account/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(7000)});
         if(!stopped&&response.status===403){
           const data=await response.json().catch(()=>({}));
           if(data.code==='ACCOUNT_BANNED')window.dispatchEvent(new Event('xerox-account-banned'));
@@ -278,15 +282,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       }catch{}finally{inFlight=false;}
     };
     void check();
-    // Check more often while a video/iframe is mounted; otherwise keep background API usage low.
-    let lastIdleCheck=Date.now();
-    const interval=setInterval(()=>{
-      const playing=hasPlayer();
-      if(document.hidden&&!playing)return;
-      if(!playing&&Date.now()-lastIdleCheck<4000)return;
-      lastIdleCheck=Date.now();
-      void check();
-    },1500);
+    const interval=setInterval(check,5000);
     const resume=()=>void check();
     document.addEventListener('visibilitychange',resume);
     window.addEventListener('focus',resume);
@@ -364,6 +360,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     if (register && password !== confirm) { setMessage('パスワードが一致しません。'); return; }
     if(register&&!agreedVersion){setMessage('利用規約を確認し、同意してください。');return;}
     try {
+      authEpoch.current++;
       setPhase('loading');
       sessionStorage.removeItem('xerox_guest');
       const result = await api(register ? '/register' : '/login', 'POST', { username, password, ...(register?{termsAccepted:true,termsVersion:agreedVersion}:{}) });
@@ -382,5 +379,5 @@ export default function AccountGate({ children }: { children: ReactNode }) {
 
   if(phase==='banned')return <TermsGate onAccepted={()=>{}} onLogout={()=>void logout(true)}><DirectMessages appealOnly/><main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-5"><section className="w-full max-w-md rounded-3xl border border-red-900 bg-gray-900 p-8 text-center shadow-2xl" role="alert"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-950 text-3xl" aria-hidden="true">!</div><h1 className="mt-5 text-2xl font-bold">このアカウントはBANされています</h1><p className="mt-3 text-sm leading-6 text-gray-300">この端末では、新しいアカウントの作成、ログアウト、アカウント切り替えなどの操作はできません。</p>{banRecord?.username&&<p className="mt-4 text-xs text-gray-500">対象アカウント: @{banRecord.username}</p>}<p className="mt-5 text-xs text-gray-500">BAN解除後は下のボタンで状態を再確認できます。認証が期限切れの場合は再ログインが必要です。</p><button type="button" className="mt-4 w-full rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900" onClick={()=>window.dispatchEvent(new Event('xerox-ban-check'))}>BAN解除状況を確認</button></section></main></TermsGate>;
 
-  return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><section className="w-full max-w-md bg-white rounded-3xl shadow-lg border border-gray-100 p-7 sm:p-9"><h1 className="text-2xl font-bold text-gray-900">XeroxYT-NTv7</h1><p className="text-sm text-gray-500 mt-2">アカウントにログインして、視聴履歴を端末とクラウドに保存します。</p>{phase === 'error' ? <><p className="mt-6 text-red-700" role="alert">{message}</p><button className="mt-4 rounded-xl bg-gray-900 text-white px-4 py-2" onClick={() => window.dispatchEvent(new Event('xerox-ban-check'))}>再試行</button></> : <form onSubmit={submit} className="mt-7 space-y-4"><h2 className="text-lg font-semibold">{register ? '新規アカウント作成' : 'ログイン'}</h2><label className="block text-sm">ユーザー名<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="英数字と _" /></label><label className="block text-sm">パスワード<input type="password" autoComplete={register ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={12} maxLength={128} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="12文字以上" /></label>{register && <label className="block text-sm">パスワード（確認）<input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" /></label>}{!localStorage.getItem('xerox_last_account_id') && <label className="flex items-start gap-2 text-sm text-gray-600"><input type="checkbox" checked={migrate} onChange={e => setMigrate(e.target.checked)} className="mt-1" />この端末にある以前の視聴履歴を取り込む</label>}{register&&<RegistrationTerms onChange={setAgreedVersion}/>} {message && <p className="text-sm text-red-700" role="alert">{message}</p>}<button disabled={phase === 'loading'||(register&&!agreedVersion)} className="w-full bg-gray-900 disabled:opacity-60 text-white rounded-xl py-3 font-semibold">{phase === 'loading' ? '処理中…' : register ? 'アカウントを作成' : 'ログイン'}</button><button type="button" onClick={() => { setRegister(!register);setAgreedVersion('');setMessage(''); }} className="w-full text-sm text-blue-700 py-2">{register ? 'すでにアカウントを持っている' : '新規アカウントを作成'}</button>{register && <p className="text-xs text-gray-500">パスワード再設定機能はまだありません。忘れないよう安全に保管してください。</p>}</form>}</section></main>;
+  return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><section className="w-full max-w-md bg-white rounded-3xl shadow-lg border border-gray-100 p-7 sm:p-9"><h1 className="text-2xl font-bold text-gray-900">XeroxYT-NTv7</h1><p className="text-sm text-gray-500 mt-2">アカウントにログインして、視聴履歴を端末とクラウドに保存します。</p>{phase === 'error' ? <><p className="mt-6 text-red-700" role="alert">{message}</p><button className="mt-4 rounded-xl bg-gray-900 text-white px-4 py-2" onClick={() => window.dispatchEvent(new Event('xerox-ban-check'))}>再試行</button></> : null}<form onSubmit={submit} className="mt-7 space-y-4"><h2 className="text-lg font-semibold">{register ? '新規アカウント作成' : 'ログイン'}</h2><label className="block text-sm">ユーザー名<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="英数字と _" /></label><label className="block text-sm">パスワード<input type="password" autoComplete={register ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={12} maxLength={128} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="12文字以上" /></label>{register && <label className="block text-sm">パスワード（確認）<input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" /></label>}{!localStorage.getItem('xerox_last_account_id') && <label className="flex items-start gap-2 text-sm text-gray-600"><input type="checkbox" checked={migrate} onChange={e => setMigrate(e.target.checked)} className="mt-1" />この端末にある以前の視聴履歴を取り込む</label>}{register&&<RegistrationTerms onChange={setAgreedVersion}/>} {message && <p className="text-sm text-red-700" role="alert">{message}</p>}<button disabled={phase === 'loading'||(register&&!agreedVersion)} className="w-full bg-gray-900 disabled:opacity-60 text-white rounded-xl py-3 font-semibold">{phase === 'loading' ? '処理中…' : register ? 'アカウントを作成' : 'ログイン'}</button><button type="button" onClick={() => { setRegister(!register);setAgreedVersion('');setMessage(''); }} className="w-full text-sm text-blue-700 py-2">{register ? 'すでにアカウントを持っている' : '新規アカウントを作成'}</button>{register && <p className="text-xs text-gray-500">パスワード再設定機能はまだありません。忘れないよう安全に保管してください。</p>}</form></section></main>;
 }
