@@ -48,7 +48,7 @@ async function accountSidecar(origin: string, headers: Headers): Promise<string 
     return Object.keys(sidecar).length > 1 ? JSON.stringify(sidecar) : null;
   })().catch(() => null);
   if (sidecarCache.size >= 64) sidecarCache.delete(sidecarCache.keys().next().value!);
-  sidecarCache.set(key, {expires: Date.now() + 20000, value});
+  sidecarCache.set(key, {expires: Date.now() + 60000, value});
   return value;
 }
 
