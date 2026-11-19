@@ -22,6 +22,14 @@
       "continue": true
     },
     {
+      "src": "/app-icons/youtube.png",
+      "dest": "https://raw.githubusercontent.com/Xerox-Pro/XeroxYT-NTv7-for-GAS/fec69ad4b60f5d67d30ed48a6c008f4a9022167b/public/app-icons/youtube.png"
+    },
+    {
+      "src": "/app-icons/youtube-dark.png",
+      "dest": "https://raw.githubusercontent.com/Xerox-Pro/XeroxYT-NTv7-for-GAS/fec69ad4b60f5d67d30ed48a6c008f4a9022167b/public/app-icons/youtube-dark.png"
+    },
+    {
       "src": "/(stream|360|edu|scratch-edu)/([A-Za-z0-9_-]+)",
       "dest": "/api/playback-gateway?route=/$1/$2"
     },
