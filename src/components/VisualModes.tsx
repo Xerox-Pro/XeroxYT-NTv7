@@ -25,15 +25,23 @@ export default function VisualModes(){
    if(stopped||inflight||document.hidden)return;
    inflight=true;
    try{
-    const response=await fetch('/api/account/visual-mode',{credentials:'same-origin',cache:'no-store'});
-    if(response.ok){const data=await response.json();if(typeof data.mode==='string')apply(new CustomEvent('mode',{detail:{mode:data.mode}}));}
+    const response=await fetch('/api/account/visual-mode',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(7000)});
+    if(!response.ok&&response.status!==403)return;
+    const data=await response.json();
+    if(stopped)return;
+    if(response.status===403&&data.code==='ACCOUNT_BANNED'){
+     window.dispatchEvent(new Event('xerox-account-banned'));
+    }else if(response.ok&&typeof data.mode==='string'){
+     apply(new CustomEvent('mode',{detail:{mode:data.mode}}));
+    }
    }catch{}finally{inflight=false;}
   };
   void check();
   const timer=setInterval(()=>void check(),4000);
   const onFocus=()=>void check();
+  window.addEventListener('xerox-visual-mode-updated',onFocus);
   window.addEventListener('focus',onFocus);
-  return()=>{stopped=true;clearInterval(timer);window.removeEventListener('focus',onFocus);window.removeEventListener('xerox-api-sidecar',apply);};
+  return()=>{stopped=true;clearInterval(timer);window.removeEventListener('focus',onFocus);window.removeEventListener('xerox-visual-mode-updated',onFocus);window.removeEventListener('xerox-api-sidecar',apply);};
  },[username]);
  useEffect(()=>{
   if(mode==='off'||mode==='quake'||mode==='zero'||mode==='mirror')return;

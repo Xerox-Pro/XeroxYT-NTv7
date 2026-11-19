@@ -6,11 +6,24 @@ type LogEntry={
  user_id:string|null;username:string|null;
 };
 
+async function monitorSetting(enabled?: boolean, signal?: AbortSignal): Promise<boolean> {
+ const response=await fetch('/api/account/admin/system-monitor',{
+  credentials:'same-origin',cache:'no-store',signal:signal??AbortSignal.timeout(10000),
+  ...(enabled===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})}),
+ });
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok||typeof data.enabled!=='boolean')throw new Error(data.error||'監視設定を取得できませんでした。');
+ return data.enabled;
+}
+
 export default function SystemLogPanel({
  accounts,selectedUserId,onUserChange,
 }:{
  accounts:AccountOption[];selectedUserId:string;onUserChange:(id:string)=>void;
 }){
+ const [enabled,setEnabled]=useState<boolean|null>(null);
+ const [changing,setChanging]=useState(false);
+ const [settingsError,setSettingsError]=useState('');
  const [logs,setLogs]=useState<LogEntry[]>([]);
  const [paused,setPaused]=useState(false);
  const [errorsOnly,setErrorsOnly]=useState(false);
@@ -22,11 +35,27 @@ export default function SystemLogPanel({
  const cursor=useRef(0);
 
  useEffect(()=>{
-  cursor.current=0;setLogs([]);setLoading(true);setError('');
- },[selectedUserId,errorsOnly]);
+  const controller=new AbortController();
+  void monitorSetting(undefined,controller.signal)
+   .then(value=>{if(!controller.signal.aborted)setEnabled(value);})
+   .catch(cause=>{if(!controller.signal.aborted)setSettingsError(cause.message);});
+  return()=>controller.abort();
+ },[]);
+
+ const toggleMonitoring=async()=>{
+  if(changing)return;
+  setChanging(true);setSettingsError('');
+  try{setEnabled(await monitorSetting(enabled===null?undefined:!enabled));}
+  catch(cause){setSettingsError(cause instanceof Error?cause.message:'監視設定を変更できませんでした。');}
+  finally{setChanging(false);}
+ };
 
  useEffect(()=>{
-  if(paused||!expanded)return;
+  cursor.current=0;setLogs([]);setLoading(true);setError('');
+ },[enabled,selectedUserId,errorsOnly]);
+
+ useEffect(()=>{
+  if(!enabled||paused||!expanded)return;
   let closed=false,inFlight=false;
   const poll=async()=>{
    if(closed||inFlight||document.hidden)return;
@@ -62,7 +91,7 @@ export default function SystemLogPanel({
   const visibility=()=>{if(!document.hidden)void poll();};
   document.addEventListener('visibilitychange',visibility);
   return()=>{closed=true;clearInterval(interval);document.removeEventListener('visibilitychange',visibility);};
- },[paused,expanded,selectedUserId,errorsOnly]);
+ },[enabled,paused,expanded,selectedUserId,errorsOnly]);
 
  const displayed=logs.filter(log=>methodFilter==='all'||log.method===methodFilter);
  return <section id="system-live-logs" className="mt-6 rounded-2xl border border-gray-200 p-4" aria-label="システム全体のリアルタイム通信ログ">
@@ -73,12 +102,16 @@ export default function SystemLogPanel({
    </div>
    <div className="flex items-center gap-2 text-xs">
     <span className={paused?'text-gray-500':error?'text-red-700':'text-emerald-700'} role="status">
-     {paused?'● 一時停止':error?'● 取得エラー':loading?'● 接続中':'● 監視中'}
+     {enabled===null?'● 設定未取得':!enabled?'● 無効':paused?'● 一時停止':error?'● 取得エラー':loading?'● 接続中':'● 監視中'}
     </span>
+    <button type="button" disabled={changing} className="rounded-lg border px-3 py-1.5" onClick={()=>void toggleMonitoring()}>
+     {enabled===null?'設定を再取得':enabled?'モニターを無効化':'モニターを有効化'}
+    </button>
     <button type="button" className="rounded-lg border px-3 py-1.5" onClick={()=>setExpanded(value=>!value)}>{expanded?'折りたたむ':'開く'}</button>
    </div>
   </div>
-  {expanded&&<>
+  {settingsError&&<p className="mt-3 text-sm text-red-700" role="alert">{settingsError}</p>}
+  {expanded&&enabled&&<>
    <div className="mt-4 flex flex-wrap items-end gap-3 rounded-xl bg-gray-50 p-3 text-sm">
     <label className="flex min-w-[180px] flex-1 flex-col gap-1">ユーザー
      <select value={selectedUserId} onChange={event=>onUserChange(event.target.value)} className="rounded-lg border bg-white p-2">
