@@ -1,6 +1,5 @@
 import {boundedRequestBody} from "../server/lib/requestSecurity.mjs";
 import {fetchApiResponse} from "../server/lib/apiRequest.mjs";
-import {apiSelector} from "../server/lib/apiAvailability.mjs";
 import { apiPool, canRetry } from "../server/lib/apiPool.mjs";
 export const config = { runtime: "edge" };
 const forwarded = [
@@ -17,7 +16,6 @@ const forwarded = [
   "x-client-usage",
 ];
 const sidecarCache = new Map<string, {expires: number; value: Promise<string | null>}>();
-const SIDECAR_PATHS = ['/api/account/visual-mode', '/api/account/dm', '/api/account/dm/rooms'];
 const isYouTubeRead = (path: string) => /^\/api\/(?:recommendations|trending|search|suggestions|video|channel|channels|home|mix|shorts|shorts-ranking|user|playlists|playlist|sync)(?:[/?]|$)/.test(path);
 
 async function accountSidecar(origin: string, headers: Headers): Promise<string | null> {
@@ -30,28 +28,27 @@ async function accountSidecar(origin: string, headers: Headers): Promise<string 
   const value = (async () => {
     const metadataHeaders = new Headers(headers);
     metadataHeaders.set('accept', 'application/json');
-    const data = await Promise.all(SIDECAR_PATHS.map(path =>
-      fetchApiResponse(origin + path, { method: 'GET', headers: metadataHeaders, redirect: 'manual' }, 2000)
-        .then(async response => ({status:response.status, body:await response.json().catch(()=>null)}))
-        .catch(() => null)
-    ));
-    // Reuse the existing visual-mode/DM sidecar responses to detect a BAN.
-    // No dedicated /ban-status polling or additional HTTP request is needed.
-    if(data.some(item=>item?.status===403&&item.body?.code==='ACCOUNT_BANNED'))
+    // A single authenticated metadata endpoint avoids three Cloudflare Worker
+    // invocations for each uncached sidecar read.
+    const response = await fetchApiResponse(origin + '/api/account/sidecar', {
+      method: 'GET', headers: metadataHeaders, redirect: 'manual',
+    }, 2000);
+    const data = await response.json().catch(() => null);
+    if (response.status === 403 && data?.code === 'ACCOUNT_BANNED')
       return JSON.stringify({capturedAt:Date.now(),banned:true});
-    const [visual, messages, rooms] = data.map(item=>item?.status===200?item.body:null);
+    if (!response.ok || !data || typeof data !== 'object') return null;
     const sidecar: Record<string, unknown> = {capturedAt: Date.now()};
-    if (typeof visual?.mode === 'string') sidecar.mode = visual.mode;
-    if (Array.isArray(messages?.threads)) sidecar.threads = messages.threads.slice(0, 16).map((t: any) => ({
+    if (typeof data.mode === 'string') sidecar.mode = data.mode;
+    if (Array.isArray(data.threads)) sidecar.threads = data.threads.slice(0, 16).map((t: any) => ({
       id: t.id, status: t.status, incoming: t.incoming, updatedAt: t.updatedAt, lastMine: t.lastMine, label: t.label,
     }));
-    if (Array.isArray(rooms?.rooms)) sidecar.rooms = rooms.rooms.slice(0, 10).map((room: any) => ({
+    if (Array.isArray(data.rooms)) sidecar.rooms = data.rooms.slice(0, 10).map((room: any) => ({
       id: room.id, status: room.status, lastAt: room.lastAt, lastMine: room.lastMine, name: room.name,
     }));
     return Object.keys(sidecar).length > 1 ? JSON.stringify(sidecar) : null;
   })().catch(() => null);
   if (sidecarCache.size >= 64) sidecarCache.delete(sidecarCache.keys().next().value!);
-  sidecarCache.set(key, {expires: Date.now() + 12000, value});
+  sidecarCache.set(key, {expires: Date.now() + 20000, value});
   return value;
 }
 
@@ -118,7 +115,8 @@ export default async function handler(request: Request) {
   const configuredPool = pool;
   const cloudflareOnly=/^\/api\/(auth|user|instagram|tiktok)(\/|$)/.test(path)||path==='/api/account/cloudflare-session';
   if(cloudflareOnly)pool=pool.filter(origin=>new URL(origin).hostname.endsWith('.workers.dev'));
-  else pool=await apiSelector.plan(pool,headers);
+  // Avoid a separate /health Worker request on every cold Edge invocation.
+  // Actual GET/HEAD failures already trigger safe peer failover below.
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
   // Metadata piggybacks on foreground YouTube API reads; no background polling.
   const wantsSidecar = request.method === 'GET'
