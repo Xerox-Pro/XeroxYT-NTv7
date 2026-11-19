@@ -3,8 +3,8 @@ import {createPortal} from 'react-dom';
 import {useLocation,useNavigate} from 'react-router-dom';
 import {ChevronDown,Check,X} from 'lucide-react';
 import {services,serviceForPath} from '../social/services.mjs';
-const logos={youtube:'/pwa-192x192.png',instagram:'/app-icons/instagram.png',tiktok:'/app-icons/tiktok.png'};
-function ServiceIcon({service}:{service:string}){return service==='youtube'?<><img className="app-icon-light" src={logos.youtube} alt=""/><img className="app-icon-dark" src={'/pwa-dark-192x192.png'} alt=""/></>:<img src={logos[service as keyof typeof logos]} alt=""/>;}
+const logos={youtube:'/pwa-192x192-gas.png',instagram:'/app-icons/instagram.png',tiktok:'/app-icons/tiktok.png'};
+function ServiceIcon({service}:{service:string}){return service==='youtube'?<><img className="app-icon-light" src={logos.youtube} alt=""/><img className="app-icon-dark" src={'/pwa-dark-192x192-gas.png'} alt=""/></>:<img src={logos[service as keyof typeof logos]} alt=""/>;}
 const DOUBLE_TAP_MS=500;
 export default function AppSwitcher({compact=false}:{compact?:boolean}){
  const location=useLocation(),navigate=useNavigate(),active=serviceForPath(location.pathname);

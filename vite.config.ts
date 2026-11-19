@@ -15,13 +15,13 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         includeAssets: [
           'favicon.ico',
-          'favicon.png',
-          'favicon-32x32.png',
-          'favicon-16x16.png',
-          'apple-touch-icon.png',
-          'pwa-192x192.png',
-          'pwa-512x512.png',
-          'pwa-maskable-512x512.png',
+          'favicon-gas.png',
+          'favicon-32x32-gas.png',
+          'favicon-16x16-gas.png',
+          'apple-touch-icon-gas.png',
+          'pwa-192x192-gas.png',
+          'pwa-512x512-gas.png',
+          'pwa-maskable-512x512-gas.png',
         ],
         manifest: {
           id: '/',
@@ -35,19 +35,19 @@ export default defineConfig(({mode}) => {
           scope: '/',
           icons: [
             {
-              src: '/pwa-192x192.png',
+              src: '/pwa-192x192-gas.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-512x512.png',
+              src: '/pwa-512x512-gas.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-maskable-512x512.png',
+              src: '/pwa-maskable-512x512-gas.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
