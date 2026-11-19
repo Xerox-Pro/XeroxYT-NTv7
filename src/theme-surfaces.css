@@ -34,3 +34,11 @@ html[data-theme=dark] .playlist-queue-panel .queue-video:hover{background:#30303
 html[data-theme=dark] .playlist-queue-panel .queue-video[aria-current=true]{background:#333c4d!important}
 html[data-theme=dark] .playlist-queue-panel .queue-controls button[aria-pressed=true]{background:#343c50!important;color:#8ab4f8!important}
 html[data-theme=dark] .playlist-queue-panel :is(.queue-thumbnail,.queue-drag-handle){background:#444!important}
+
+/* Optional visual modes are reversible and do not alter account data. */
+@keyframes xerox-quake{0%,100%{transform:translate(0,0)}20%{transform:translate(-3px,2px)}40%{transform:translate(3px,-2px)}60%{transform:translate(-2px,-2px)}80%{transform:translate(2px,3px)}}
+@keyframes xerox-zero{0%,100%{translate:0 0;rotate:0deg}50%{translate:0 -14px;rotate:1.5deg}}
+html.xerox-mode-quake #root{animation:xerox-quake .36s linear infinite}
+html.xerox-mode-zero #root :is(.video-card,.shorts-cover,.shorts-frame,.my-section){animation:xerox-zero 3.2s ease-in-out infinite alternate}
+html.xerox-mode-mirror #root{transform:scaleX(-1)}
+@media(prefers-reduced-motion:reduce){html.xerox-mode-quake #root,html.xerox-mode-zero #root *{animation:none!important}}
