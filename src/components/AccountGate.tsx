@@ -59,6 +59,8 @@ const read = <T,>(key: string, fallback: T): T => { try { return JSON.parse(loca
 // In particular, an iframe can keep playing audio after its containing page is hidden.
 function stopAllPlaybackNow(){
   try{
+    const iosVideo=document.querySelector('video') as (HTMLVideoElement & {webkitExitFullscreen?:()=>void;webkitSetPresentationMode?:(mode:'inline')=>void})|null;
+    try{iosVideo?.webkitExitFullscreen?.();iosVideo?.webkitSetPresentationMode?.('inline');}catch{}
     for(const media of document.querySelectorAll<HTMLMediaElement>('video,audio')){
       try{
         media.pause();
@@ -74,8 +76,6 @@ function stopAllPlaybackNow(){
     }
     if(document.pictureInPictureElement)void document.exitPictureInPicture().catch(()=>{});
     if(document.fullscreenElement)void document.exitFullscreen().catch(()=>{});
-    const iosVideo=document.querySelector('video') as (HTMLVideoElement & {webkitExitFullscreen?:()=>void;webkitSetPresentationMode?:(mode:'inline')=>void})|null;
-    try{iosVideo?.webkitExitFullscreen?.();iosVideo?.webkitSetPresentationMode?.('inline');}catch{}
   }catch{}
 }
 
@@ -181,6 +181,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       if (background) window.dispatchEvent(new CustomEvent('xerox-history-remote', { detail: history }));
       if (dirty) setTimeout(() => void sync.current(), 0);
     } catch (err: any) {
+      if(epoch!==authEpoch.current)return; // BAN or logout occurred while loading.
       if(err.code==='TERMS_REQUIRED'){if(active.current?.id!==u.id)cache.current=read<Cache>(accountKey(u.id),{history:[],version:0,dirty:false});const pending={...u,termsAccepted:false};active.current=pending;localStorage.setItem(SESSION_HINT_KEY,JSON.stringify(pending));setUser(pending);setPhase('ready');return;}
       if (err.status === 401 && background) { serverAuthenticated.current=false;setMessage('サーバーの認証を確認できません。端末内のデータを保持して表示しています。'); }
       else if (err.status === 401) { setMessage('認証を確認できませんでした。もう一度ログインしてください。');setPhase('login'); }
@@ -279,7 +280,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     let lastIdleCheck=Date.now();
     const interval=setInterval(()=>{
       if(document.hidden)return;
-      const hasPlayer=!!document.querySelector('video,iframe[src]:not([src="about:blank"])');
+      const hasPlayer=!!document.querySelector('video,audio,iframe[allow*="autoplay"],iframe[allow*="picture-in-picture"]');
       if(!hasPlayer&&Date.now()-lastIdleCheck<4000)return;
       lastIdleCheck=Date.now();
       void check();
