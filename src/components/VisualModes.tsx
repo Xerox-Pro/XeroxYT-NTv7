@@ -18,22 +18,21 @@ export default function VisualModes(){
    if(typeof next==='string')setMode(['chaos','chaos2','jelly','spin','quake','zero','mirror'].includes(next)?next as Mode:'off');
   };
   window.addEventListener('xerox-api-sidecar',apply);
-  // A lightweight, conditional mode-only request keeps the effect synchronized
-  // even when the user is idle and no other API requests are in flight.
-  let stopped=false,inflight=false;
+  // Presence heartbeats and ordinary YouTube reads now carry mode updates.
+  // Fetch once at mount, then on explicit focus only; never poll every 4s.
+  let stopped=false,inflight=false,lastCheck=0;
   const check=async()=>{
    if(stopped||inflight||document.hidden)return;
-   inflight=true;
+   inflight=true;lastCheck=Date.now();
    try{
     const response=await fetch('/api/account/visual-mode',{credentials:'same-origin',cache:'no-store'});
-    if(response.ok){const data=await response.json();if(typeof data.mode==='string')apply(new CustomEvent('mode',{detail:{mode:data.mode}}));}
+    if(response.ok){const data=await response.json();if(!stopped&&typeof data.mode==='string')apply(new CustomEvent('mode',{detail:{mode:data.mode}}));}
    }catch{}finally{inflight=false;}
   };
   void check();
-  const timer=setInterval(()=>void check(),4000);
-  const onFocus=()=>void check();
+  const onFocus=()=>{if(Date.now()-lastCheck>20000)void check();};
   window.addEventListener('focus',onFocus);
-  return()=>{stopped=true;clearInterval(timer);window.removeEventListener('focus',onFocus);window.removeEventListener('xerox-api-sidecar',apply);};
+  return()=>{stopped=true;window.removeEventListener('focus',onFocus);window.removeEventListener('xerox-api-sidecar',apply);};
  },[username]);
  useEffect(()=>{
   if(mode==='off'||mode==='quake'||mode==='zero'||mode==='mirror')return;
