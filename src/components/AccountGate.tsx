@@ -264,8 +264,10 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   useEffect(()=>{
     if(phase!=='ready'||!user?.id)return;
     let stopped=false,inFlight=false;
+    const hasPlayer=()=>!!document.querySelector('video,audio,iframe[allow*="autoplay"],iframe[allow*="picture-in-picture"]');
     const check=async()=>{
-      if(stopped||inFlight||document.hidden)return;
+      // Keep checking a playing iframe even when the tab is backgrounded (e.g. picture-in-picture).
+      if(stopped||inFlight||(document.hidden&&!hasPlayer()))return;
       inFlight=true;
       try{
         const response=await fetch('/api/account/ban-status',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(7000)});
@@ -279,9 +281,9 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     // Check more often while a video/iframe is mounted; otherwise keep background API usage low.
     let lastIdleCheck=Date.now();
     const interval=setInterval(()=>{
-      if(document.hidden)return;
-      const hasPlayer=!!document.querySelector('video,audio,iframe[allow*="autoplay"],iframe[allow*="picture-in-picture"]');
-      if(!hasPlayer&&Date.now()-lastIdleCheck<4000)return;
+      const playing=hasPlayer();
+      if(document.hidden&&!playing)return;
+      if(!playing&&Date.now()-lastIdleCheck<4000)return;
       lastIdleCheck=Date.now();
       void check();
     },1500);
