@@ -123,6 +123,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   const active = useRef<User | null>(cachedUser);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sending = useRef(false);
+  const syncRetryDelay = useRef(15000);
   const serverAuthenticated=useRef(false);
   const authEpoch = useRef(0);
   const sync = useRef<() => Promise<void>>(async () => {});
@@ -198,6 +199,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     const snapshot = cache.current;
     try {
       const result = await api('/history', 'PUT', { history: snapshot.history, version: snapshot.version });
+      syncRetryDelay.current = 15000;
       cache.current = { ...cache.current, version: result.version, dirty: cache.current.history !== snapshot.history };
       persist(u); setMessage('');
     } catch (err: any) {
@@ -213,13 +215,19 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       } else setMessage('履歴は端末に保存されています。同期を再試行します。');
     } finally {
       sending.current = false;
-      if (cache.current.dirty && active.current && serverAuthenticated.current) timer.current = setTimeout(() => void sync.current(), 5000);
+      if (cache.current.dirty && active.current && serverAuthenticated.current) {
+        // Avoid one D1 write every 5 seconds during an upstream outage.
+        const delay = syncRetryDelay.current;
+        syncRetryDelay.current = Math.min(delay * 2, 300000);
+        timer.current = setTimeout(() => void sync.current(), delay);
+      }
     }
   };
 
   useEffect(() => {
     if(cachedUser)active.current=cachedUser;
     let cancelled=false,busy=false,lastCheck=0;
+    let retryTimer:ReturnType<typeof setTimeout>|null=null;
     const verify=async(force=false)=>{
       if(cancelled||busy||Date.now()-lastCheck<(force?5000:300000))return;
       busy=true;lastCheck=Date.now();const epoch=authEpoch.current;
@@ -227,6 +235,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
         const {user:existing,historyVersion}=await api('/session');
         if(cancelled||authEpoch.current!==epoch)return;
         if(!existing?.id)throw new Error('Invalid session response');
+        if(retryTimer){clearTimeout(retryTimer);retryTimer=null;}
         if(banRef.current){localStorage.removeItem(BAN_LOCK_KEY);setBanRecord(null);}
         const wasAuthenticated=serverAuthenticated.current;
         const sameAccount=active.current?.id===existing.id;
@@ -254,8 +263,14 @@ export default function AccountGate({ children }: { children: ReactNode }) {
         if(serverAuthenticated.current){
           setMessage('通信が不安定です。ログイン情報を保持したまま再確認します。');
         }else{
-          setMessage('サーバーのログイン状態を確認できません。通信環境を確認してください。');
-          setPhase('error');
+          // Never unlock cached account data without a verified server session.
+          // An account service outage should still let a new user see the login form.
+          setMessage('認証サーバーが応答していません。自動で再確認します。');
+          setPhase(cachedUser?'error':'login');
+          if(!retryTimer)retryTimer=setTimeout(()=>{
+            retryTimer=null;
+            if(!cancelled&&!document.hidden){lastCheck=0;void verify(true);}
+          },120000);
         }
       }finally{busy=false;}
     };
@@ -266,7 +281,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     void verify(true);
     const interval=setInterval(resume,300000);
     window.addEventListener('online',resumeNow);window.addEventListener('focus',resumeNow);window.addEventListener('xerox-ban-check',checkBanNow);document.addEventListener('visibilitychange',resumeNow);
-    return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);window.removeEventListener('xerox-ban-check',checkBanNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
+    return ()=>{cancelled=true;if(retryTimer)clearTimeout(retryTimer);active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);window.removeEventListener('xerox-ban-check',checkBanNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
   },[initialize,cachedUser,lockBanned]);
 
   // No standalone BAN polling. Account/session and presence responses, plus the
