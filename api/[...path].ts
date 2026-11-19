@@ -32,9 +32,14 @@ async function accountSidecar(origin: string, headers: Headers): Promise<string 
     metadataHeaders.set('accept', 'application/json');
     const data = await Promise.all(SIDECAR_PATHS.map(path =>
       fetchApiResponse(origin + path, { method: 'GET', headers: metadataHeaders, redirect: 'manual' }, 2000)
-        .then(response => response.ok ? response.json() : null).catch(() => null)
+        .then(async response => ({status:response.status, body:await response.json().catch(()=>null)}))
+        .catch(() => null)
     ));
-    const [visual, messages, rooms] = data;
+    // Reuse the existing visual-mode/DM sidecar responses to detect a BAN.
+    // No dedicated /ban-status polling or additional HTTP request is needed.
+    if(data.some(item=>item?.status===403&&item.body?.code==='ACCOUNT_BANNED'))
+      return JSON.stringify({capturedAt:Date.now(),banned:true});
+    const [visual, messages, rooms] = data.map(item=>item?.status===200?item.body:null);
     const sidecar: Record<string, unknown> = {capturedAt: Date.now()};
     if (typeof visual?.mode === 'string') sidecar.mode = visual.mode;
     if (Array.isArray(messages?.threads)) sidecar.threads = messages.threads.slice(0, 16).map((t: any) => ({
