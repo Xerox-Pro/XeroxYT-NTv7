@@ -109,7 +109,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   const [initialBan] = useState<BanRecord | null>(()=>read<BanRecord|null>(BAN_LOCK_KEY,null));
   const [cachedUser] = useState<User | null>(() => { const handoff=(window as any).__XEROX_ACCOUNT_HANDOFF__;if(handoff&&Date.now()-handoff.savedAt<30000&&handoff.user?.id&&handoff.user?.username)return handoff.user;const hint = read<User | null>(SESSION_HINT_KEY, null); return hint && typeof hint.id === 'string' && typeof hint.username === 'string' && localStorage.getItem('xerox_last_account_id') === hint.id ? hint : null; });
   const [user, setUser] = useState<User | null>(cachedUser);
-  const [phase, setPhase] = useState<'checking' | 'login' | 'loading' | 'ready' | 'error' | 'banned'>(initialBan?'banned':cachedUser ? 'checking' : 'login');
+  const [phase, setPhase] = useState<'checking' | 'login' | 'loading' | 'ready' | 'error' | 'banned'>(initialBan?'banned':'checking');
   const [banRecord,setBanRecord]=useState<BanRecord|null>(initialBan);
   const banRef=useRef(banRecord);banRef.current=banRecord;
   const [register, setRegister] = useState(false);
@@ -153,8 +153,9 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   },[lockBanned]);
 
   const persist = (u: User) => localStorage.setItem(accountKey(u.id), JSON.stringify({...cache.current, savedAt: new Date().toISOString()}));
-  const initialize = useCallback(async (u: User, importLegacy = false, background = false) => {
-    if (!background) setPhase('loading'); setMessage('');
+  const initialize = useCallback(async (u: User, importLegacy = false, background = false, silent = false) => {
+    // Server-side session verification must never flash the login/loading form.
+    if (!background && !silent) setPhase('loading'); setMessage('');
     const epoch = authEpoch.current;
     try {
       const remote = await api('/history');
@@ -228,8 +229,12 @@ export default function AccountGate({ children }: { children: ReactNode }) {
         if(!existing?.id)throw new Error('Invalid session response');
         if(banRef.current){localStorage.removeItem(BAN_LOCK_KEY);setBanRecord(null);}
         const wasAuthenticated=serverAuthenticated.current;
+        const sameAccount=active.current?.id===existing.id;
         serverAuthenticated.current=true;
-        await initialize(existing,false,wasAuthenticated&&active.current?.id===existing.id);
+        // Stay on the current page during routine rechecks. On first load,
+        // keep the app gated invisibly until the server has verified the cookie.
+        if(wasAuthenticated&&!sameAccount)setPhase('checking');
+        await initialize(existing,false,wasAuthenticated&&sameAccount,true);
       }catch(err:any){
         if(cancelled||authEpoch.current!==epoch)return;
         if(err.code==='ACCOUNT_BANNED'){lockBanned();return;}
@@ -377,7 +382,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     try { authEpoch.current++; await api('/logout', 'POST', {});serverAuthenticated.current=false; active.current = null; localStorage.removeItem(SESSION_HINT_KEY); setUser(null); setPhase('login'); setMessage(''); }
     catch { setMessage('ログアウトできませんでした。'); }
   }
-  if (phase === 'checking') return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><p role="status" className="text-sm text-gray-600">ログイン状態を確認しています…</p></main>;
+  if (phase === 'checking') return <main className="min-h-screen bg-gray-50" aria-busy="true"><span className="sr-only" role="status">読み込み中</span></main>;
   if (phase === 'ready' && user && serverAuthenticated.current) return <AccountContext.Provider value={{ username: user.username, ...(user.admin?{isMaster:true}:{}), logout }}><TermsGate key={user.id} alreadyAccepted={user.termsAccepted===true} onAccepted={()=>{if(active.current)void initialize(active.current,false,true);}} onLogout={()=>void logout(true)}><VisualModes/><MessageNotifications/>{children}{message && <div role="status" className="fixed top-16 right-4 z-[200] bg-gray-900 text-white text-xs p-3 rounded-xl max-w-xs shadow-lg">{message}{!serverAuthenticated.current&&<button type="button" className="block mt-2 underline" onClick={()=>{setPassword('');setConfirm('');setPhase('login');setMessage('端末内のデータを保持したまま再接続します。');}}>再ログインして同期を再開</button>}</div>}</TermsGate></AccountContext.Provider>;
 
   if(phase==='banned')return <TermsGate onAccepted={()=>{}} onLogout={()=>void logout(true)}><DirectMessages appealOnly/><main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-5"><section className="w-full max-w-md rounded-3xl border border-red-900 bg-gray-900 p-8 text-center shadow-2xl" role="alert"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-950 text-3xl" aria-hidden="true">!</div><h1 className="mt-5 text-2xl font-bold">このアカウントはBANされています</h1><p className="mt-3 text-sm leading-6 text-gray-300">この端末では、新しいアカウントの作成、ログアウト、アカウント切り替えなどの操作はできません。</p>{banRecord?.username&&<p className="mt-4 text-xs text-gray-500">対象アカウント: @{banRecord.username}</p>}<p className="mt-5 text-xs text-gray-500">BAN解除後は下のボタンで状態を再確認できます。認証が期限切れの場合は再ログインが必要です。</p><button type="button" className="mt-4 w-full rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900" onClick={()=>window.dispatchEvent(new Event('xerox-ban-check'))}>BAN解除状況を確認</button></section></main></TermsGate>;
