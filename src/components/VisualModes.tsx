@@ -19,7 +19,7 @@ export default function VisualModes(){
   };
   window.addEventListener('xerox-api-sidecar',apply);
   // Presence heartbeats and ordinary YouTube reads now carry mode updates.
-  // Fetch once at mount, then on explicit focus only; never poll every 4s.
+  // Fetch once at mount, then no more than every five minutes on focus.
   let stopped=false,inflight=false,lastCheck=0;
   const check=async()=>{
    if(stopped||inflight||document.hidden)return;
@@ -30,7 +30,7 @@ export default function VisualModes(){
    }catch{}finally{inflight=false;}
   };
   void check();
-  const onFocus=()=>{if(Date.now()-lastCheck>20000)void check();};
+  const onFocus=()=>{if(Date.now()-lastCheck>300000)void check();};
   window.addEventListener('focus',onFocus);
   return()=>{stopped=true;window.removeEventListener('focus',onFocus);window.removeEventListener('xerox-api-sidecar',apply);};
  },[username]);
