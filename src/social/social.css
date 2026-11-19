@@ -72,3 +72,19 @@
  .tt-volume{right:12px;top:44px}
 }
 @media(prefers-reduced-motion:reduce){.tt-player,.tiktok-mode.is-vertical .social-reel-viewer{scroll-behavior:auto!important}}
+
+/* TikTok account picker stays separate from credential entry. */
+.tt-accounts{margin:18px 0;padding:16px;border:1px solid #38383f;border-radius:14px;background:#1b1b20;color:#f4f4f6}
+.tt-accounts header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tt-accounts header h3{margin:0;font-size:15px}
+.tt-accounts header button{background:none;border:0;padding:8px;color:#fff}
+.tt-accounts>p{font-size:12px;color:#b7b7bd;line-height:1.7}
+.tt-account-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid #ffffff22;min-width:0}
+.tt-account-row>img{width:43px;height:43px;border-radius:50%;object-fit:cover;flex-shrink:0}
+.tt-account-name{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.tt-account-name b,.tt-account-name small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tt-account-name small{font-size:11px;color:#aaa}
+.tt-account-row button,.tt-account-active{display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 10px;border-radius:9px;border:1px solid #555;background:#34343a;color:#fff;font-size:12px;flex-shrink:0}
+.tt-account-active{background:#16432d;border-color:#2c6a48;color:#c6ffe0}
+.tt-account-row .tt-account-remove{padding:8px;background:transparent;border:0;color:#bbb}
+@media(max-width:420px){.tt-account-row{gap:7px}.tt-account-row button,.tt-account-active{padding:6px;font-size:11px}}
