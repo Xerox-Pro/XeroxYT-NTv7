@@ -65,7 +65,7 @@ export default async function handler(request: Request, context?: EdgeContext) {
     const fields = {event: 'api_request', operation: routeName, method: request.method, status: response.status, durationMs: Date.now() - startedAt, attempts, upstreamIndex, ...(reason ? {reason} : {})};
     // Log sanitized metadata on the server; never store query strings, tokens, or request bodies.
     if(context?.waitUntil && process.env.API_SHARED_SECRET && request.headers.has('cookie')
-       && !/^\\/api\\/account\\/(?:telemetry|admin\\/logs)(?:[/?]|$)/.test(new URL(request.url).pathname)){
+       && !new RegExp('^/api/account/(?:telemetry|admin/logs)(?:[/?]|$)').test(new URL(request.url).pathname)){
       const logTask=(async()=>{
         try{
           const upstream=apiPool(process.env).find(value=>new URL(value).hostname.endsWith('.workers.dev'));
