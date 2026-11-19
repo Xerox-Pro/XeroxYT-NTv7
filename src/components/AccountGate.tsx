@@ -173,9 +173,31 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     const resumeNow=()=>{if(!document.hidden)void verify(true);};
     void verify(true);
     const interval=setInterval(resume,30000);
-    window.addEventListener('online',resumeNow);window.addEventListener('focus',resumeNow);document.addEventListener('visibilitychange',resumeNow);
-    return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
+    window.addEventListener('online',resumeNow);window.addEventListener('focus',resumeNow);window.addEventListener('xerox-ban-check',resumeNow);document.addEventListener('visibilitychange',resumeNow);
+    return ()=>{cancelled=true;active.current=null;clearInterval(interval);window.removeEventListener('online',resumeNow);window.removeEventListener('focus',resumeNow);window.removeEventListener('xerox-ban-check',resumeNow);document.removeEventListener('visibilitychange',resumeNow);if(timer.current)clearTimeout(timer.current);};
   },[initialize,cachedUser,lockBanned]);
+
+  // Each visible browser tab reports its own presence. Background tabs do not count.
+  useEffect(() => {
+    if(phase!=='ready'||!user?.id)return;
+    const tabId=crypto.randomUUID().replace(/-/g,'');
+    let stopped=false;
+    const send=(visible:boolean)=>{
+      if(stopped&&visible)return;
+      void fetch('/api/account/presence',{
+        method:'POST',credentials:'same-origin',cache:'no-store',keepalive:true,
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({tabId,visible})
+      }).catch(()=>{});
+    };
+    const onVisibility=()=>send(!document.hidden);
+    const onPageHide=()=>send(false);
+    if(!document.hidden)send(true);
+    const interval=setInterval(()=>{if(!document.hidden)send(true);},30000);
+    document.addEventListener('visibilitychange',onVisibility);
+    window.addEventListener('pagehide',onPageHide);
+    return()=>{stopped=true;clearInterval(interval);document.removeEventListener('visibilitychange',onVisibility);window.removeEventListener('pagehide',onPageHide);send(false);};
+  },[phase,user?.id]);
 
   useEffect(() => {
     const changed = (event: Event) => {
@@ -201,6 +223,8 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       setPhase('loading');
       sessionStorage.removeItem('xerox_guest');
       const result = await api(register ? '/register' : '/login', 'POST', { username, password, ...(register?{termsAccepted:true,termsVersion:agreedVersion}:{}) });
+      // Successful authentication is authoritative after a BAN is lifted. Clear the persistent device lock.
+      localStorage.removeItem(BAN_LOCK_KEY);banRef.current=null;setBanRecord(null);
       serverAuthenticated.current=true;setPassword(''); setConfirm(''); await initialize(result.user, migrate);
     } catch (err:any) { if(err?.code==='ACCOUNT_BANNED'){lockBanned();return;}setMessage(err instanceof Error ? err.message : 'ログインに失敗しました。'); setPhase('login'); }
   }
@@ -211,7 +235,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   }
   if (phase === 'ready' && user) return <AccountContext.Provider value={{ username: user.username, ...(user.admin?{isMaster:true}:{}), logout }}><TermsGate key={user.id} alreadyAccepted={user.termsAccepted===true} onAccepted={()=>{if(active.current)void initialize(active.current,false,true);}} onLogout={()=>void logout(true)}><VisualModes/><MessageNotifications/>{children}{message && <div role="status" className="fixed top-16 right-4 z-[200] bg-gray-900 text-white text-xs p-3 rounded-xl max-w-xs shadow-lg">{message}{!serverAuthenticated.current&&<button type="button" className="block mt-2 underline" onClick={()=>{setPassword('');setConfirm('');setPhase('login');setMessage('端末内のデータを保持したまま再接続します。');}}>再ログインして同期を再開</button>}</div>}</TermsGate></AccountContext.Provider>;
 
-  if(phase==='banned')return <TermsGate onAccepted={()=>{}} onLogout={()=>void logout(true)}><DirectMessages appealOnly/><main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-5"><section className="w-full max-w-md rounded-3xl border border-red-900 bg-gray-900 p-8 text-center shadow-2xl" role="alert"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-950 text-3xl" aria-hidden="true">!</div><h1 className="mt-5 text-2xl font-bold">このアカウントはBANされています</h1><p className="mt-3 text-sm leading-6 text-gray-300">この端末では、新しいアカウントの作成、ログアウト、アカウント切り替えなどの操作はできません。</p>{banRecord?.username&&<p className="mt-4 text-xs text-gray-500">対象アカウント: @{banRecord.username}</p>}<p className="mt-5 text-xs text-gray-500">BANが解除された場合は、この画面を開いたままにするか、しばらくしてから再読み込みしてください。</p></section></main></TermsGate>;
+  if(phase==='banned')return <TermsGate onAccepted={()=>{}} onLogout={()=>void logout(true)}><DirectMessages appealOnly/><main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-5"><section className="w-full max-w-md rounded-3xl border border-red-900 bg-gray-900 p-8 text-center shadow-2xl" role="alert"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-950 text-3xl" aria-hidden="true">!</div><h1 className="mt-5 text-2xl font-bold">このアカウントはBANされています</h1><p className="mt-3 text-sm leading-6 text-gray-300">この端末では、新しいアカウントの作成、ログアウト、アカウント切り替えなどの操作はできません。</p>{banRecord?.username&&<p className="mt-4 text-xs text-gray-500">対象アカウント: @{banRecord.username}</p>}<p className="mt-5 text-xs text-gray-500">BAN解除後は下のボタンで状態を再確認できます。認証が期限切れの場合は再ログインが必要です。</p><button type="button" className="mt-4 w-full rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900" onClick={()=>window.dispatchEvent(new Event('xerox-ban-check'))}>BAN解除状況を確認</button></section></main></TermsGate>;
 
   return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><section className="w-full max-w-md bg-white rounded-3xl shadow-lg border border-gray-100 p-7 sm:p-9"><h1 className="text-2xl font-bold text-gray-900">XeroxYT-NTv7</h1><p className="text-sm text-gray-500 mt-2">アカウントにログインして、視聴履歴を端末とクラウドに保存します。</p>{phase === 'error' ? <><p className="mt-6 text-red-700" role="alert">{message}</p><button className="mt-4 rounded-xl bg-gray-900 text-white px-4 py-2" onClick={() => user ? void initialize(user) : window.location.reload()}>再試行</button></> : <form onSubmit={submit} className="mt-7 space-y-4"><h2 className="text-lg font-semibold">{register ? '新規アカウント作成' : 'ログイン'}</h2><label className="block text-sm">ユーザー名<input autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="英数字と _" /></label><label className="block text-sm">パスワード<input type="password" autoComplete={register ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={12} maxLength={128} className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" placeholder="12文字以上" /></label>{register && <label className="block text-sm">パスワード（確認）<input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2.5" /></label>}{!localStorage.getItem('xerox_last_account_id') && <label className="flex items-start gap-2 text-sm text-gray-600"><input type="checkbox" checked={migrate} onChange={e => setMigrate(e.target.checked)} className="mt-1" />この端末にある以前の視聴履歴を取り込む</label>}{register&&<RegistrationTerms onChange={setAgreedVersion}/>} {message && <p className="text-sm text-red-700" role="alert">{message}</p>}<button disabled={phase === 'loading'||(register&&!agreedVersion)} className="w-full bg-gray-900 disabled:opacity-60 text-white rounded-xl py-3 font-semibold">{phase === 'loading' ? '処理中…' : register ? 'アカウントを作成' : 'ログイン'}</button><button type="button" onClick={() => { setRegister(!register);setAgreedVersion('');setMessage(''); }} className="w-full text-sm text-blue-700 py-2">{register ? 'すでにアカウントを持っている' : '新規アカウントを作成'}</button>{register && <p className="text-xs text-gray-500">パスワード再設定機能はまだありません。忘れないよう安全に保管してください。</p>}</form>}</section></main>;
 }
