@@ -50,8 +50,7 @@ async function accountSidecar(origin: string, headers: Headers): Promise<string 
   return value;
 }
 
-type EdgeContext={waitUntil?:(promise:Promise<unknown>)=>void};
-export default async function handler(request: Request, context?: EdgeContext) {
+export default async function handler(request: Request) {
   const startedAt = Date.now();
   // Keep the entire Edge invocation below its 25s first-response limit,
   // including health checks, request-body parsing and upstream retries.
@@ -63,27 +62,14 @@ export default async function handler(request: Request, context?: EdgeContext) {
   let upstreamIndex = 0;
   const respond = (response: Response, reason?: string) => {
     const fields = {event: 'api_request', operation: routeName, method: request.method, status: response.status, durationMs: Date.now() - startedAt, attempts, upstreamIndex, ...(reason ? {reason} : {})};
-    // Log sanitized metadata on the server; never store query strings, tokens, or request bodies.
-    if(context?.waitUntil && process.env.API_SHARED_SECRET && request.headers.has('cookie')
-       && !new RegExp('^/api/account/(?:telemetry|admin/logs)(?:[/?]|$)').test(new URL(request.url).pathname)){
-      const logTask=(async()=>{
-        try{
-          const upstream=apiPool(process.env).find(value=>new URL(value).hostname.endsWith('.workers.dev'));
-          if(!upstream)return;
-          await fetch(upstream+'/api/account/telemetry',{
-            method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.API_SHARED_SECRET,'Cookie':request.headers.get('cookie')||'','Origin':new URL(request.url).origin},
-            body:JSON.stringify({route:routeName,method:request.method,status:response.status,durationMs:Date.now()-startedAt}),
-            signal:AbortSignal.timeout(2500)
-          });
-        }catch{}
-      })();
-      context.waitUntil(logTask);
-    }
+    // Request metadata is recorded once at the Cloudflare API boundary.
     if (response.status >= 500) console.warn(JSON.stringify(fields));
     else console.info(JSON.stringify(fields));
     return response;
   };
 
+  // Internal telemetry is not a public API: prevent client-forged log entries.
+  if(url.pathname==='/api/account/telemetry')return respond(Response.json({error:'Not found'},{status:404}));
   let pool: string[];
   try {
     pool = apiPool(process.env).filter(origin=>new URL(origin).hostname.endsWith('.workers.dev'));
