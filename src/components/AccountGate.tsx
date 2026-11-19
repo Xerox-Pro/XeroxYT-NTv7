@@ -322,8 +322,10 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     const observer=titleNode?new MutationObserver(schedule):null;
     if(titleNode)observer?.observe(titleNode,{childList:true,characterData:true,subtree:true});
     if(!document.hidden)send(true,true);
-    // A five-minute fallback presence request checks BAN and visual mode; foreground API reads provide faster updates.
-    const interval=setInterval(()=>{if(!document.hidden)send(true,true);},300000);
+    // Presence must remain within the server's 90-second viewing window.
+    // Session and visual-mode standalone checks stay at five minutes; presence
+    // is one low-rate combined heartbeat for viewing state, BAN, and mode.
+    const interval=setInterval(()=>{if(!document.hidden)send(true,true);},60000);
     document.addEventListener('visibilitychange',onVisibility);
     window.addEventListener('focus',schedule);
     window.addEventListener('pagehide',onPageHide);
