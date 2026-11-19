@@ -20,3 +20,17 @@ html[data-theme=dark] .playback-range input{accent-color:#82b4ff}
 html[data-theme=dark] .playback-settings-trigger{background:#272727;color:#f1f1f1;border-color:#404040}
 html[data-theme=dark] .playback-settings-trigger:hover{background:#393939}
 html[data-theme=dark] .thumbnail-frame{border-width:0}
+
+/* Playlist playback queue: cover every nested surface in dark mode. */
+html[data-theme=dark] .playlist-queue-panel,
+html[data-theme=dark] .playlist-queue-panel.queue-open,
+html[data-theme=dark] .playlist-queue-panel.queue-collapsed{background:#181818!important;color:#f1f1f1!important;border-color:#343434!important}
+html[data-theme=dark] .playlist-queue-panel>header,
+html[data-theme=dark] .playlist-queue-panel .queue-controls{background:#202020!important;color:#f1f1f1!important;border-color:#343434!important}
+html[data-theme=dark] .playlist-queue-panel :is(.queue-heading strong,.queue-video-text strong,.queue-toggle,.queue-controls button){color:#f1f1f1!important}
+html[data-theme=dark] .playlist-queue-panel :is(.queue-heading span,.queue-video-text>span,.queue-number){color:#aaa!important}
+html[data-theme=dark] .playlist-queue-panel .queue-video{background:transparent!important;color:#f1f1f1!important}
+html[data-theme=dark] .playlist-queue-panel .queue-video:hover{background:#303030!important}
+html[data-theme=dark] .playlist-queue-panel .queue-video[aria-current=true]{background:#333c4d!important}
+html[data-theme=dark] .playlist-queue-panel .queue-controls button[aria-pressed=true]{background:#343c50!important;color:#8ab4f8!important}
+html[data-theme=dark] .playlist-queue-panel :is(.queue-thumbnail,.queue-drag-handle){background:#444!important}
