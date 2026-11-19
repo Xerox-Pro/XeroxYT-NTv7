@@ -280,22 +280,29 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     if(phase!=='ready'||!user?.id)return;
     const tabId=crypto.randomUUID().replace(/-/g,'');
     let stopped=false,scheduled:ReturnType<typeof setTimeout>|undefined;
-    let lastSent='';
+    let lastSent='',lastHeartbeat=0;
     const send=(visible:boolean,force=false)=>{
       if(stopped&&visible)return;
       const page=visible?presencePage(pagePath.current):{page:'',title:''};
       const payload={tabId,visible,...page};
       const serialized=JSON.stringify(payload);
       if(visible&&!force&&serialized===lastSent)return;
-      if(visible)lastSent=serialized;
+      // A focus + visibilitychange pair must not send duplicate heartbeats.
+      if(visible&&force&&Date.now()-lastHeartbeat<1200)return;
+      if(visible){lastSent=serialized;lastHeartbeat=Date.now();}
       void fetch('/api/account/presence',{
         method:'POST',credentials:'same-origin',cache:'no-store',keepalive:!visible,
         headers:{'Content-Type':'application/json'},
         body:serialized,
       }).then(async response=>{
-        if(!stopped&&response.status===403){
+        if(stopped||!visible)return;
+        if(response.status===403){
           const data=await response.json().catch(()=>({}));
           if(data.code==='ACCOUNT_BANNED')window.dispatchEvent(new Event('xerox-account-banned'));
+        }else if(response.ok){
+          const data=await response.json().catch(()=>({}));
+          if(typeof data.mode==='string')
+            window.dispatchEvent(new CustomEvent('xerox-api-sidecar',{detail:{mode:data.mode}}));
         }
       }).catch(()=>{});
     };
@@ -310,13 +317,16 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     const observer=titleNode?new MutationObserver(schedule):null;
     if(titleNode)observer?.observe(titleNode,{childList:true,characterData:true,subtree:true});
     if(!document.hidden)send(true,true);
-    const interval=setInterval(()=>{if(!document.hidden)send(true,true);},30000);
+    // One presence request also checks BAN and refreshes visual mode.
+    const interval=setInterval(()=>{if(!document.hidden)send(true,true);},20000);
     document.addEventListener('visibilitychange',onVisibility);
+    window.addEventListener('focus',schedule);
     window.addEventListener('pagehide',onPageHide);
     window.addEventListener('xerox-presence-page-changed',schedule);
     return()=>{
       stopped=true;clearInterval(interval);if(scheduled)clearTimeout(scheduled);observer?.disconnect();
       document.removeEventListener('visibilitychange',onVisibility);
+      window.removeEventListener('focus',schedule);
       window.removeEventListener('pagehide',onPageHide);
       window.removeEventListener('xerox-presence-page-changed',schedule);
       send(false,true);
