@@ -35,7 +35,7 @@ export default function TikTokQrLogin({onConnected}:{onConnected:()=>void}){
     {qr.qrImage?<img src={qr.qrImage} alt="TikTokアプリでスキャンするログイン用QRコード"/>:<p>この接続先からQR画像を取得できませんでした。公式リンクからログインを行えます。</p>}
     <a href={qr.qrCodeUrl} target="_blank" rel="noopener noreferrer">TikTokの認証リンクを開く <ExternalLink size={15}/></a>
     <button className="social-secondary" onClick={()=>{setQr(null);setStatus('');}}><RefreshCw size={15}/>別のQRコードを発行する</button>
-   </div>}
+   </div>:null}
   {status&&<p role="status"><ShieldCheck size={15}/> {status}</p>}
   {error&&<div role="alert" className="social-alert">
    <p>{error}</p>
