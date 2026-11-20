@@ -6,11 +6,12 @@ if(process.env.VERCEL_ENV==='production'){
  // Never reuse a login profile or credentials from another project.
  let snapshotId=null;
  try {
-  const template=await Sandbox.get({name:'social-login-browser-template-final',resume:true});
-  const saved=template.currentSnapshotId?await Snapshot.get({snapshotId:template.currentSnapshotId}):null;
-  const snapshot=saved&&!saved.expiresAt?(await template.stop(),saved):await template.snapshot({expiration:0});
-  snapshotId=snapshot.snapshotId;
-  console.info('Login browser template prepared');
+  const template=await Sandbox.get({name:'social-login-browser-template-final',resume:false});
+  const snapshot=template.currentSnapshotId?await Snapshot.get({snapshotId:template.currentSnapshotId}):null;
+  if(snapshot&&(!snapshot.expiresAt||snapshot.expiresAt.getTime()>Date.now())){
+   snapshotId=snapshot.snapshotId;
+   console.info('Login browser template prepared');
+  }
  } catch(error) {
   const code=error?.json?.error?.code||error?.code;
   if(code!=='not_found')throw error;

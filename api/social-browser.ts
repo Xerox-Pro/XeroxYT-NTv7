@@ -15,7 +15,7 @@ export default async function handler(req:any,res:any){
  try{
   if(body.operation==='create'){
    if(!browserTemplate.snapshotId)return res.status(503).json({error:'VERCEL_BROWSER_NOT_CONFIGURED'});
-   stage="sandbox_create";sandbox=await Sandbox.create({source:{type:'snapshot',snapshotId:browserTemplate.snapshotId},name:'social-login-'+randomUUID(),persistent:false,timeout:600000,resources:{vcpus:1},ports:[]});
+   stage="sandbox_create";sandbox=await Sandbox.create({source:{type:'snapshot',snapshotId:browserTemplate.snapshotId},name:'social-login-'+randomUUID(),persistent:false,region:'hnd1',timeout:600000,resources:{vcpus:1},ports:[]});
    await sandbox.writeFiles(await Promise.all(['launch.mjs','navigate.mjs'].map(async file=>({path:ROOT+'/'+file,content:await readFile(path.join(process.cwd(),'server/browser',file))}))));
    stage='chromium_launch';await sandbox.runCommand({cmd:'node',args:[ROOT+'/launch.mjs'],cwd:ROOT,detached:true});
    // The template has dependencies preinstalled; wait briefly for Chromium.
