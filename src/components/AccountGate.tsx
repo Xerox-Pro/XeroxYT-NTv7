@@ -113,7 +113,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   const [initialBan] = useState<BanRecord | null>(()=>read<BanRecord|null>(BAN_LOCK_KEY,null));
   const [cachedUser] = useState<User | null>(() => { const handoff=(window as any).__XEROX_ACCOUNT_HANDOFF__;if(handoff&&Date.now()-handoff.savedAt<30000&&handoff.user?.id&&handoff.user?.username)return handoff.user;const hint = read<User | null>(SESSION_HINT_KEY, null); return hint && typeof hint.id === 'string' && typeof hint.username === 'string' && localStorage.getItem('xerox_last_account_id') === hint.id ? hint : null; });
   const [user, setUser] = useState<User | null>(cachedUser);
-  const [phase, setPhase] = useState<'checking' | 'login' | 'loading' | 'ready' | 'error' | 'banned'>(initialBan?'banned':cachedUser ? 'checking' : 'login');
+  const [phase, setPhase] = useState<'checking' | 'login' | 'loading' | 'ready' | 'error' | 'banned'>(initialBan?'banned':cachedUser ? 'ready' : 'login');
   const [banRecord,setBanRecord]=useState<BanRecord|null>(initialBan);
   const banRef=useRef(banRecord);banRef.current=banRecord;
   const [register,setRegister]=useState(false);
@@ -128,7 +128,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   const active = useRef<User | null>(cachedUser);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sending = useRef(false);
-  const serverAuthenticated=useRef(false);
+  const serverAuthenticated=useRef(Boolean(cachedUser&&!initialBan));
   const authEpoch = useRef(0);
   const sync = useRef<() => Promise<void>>(async () => {});
   useEffect(()=>{const prepare=async()=>{if(cache.current.dirty){await sync.current();if(cache.current.dirty)return false;}const current=active.current;if(current)(window as any).__XEROX_ACCOUNT_HANDOFF__={user:current,savedAt:Date.now()};return true;};(window as any).__XEROX_GAS_BEFORE_UPDATE__=prepare;return()=>{if((window as any).__XEROX_GAS_BEFORE_UPDATE__===prepare)delete (window as any).__XEROX_GAS_BEFORE_UPDATE__;};},[]);
@@ -188,9 +188,16 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     } catch (err: any) {
       if(epoch!==authEpoch.current)return; // BAN or logout occurred while loading.
       if(err.code==='TERMS_REQUIRED'){if(active.current?.id!==u.id)cache.current=read<Cache>(accountKey(u.id),{history:[],version:0,dirty:false});const pending={...u,termsAccepted:false};active.current=pending;localStorage.setItem(SESSION_HINT_KEY,JSON.stringify(pending));setUser(pending);setPhase('ready');return;}
-      if (err.status === 401 && background) { serverAuthenticated.current=false;setMessage('サーバーの認証を確認できません。端末内のデータを保持して表示しています。'); }
-      else if (err.status === 401) { setMessage('認証を確認できませんでした。もう一度ログインしてください。');setPhase('login'); }
-      else if (background) { setMessage('クラウドの履歴を確認できません。端末内の履歴を表示しています。'); }
+      if (err.status === 401) {
+        authEpoch.current++;
+        serverAuthenticated.current=false;
+        active.current=null;
+        localStorage.removeItem(SESSION_HINT_KEY);
+        stopAllPlaybackNow();
+        setUser(null);
+        setMessage('ログインの有効期限が切れました。もう一度ログインしてください。');
+        setPhase('login');
+      } else if (background) { setMessage('クラウドの履歴を確認できません。端末内の履歴を表示しています。'); }
       else { setUser(u); setMessage(err instanceof Error ? err.message : '履歴を読み込めませんでした。'); setPhase('error'); }
     }
   }, []);
@@ -261,10 +268,20 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       }finally{busy=false;}
     };
     const recheck=()=>void verify();
-    void verify();
+    if(cachedUser&&!initialBan)void initialize(cachedUser,false,true);
+    const sessionChanged=(event:StorageEvent)=>{
+      if(event.key===SESSION_HINT_KEY&&event.oldValue!==event.newValue){
+        try {
+          const previous=event.oldValue?JSON.parse(event.oldValue):null;
+          const next=event.newValue?JSON.parse(event.newValue):null;
+          if(previous?.id!==next?.id)window.location.reload();
+        } catch { window.location.reload(); }
+      }
+    };
+    window.addEventListener('storage',sessionChanged);
     window.addEventListener('xerox-ban-check',recheck);
-    return ()=>{cancelled=true;active.current=null;window.removeEventListener('xerox-ban-check',recheck);if(timer.current)clearTimeout(timer.current);};
-  },[initialize,cachedUser,lockBanned]);
+    return ()=>{cancelled=true;window.removeEventListener('storage',sessionChanged);window.removeEventListener('xerox-ban-check',recheck);if(timer.current)clearTimeout(timer.current);};
+  },[initialize,cachedUser,initialBan,lockBanned]);
 
   // Each foreground tab reports its current in-site section. The video title is
   // sent only for a watch page; search terms, DMs and external URLs stay private.
