@@ -1,4 +1,3 @@
-import AppSwitcher from './AppSwitcher';
 import { useDeviceProfile } from '../lib/deviceProfile';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -415,7 +414,10 @@ export default function Navbar({
         >
           <Menu size={22} strokeWidth={2} />
         </motion.button>
-        <AppSwitcher/>
+        <button type="button" className="flex items-center gap-2 whitespace-nowrap font-bold" onClick={onHome} aria-label="XeroxYT-NTv7のホーム">
+          <img src="/favicon-32x32-gas.png" width={32} height={32} alt=""/>
+          <span className="hidden sm:inline">XeroxYT-NTv7</span>
+        </button>
       </div>
       
       {/* 中央: 検索バー + マイク */}

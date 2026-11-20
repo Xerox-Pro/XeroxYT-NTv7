@@ -54,9 +54,11 @@ export default async function handler(request: Request) {
   const startedAt = Date.now();
   // Keep the entire Edge invocation below its 25s first-response limit,
   // including health checks, request-body parsing and upstream retries.
-  const loginStart = /^\/api\/(instagram|tiktok)\/login\/(start|credentials|verify|check|finish|view|input|cancel)$/.test(new URL(request.url).pathname);
-  const deadline = startedAt + (loginStart ? 24000 : 18000);
+  const deadline = startedAt + 18000;
   const url = new URL(request.url);
+  if (/^\/api\/(?:instagram|tiktok|x|x-public-post|social-browser)(?:\/|$)/i.test(url.pathname)) {
+    return Response.json({error:'Not found'}, {status:404});
+  }
   const routeName = '/' + url.pathname.split('/').filter(Boolean).slice(0, 3).map((part, index) => index === 2 && part !== 'batch' ? ':id' : part).join('/');
   let attempts = 0;
   let upstreamIndex = 0;
@@ -120,7 +122,7 @@ export default async function handler(request: Request) {
     return peerHeaders;
   };
   // Linked provider credentials use the primary Worker's encryption key.
-  const linkedAccountRoute = /^\/api\/(auth|user|instagram|tiktok)(\/|$)/.test(path)
+  const linkedAccountRoute = /^\/api\/(auth|user)(\/|$)/.test(path)
     || path === '/api/account/cloudflare-session';
   if (linkedAccountRoute) pool = pool.filter(origin => origin !== secondaryOrigin);
   else pool = await apiSelector.plan(pool, headers, headersFor);
@@ -151,7 +153,7 @@ export default async function handler(request: Request) {
         body,
         redirect: "manual",
         signal: request.signal,
-      }, Math.max(1, Math.min(loginStart ? 22000 : 12000, deadline - Date.now())));
+      }, Math.max(1, Math.min(12000, deadline - Date.now())));
       // A route error or a per-user quota does not tell us whether this API is healthy.
       if (
         canRetry(request.method, path, response.status, sharedAccountRead) &&

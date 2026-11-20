@@ -40,12 +40,12 @@ function gasRoute_(path) {
   try{decoded=decodeURIComponent(pathname);}catch(_){return false;}
   if(/%|\\|\/\/|[\u0000-\u001f]/.test(decoded)||decoded.split('/').some(function(s){return s==='.'||s==='..';}))return false;
   if(/^\/api\/(?:debug|admin|internal|transport-config)(?:\/|$)/.test(decoded)||decoded==='/api/account/cloudflare-session')return false;
-  return /^\/api\/(?:account|auth|user|instagram|tiktok|limits|recommendations|trending|search|suggestions|video|channel|channels|home|mix|shorts|shorts-ranking|sync|playlist|playlists|health|config)(?:\/|$)/.test(decoded);
+  return /^\/api\/(?:account|auth|user|limits|recommendations|trending|search|suggestions|video|channel|channels|home|mix|shorts|shorts-ranking|sync|playlist|playlists|health|config)(?:\/|$)/.test(decoded);
 }
 function gasHeader_(headers,name) {
   var key=Object.keys(headers||{}).find(function(k){return k.toLowerCase()===name;});return key?headers[key]:null;
 }
-// Only the app's site-session cookie is bridged. Never store Google/IG/TikTok cookies in GAS.
+// Only the app's site-session cookie is bridged. Never store Google cookies in GAS.
 function gasSaveCookie_(key,responseHeaders) {
   var values=gasHeader_(responseHeaders,'set-cookie');
   if(!values)return;
@@ -81,7 +81,7 @@ function gasRequest(request) {
     var headers={'Accept':'application/json','Origin':origin};
     ['content-type','accept-language','x-client-id','x-usage-token','x-client-usage'].forEach(function(name){var v=gasHeader_(request.headers,name);if(typeof v==='string'&&v.length<2048&&!/[\r\n]/.test(v))headers[name]=v;});
     var cookie=CacheService.getScriptCache().get(key);if(cookie)headers.Cookie=cookie;
-    // The account cookie must also reach auth/user/social routes when origins differ.
+    // The account cookie must also reach auth/user routes when origins differ.
     if(target!==account){var accountCookie=CacheService.getScriptCache().get('xyg:'+gasHash_(request.session+account));if(accountCookie)headers.Cookie=accountCookie;}
     var secret=props.getProperty('API_SHARED_SECRET');if(secret)headers.Authorization='Bearer '+secret;
     if(!['GET','HEAD'].includes(method)&&!/^application\/json(?:;|$)/i.test(headers['content-type']||''))return gasResult_(415,{error:'JSON形式で送信してください。'});

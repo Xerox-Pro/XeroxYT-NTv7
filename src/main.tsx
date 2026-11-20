@@ -4,7 +4,6 @@ import { Router, createPath, parsePath, NavigationType } from 'react-router-dom'
 import type { Location, To } from 'react-router-dom';
 import App from './App.tsx';
 import './index.css';
-import './social/switcher.css';
 import { initPWA } from './pwa';
 
 const LAST_PAGE_KEY = 'xerox_last_page';

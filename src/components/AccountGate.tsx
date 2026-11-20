@@ -20,12 +20,6 @@ const accountKey = (id: string) => `xerox_account_history_${id}`;
 // Share only an in-app section and, for watch pages, a public video title.
 // Never send full URLs, search queries, message text or other private page content.
 function presencePage(path:string):{page:string;title:string}{
- if(path.startsWith('/instagram')||path.startsWith('/tiktok')){
-  const service=path.startsWith('/instagram')?'Instagram':'TikTok';
-  const section=path.split('/')[2]||'home';
-  const labels:Record<string,string>={home:'ホーム',following:'フォロー中',reels:'リール',explore:'発見',search:'検索',messages:'メッセージ',inbox:'受信箱',profile:'プロフィール',login:'ログイン'};
-  return {page:service+' / '+(labels[section]||'その他'),title:''};
- }
  const labels:Record<string,string>={
   '/':'ホーム','/watch':'動画','/shorts':'ショート','/results':'検索結果','/search':'検索',
   '/feed/subscriptions':'登録チャンネル','/feed/library':'ライブラリ','/feed/history':'履歴',

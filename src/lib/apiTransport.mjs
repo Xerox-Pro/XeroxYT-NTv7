@@ -29,14 +29,3 @@ export function apiFetch(path,options={}){
     return response;
   });
 }
-
-// Legacy name retained for the social clients; requests never go to Cloudflare
-// from the browser, including authenticated and public social endpoints.
-export function cloudflareOnlyFetch(path,options={}){
-  const target=sameOriginPath(path);
-  if(!/^\/api\/(instagram|tiktok)(\/|$)/.test(target)) throw new Error('サービスの接続先が無効です。');
-  if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem('xerox_guest')==='true'
-     &&!/^\/api\/(instagram|tiktok)\/public\//.test(target))
-    return Promise.resolve(Response.json({error:'連携にはサイトへのログインが必要です。',code:'SITE_SESSION_REQUIRED'},{status:401}));
-  return fetch(target,{...options,credentials:'same-origin'});
-}

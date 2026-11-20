@@ -55,8 +55,7 @@ declare global {
   }
 }
 
-export default function MainApp({socialContent}:{socialContent?:React.ReactNode}={}) {
-  const isSocial=!!socialContent;
+export default function MainApp() {
   const inactiveRequests=useRef(new AbortController());
   const navigate = useNavigate();
   const deviceProfile = useDeviceProfile();
@@ -142,7 +141,6 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       setLoadingMore(false);
       isFetchingMore.current = false;
     }
-    if (/^\/(instagram|tiktok)(\/|$)/.test(path)){inactiveRequests.current.abort();setGoogleStatusReady(false);return;}
     if(inactiveRequests.current.signal.aborted)inactiveRequests.current=new AbortController();
     if (path === '/') {
       const category = searchParams.get('category') || 'すべて';
@@ -622,13 +620,12 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
   }, [isPolling, authFlow]);
 
   useEffect(()=>{
-    if(isSocial)return;
     let cancelled=false;youtubeGeneration.current++;
     setGoogleStatusReady(false);localStorage.removeItem('xerox_youtube_credentials');
     fetchJSON('/api/auth/status',{signal:inactiveRequests.current.signal}).then(status=>{if(cancelled)return;const shared=!status.connected&&status.recommendationSource===true;setSharedRecommendations(shared);if(shared)localStorage.setItem('xerox_shared_recommendations','1');else localStorage.removeItem('xerox_shared_recommendations');if(status.connected&&status.user){localStorage.setItem('xerox_youtube_linked','1');setUserInfo(status.user);window.dispatchEvent(new Event('xerox-youtube-connection'));}else{localStorage.removeItem('xerox_youtube_linked');setUserInfo(null);}setGoogleStatusReady(true);}).catch(()=>{if(!cancelled){setAuthError('Google連携の状態を確認できませんでした。再読み込みしてください。');setGoogleStatusReady(true);}});
     return()=>{cancelled=true;youtubeGeneration.current++;};
-  },[siteAccount?.username,isSocial]);
-  useEffect(()=>{if(isSocial||!googleStatusReady)return;if(userInfo)void fetchYoutubeAuthData();setHomeShorts({category:'',videos:[]});setSelectedCategory('すべて');setPage(1);if(googleStatusReady&&location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo,sharedRecommendations,googleStatusReady,isSocial]);
+  },[siteAccount?.username]);
+  useEffect(()=>{if(!googleStatusReady)return;if(userInfo)void fetchYoutubeAuthData();setHomeShorts({category:'',videos:[]});setSelectedCategory('すべて');setPage(1);if(googleStatusReady&&location.pathname==='/')void fetchRecommendations(1,false);},[!!userInfo,sharedRecommendations,googleStatusReady]);
   const cancelGoogleLink=async()=>{isPollingRef.current=false;setIsPolling(false);setAuthFlow(null);setAuthError(null);try{await fetchJSON('/api/auth/cancel',{method:'POST'});}catch(error:any){setAuthError(error.message);}};
 
   const handleLogout = async () => {
@@ -863,7 +860,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
 
   // 無限スクロール検知
   const handleScroll = useCallback((force:boolean|'retry'|Event=false) => {
-    if (isSocial || (view !== 'home' && view !== 'search')) return;
+    if (view !== 'home' && view !== 'search') return;
     if (view === 'search' && !searchQuery.trim()) return;
     if (loading || loadingMore || !hasMore || isFetchingMore.current || (moreError&&force!=='retry')) return;
 
@@ -883,7 +880,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
         fetchSearch(searchQuery, nextPage, true);
       }
     }
-  }, [view, loading, loadingMore, hasMore, page, searchQuery, selectedCategory, location.search,isSocial,moreError]);
+  }, [view, loading, loadingMore, hasMore, page, searchQuery, selectedCategory, location.search,moreError]);
 
   useEffect(() => {
     const detect=()=>handleScroll();
@@ -892,7 +889,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
     const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting))handleScroll(true);},{rootMargin:'1000px 0px'});
     if(loadMoreMarker.current)observer.observe(loadMoreMarker.current);
     return ()=>{window.removeEventListener('scroll',detect);document.removeEventListener('scroll',detect,true);observer.disconnect();};
-  }, [handleScroll,isSocial,videos.length]);
+  }, [handleScroll,videos.length]);
 
   const handleSearch = (q: string) => {
     saveShortsInterest(q);
@@ -1075,7 +1072,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
       {openingMix&&<div role="status" aria-live="polite" className="youtube-action-toast"><span className="inline-block h-4 w-4 shrink-0 rounded-full border-2 border-white/30 border-t-white motion-safe:animate-spin" aria-hidden="true"/><span>ミックスリストを読み込み中…<span className="block max-w-64 truncate text-white/70">{openingMix}</span></span></div>}
       <TopProgressBar isLoading={loading || loadingMore || !!openingMix} />
       {/* ナビゲーションバー: 常に上部に固定しつつ、コンテンツと被らないようにする */}
-      {!isSocial&&<div className="w-full shrink-0 sticky top-0 z-50 bg-white">
+      <div className="w-full shrink-0 sticky top-0 z-50 bg-white">
         <Navbar
           onSearch={handleSearch}
           googleLinked={!!userInfo}
@@ -1084,11 +1081,11 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           initialSearchQuery={searchQuery}
         />
-      </div>}
+      </div>
 
       <div className="flex flex-1 relative items-start">
         {/* サイドバー: Desktopではsticky、モバイルではfixed overlay */}
-        {!isSocial&&<Sidebar
+        <Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           currentView={view}
@@ -1102,7 +1099,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
           onDebugAPI={() => navigate('/debug/api')}
           onSystemSettings={() => navigate('/system/settings')}
           showSystemSettings={!!siteAccount?.isMaster}
-        />}
+        />
 
         {/* メインコンテンツビュー */}
         <main
@@ -1110,13 +1107,13 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
         >
           {/* Keep the same player mounted when navigating, preserving iframe playback. */}
           {currentVideoId && (
-            <FloatingPlayerFrame mini={isSocial || view !== 'video'}
+            <FloatingPlayerFrame mini={view !== 'video'}
               onRestore={() => navigate(`/watch?v=${encodeURIComponent(currentVideoId)}${currentPlaylistId ? `&list=${encodeURIComponent(currentPlaylistId)}` : ''}`)}
               onClose={() => { setCurrentVideoId(null); setCurrentPlaylistId(null); }}>
               <VideoPlayer
                 key={currentVideoId}
                 videoId={currentVideoId}
-                isMini={isSocial || view !== 'video'}
+                isMini={view !== 'video'}
                 onRequestPip={()=>navigate('/')}
                 playlistQueue={currentPlaylistQueue}
                 playlistQueueIndex={playlistQueueIndex}
@@ -1138,7 +1135,7 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
               />
             </FloatingPlayerFrame>
           )}
-          {isSocial?socialContent:<AnimatePresence mode="wait">
+          <AnimatePresence mode="wait">
             <motion.div
               key={view}
               initial={{ opacity: 0, y: 10 }}
@@ -1356,13 +1353,13 @@ export default function MainApp({socialContent}:{socialContent?:React.ReactNode}
           )
         }
         </motion.div>
-      </AnimatePresence>}
+      </AnimatePresence>
         </main>
       </div>
 
-      {!isSocial&&<nav className="mobile-bottom-nav" aria-label="メインメニュー">
+      <nav className="mobile-bottom-nav" aria-label="メインメニュー">
         {[{to:'/', label:'ホーム', Icon:Home, current:'home'}, {to:'/shorts', label:'ショート', Icon:Zap, current:'shorts'}, {to:'/feed/subscriptions', label:'登録チャンネル', Icon:PlaySquare, current:'subscriptions'}, {to:'/feed/library', label:'マイページ', Icon:User, current:'library'}].map(({to, label, Icon, current}) => <Link key={to} to={to} aria-current={view === current ? 'page' : undefined}><>{current === 'library' && deviceProfile.avatar ? <img src={deviceProfile.avatar} alt="" className="mobile-profile-avatar"/> : <Icon size={23} strokeWidth={view === current ? 2.5 : 1.8}/>}</><span>{label}</span></Link>)}
-      </nav>}
+      </nav>
 
       {/* プレイリスト保存モーダル */}
       {playlistModalVideo && (

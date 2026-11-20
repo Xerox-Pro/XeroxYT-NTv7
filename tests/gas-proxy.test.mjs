@@ -14,7 +14,7 @@ function harness(){
 test('strict paths reject traversal, cross-origin and privileged calls',()=>{
  const h=harness();for(const path of ['https://evil.example/api/search','//evil.example/api/search','/api/../internal','/api/%2e%2e/internal','/api/%252e%252e/internal','/api/search%0d%0aHost:evil','/api/transport-config','/api/account/cloudflare-session','/api/debug/search','/api/search#bad'])assert.equal(h.request(path).status,400,path);
  assert.equal(h.calls.length,0);
- for(const path of ['/api/playlist/test','/api/shorts-ranking?x=1','/api/instagram/public/feed'])assert.equal(h.request(path).status,200,path);
+ for(const path of ['/api/playlist/test','/api/shorts-ranking?x=1'])assert.equal(h.request(path).status,200,path);
 });
 test('server chooses fixed URL, origin, shared secret and ignores caller credentials',()=>{
  const h=harness();const r=h.request('/api/search?q=test','a'.repeat(64),{headers:{authorization:'evil',cookie:'other',origin:'https://evil.example'}});
