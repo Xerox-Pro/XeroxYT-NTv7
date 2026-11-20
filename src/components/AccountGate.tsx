@@ -113,7 +113,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   const [initialBan] = useState<BanRecord | null>(()=>read<BanRecord|null>(BAN_LOCK_KEY,null));
   const [cachedUser] = useState<User | null>(() => { const handoff=(window as any).__XEROX_ACCOUNT_HANDOFF__;if(handoff&&Date.now()-handoff.savedAt<30000&&handoff.user?.id&&handoff.user?.username)return handoff.user;const hint = read<User | null>(SESSION_HINT_KEY, null); return hint && typeof hint.id === 'string' && typeof hint.username === 'string' && localStorage.getItem('xerox_last_account_id') === hint.id ? hint : null; });
   const [user, setUser] = useState<User | null>(cachedUser);
-  const [phase, setPhase] = useState<'checking' | 'login' | 'loading' | 'ready' | 'error' | 'banned'>(initialBan?'banned':cachedUser ? 'ready' : 'login');
+  const [phase, setPhase] = useState<'checking' | 'login' | 'loading' | 'ready' | 'error' | 'banned'>(initialBan?'checking':cachedUser ? 'ready' : 'login');
   const [banRecord,setBanRecord]=useState<BanRecord|null>(initialBan);
   const banRef=useRef(banRecord);banRef.current=banRecord;
   const [register,setRegister]=useState(false);
@@ -244,7 +244,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
         const {user:existing}=await api('/session'+(device?'?device='+device:''));
         if(cancelled||authEpoch.current!==epoch)return;
         if(!existing?.id)throw new Error('Invalid session response');
-        if(banRef.current){localStorage.removeItem(BAN_LOCK_KEY);setBanRecord(null);}
+        if(banRef.current){localStorage.removeItem(BAN_LOCK_KEY);banRef.current=null;setBanRecord(null);}
         const wasAuthenticated=serverAuthenticated.current;
         serverAuthenticated.current=true;
         await initialize(existing,false,wasAuthenticated&&active.current?.id===existing.id);
@@ -268,7 +268,8 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       }finally{busy=false;}
     };
     const recheck=()=>void verify();
-    if(cachedUser&&!initialBan)void initialize(cachedUser,false,true);
+    if(initialBan)void verify();
+    else if(cachedUser)void initialize(cachedUser,false,true);
     const sessionChanged=(event:StorageEvent)=>{
       if(event.key===SESSION_HINT_KEY&&event.oldValue!==event.newValue){
         try {
