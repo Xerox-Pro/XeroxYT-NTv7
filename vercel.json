@@ -5,6 +5,15 @@
   "outputDirectory": "dist",
   "routes": [
     {
+      "src": "/(?:open\\.html|open-launch\\.js|api/open-xerox\\.html)",
+      "headers": { "Cache-Control": "no-store" },
+      "continue": true
+    },
+    {
+      "src": "/api/open-xerox\\.html",
+      "dest": "/open.html"
+    },
+    {
       "src": "/(?!api(?:/|$)|stream/|360/|edu/|scratch-edu/)(.*)",
       "headers": {
         "X-Content-Type-Options": "nosniff",

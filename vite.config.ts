@@ -56,11 +56,11 @@ export default defineConfig(({mode}) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-          globIgnores: ['**/SocialApp-*.js','**/SocialApp-*.css','**/app-icons/**'],
+          globIgnores: ['**/SocialApp-*.js','**/SocialApp-*.css','**/app-icons/**','**/open.html','**/open-launch.js'],
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
-          navigateFallbackDenylist: [/^\/api/, /^\/stream/, /^\/edu/, /^\/360/, /^\/scratch-edu/],
+          navigateFallbackDenylist: [/^\/open\.html(?:\?|$)/, /^\/api/, /^\/stream/, /^\/edu/, /^\/360/, /^\/scratch-edu/],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
