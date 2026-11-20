@@ -1,3 +1,4 @@
+import {apiFetch} from '../lib/apiTransport.mjs';
 import {useEffect,useRef,useState} from 'react';
 
 type AccountOption={id:string;username:string};
@@ -7,7 +8,7 @@ type LogEntry={
 };
 
 async function monitorSetting(enabled?: boolean, signal?: AbortSignal): Promise<{enabled:boolean;auditRecorded?:boolean}> {
- const response=await fetch('/api/account/admin/system-monitor',{
+ const response=await apiFetch('/api/account/admin/system-monitor',{
   credentials:'same-origin',cache:'no-store',signal:signal??AbortSignal.timeout(10000),
   ...(enabled===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})}),
  });
@@ -71,7 +72,7 @@ export default function SystemLogPanel({
     if(cursor.current>0)params.set('after',String(cursor.current));
     if(selectedUserId)params.set('userId',selectedUserId);
     if(errorsOnly)params.set('errors','1');
-    const response=await fetch('/api/account/admin/system-logs?'+params.toString(),{
+    const response=await apiFetch('/api/account/admin/system-logs?'+params.toString(),{
      credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000),
     });
     const data=await response.json().catch(()=>({}));

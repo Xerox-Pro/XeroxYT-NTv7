@@ -1,3 +1,4 @@
+import {apiFetch} from '../lib/apiTransport.mjs';
 import {useCallback,useEffect,useState} from 'react';
 
 export type Entry={
@@ -27,7 +28,7 @@ export default function AdminActionHistory({revision,busy,canApply,apply}:{
  const load=useCallback(async (before?:number,signal?:AbortSignal)=>{
   setLoading(true);setError('');
   try{
-   const response=await fetch('/api/account/admin/action-history'+(before?'?before='+before:''),{
+   const response=await apiFetch('/api/account/admin/action-history'+(before?'?before='+before:''),{
     cache:'no-store',credentials:'same-origin',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(15000)]):AbortSignal.timeout(15000),
    });
    const data=await response.json();

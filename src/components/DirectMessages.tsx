@@ -1,10 +1,11 @@
+import {apiFetch} from '../lib/apiTransport.mjs';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {ArrowLeft,MessageCircle,Send,SquarePen,Users,ShieldCheck} from 'lucide-react';
 import {useSiteAccount} from './AccountGate';
 import GroupMessages,{MessagingProfile} from './GroupMessages';
 import './messages.css';
 import './messages-refinements.css';
-async function api(path='',body?:unknown){const response=await fetch('/api/account/dm'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const data=await response.json();if(!response.ok)throw Error(data.error||'通信できませんでした。');return data;}
+async function api(path='',body?:unknown){const response=await apiFetch('/api/account/dm'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const data=await response.json();if(!response.ok)throw Error(data.error||'通信できませんでした。');return data;}
 export default function DirectMessages({appealOnly=false}:{appealOnly?:boolean}){
  const admin=useSiteAccount()?.isMaster;
  const [open,setOpen]=useState(!appealOnly),[threads,setThreads]=useState<any[]>([]),[selected,setSelected]=useState(''),[messages,setMessages]=useState<any[]>([]),[target,setTarget]=useState(''),[text,setText]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[compose,setCompose]=useState(false),[tab,setTab]=useState('direct'),[reports,setReports]=useState<any[]|null>(null);

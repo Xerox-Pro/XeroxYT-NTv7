@@ -1,6 +1,7 @@
+import {apiFetch} from '../lib/apiTransport.mjs';
 import {useEffect,useState,type ReactNode} from 'react';
 import {useSiteAccount} from './AccountGate';
-async function api(path:string,body?:unknown){const response=await fetch('/api/account/dm'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const data=await response.json();if(!response.ok)throw Error(data.error||'操作できませんでした。');return data;}
+async function api(path:string,body?:unknown){const response=await apiFetch('/api/account/dm'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const data=await response.json();if(!response.ok)throw Error(data.error||'操作できませんでした。');return data;}
 export function MessagingProfile({children}:{children:ReactNode}){
  const [nickname,setNickname]=useState<string|null|undefined>(),[name,setName]=useState(''),[error,setError]=useState('');
  useEffect(()=>{let active=true;void api('/profile').then(data=>{if(active)setNickname(data.nickname);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[]);

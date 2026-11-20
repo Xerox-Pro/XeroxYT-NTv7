@@ -2,8 +2,14 @@ export function apiPool(env) {
  const entries=Object.entries(env).filter(([key,value])=>/^API_BASE_URL(?:_\d+)?$/.test(key)&&typeof value==='string'&&value.trim()).sort(([a],[b])=>{const ai=a==='API_BASE_URL'?0:Number(a.split('_').at(-1)),bi=b==='API_BASE_URL'?0:Number(b.split('_').at(-1));return ai-bi;});
  return [...new Set(entries.map(([key,value])=>{const input=value.trim();const bare=/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?::443)?\/?$/i.test(input);let url;try{url=new URL(bare?'https://'+input:input);}catch{throw new Error(`${key} must be an HTTPS origin`);}if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||url.pathname!=='/')throw new Error(`${key} must be an HTTPS origin`);return url.origin;}))];
 }
-export function canRetry(method,path,status,sharedAccountRead=false){
+export function canRetry(method,path,status,sharedAccount=false){
  return ['GET','HEAD'].includes(method)
-  && (sharedAccountRead || !/^\/api\/(account|auth)(\/|$)/.test(path))
+  && (sharedAccount || !/^\/api\/(account|auth)(\/|$)/.test(path))
   && [408,429,500,502,503,504].includes(status);
+}
+
+export function orderApiPool(pool, secondary, preference) {
+ return secondary && preference==='2' && pool.includes(secondary)
+  ? [secondary,...pool.filter(origin=>origin!==secondary)]
+  : pool;
 }

@@ -3,6 +3,20 @@
 export function readTransportState(){ return {mode:'proxy', automatic:false}; }
 export function setTransportMode(_mode){ /* Direct access is intentionally disabled. */ }
 
+const apiPreferenceKey='xerox_preferred_api';
+
+export function getApiPreference(){
+  try{return sessionStorage.getItem(apiPreferenceKey)==='2'?'2':'auto';}
+  catch{return 'auto';}
+}
+
+export function setApiPreference(value){
+  try{
+    if(value==='2')sessionStorage.setItem(apiPreferenceKey,'2');
+    else sessionStorage.removeItem(apiPreferenceKey);
+  }catch{}
+}
+
 function sameOriginPath(path){
   if(typeof path!=='string'||!path.startsWith('/')||path.startsWith('//')) throw new Error('APIの接続先が無効です。');
   const url=new URL(path,window.location.origin);
@@ -17,6 +31,7 @@ export function apiFetch(path,options={}){
     return Promise.resolve(Response.json({error:'アカウント連携にはログインしてください。',code:'SITE_SESSION_REQUIRED'},{status:401}));
   }
   const headers=new Headers(options.headers);
+  if(getApiPreference()==='2')headers.set('X-XeroxYT-Prefer-API','2');
   const method=(options.method||'GET').toUpperCase();
   if(method==='GET'&&/^\/api\/(?:recommendations|trending|search|suggestions|video|channel|channels|home|mix|shorts|shorts-ranking|user|playlists|playlist|sync)(?:[/?]|$)/.test(target))headers.set('X-XeroxYT-Sidecar','1');
   return fetch(target,{...options,headers,credentials:'same-origin'}).then(response=>{

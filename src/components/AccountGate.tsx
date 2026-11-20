@@ -1,3 +1,4 @@
+import {apiFetch} from '../lib/apiTransport.mjs';
 import { useCallback, useEffect, useRef, useState, createContext, useContext, type ReactNode, type FormEvent } from 'react';
 import {useLocation} from 'react-router-dom';
 import {flushSync} from 'react-dom';
@@ -94,11 +95,10 @@ function registrationDevice(): string | null {
 }
 
 async function api(path: string, method = 'GET', body?: unknown) {
-  const response = await fetch(`/api/account${path}`, { method, credentials: 'same-origin', cache: 'no-store', ...(path.startsWith('/session') ? { signal: AbortSignal.timeout(7000) } : {}), ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
+  const response = await apiFetch(`/api/account${path}`, { method, credentials: 'same-origin', cache: 'no-store', ...(path.startsWith('/session') ? { signal: AbortSignal.timeout(7000) } : {}), ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error=Object.assign(new Error(data.error || '通信に失敗しました。'), { status: response.status, code:data.code });
-    if(data.code==='ACCOUNT_BANNED')window.dispatchEvent(new CustomEvent('xerox-account-banned'));
     throw error;
   }
   return data;
@@ -298,15 +298,10 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       const serialized=JSON.stringify(payload);
       if(visible&&!force&&serialized===lastSent)return;
       if(visible)lastSent=serialized;
-      void fetch('/api/account/presence',{
+      void apiFetch('/api/account/presence',{
         method:'POST',credentials:'same-origin',cache:'no-store',keepalive:!visible,
         headers:{'Content-Type':'application/json'},
         body:serialized,
-      }).then(async response=>{
-        if(!stopped&&response.status===403){
-          const data=await response.json().catch(()=>({}));
-          if(data.code==='ACCOUNT_BANNED')window.dispatchEvent(new Event('xerox-account-banned'));
-        }
       }).catch(()=>{});
     };
     const schedule=()=>{

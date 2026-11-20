@@ -1,3 +1,4 @@
+import {apiFetch,getApiPreference,setApiPreference} from '../lib/apiTransport.mjs';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {useSiteAccount} from './AccountGate';
 import ReleaseStatus from './ReleaseStatus';
@@ -6,10 +7,11 @@ import SystemLogPanel from './SystemLogPanel';
 
 type Account={id:string;username:string;created_at:number;banned:number;traffic_stopped:number;requests:number;videos:number;searches:number;last_seen?:number;visual_mode?:string;monitoring?:boolean;is_master?:boolean;viewing?:boolean;viewing_page?:string;viewing_title?:string};
 async function request(path:string,method='GET',body?:unknown){
- const response=await fetch(path,{method,credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(25000),...(body===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
+ const response=await apiFetch(path,{method,credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(25000),...(body===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
  const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'操作に失敗しました。');return data;
 }
 export default function AdminPanel(){
+ const [preferredApi,setPreferredApi]=useState(getApiPreference);
  const [sort,setSort]=useState('communication');
  const loadSeq=useRef(0);
  const [search,setSearch]=useState(''),[statusFilter,setStatusFilter]=useState('all'),[modeFilter,setModeFilter]=useState('all');
@@ -118,6 +120,17 @@ export default function AdminPanel(){
  };
  return <section className="my-section rounded-2xl border border-gray-200 p-5" aria-label="システム管理">
   <div className="my-section-heading"><h2>システム管理</h2><button onClick={()=>void load().catch(()=>{})}>更新</button></div>
+  <label className="my-3 flex flex-wrap items-center gap-2 text-sm">
+   接続先
+   <select className="rounded-lg border px-2 py-1" value={preferredApi} disabled={!!busy}
+    onChange={event=>{
+     setApiPreference(event.target.value);setPreferredApi(getApiPreference());
+     void load().catch(()=>{});refreshAudit();
+     window.dispatchEvent(new Event('xerox-system-monitor-updated'));
+    }}>
+    <option value="auto">自動</option><option value="2">予備APIを優先</option>
+   </select>
+  </label>
   <div className="my-4 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm" role="search" aria-label="管理対象アカウントの絞り込み">
    <label className="flex min-w-[170px] flex-1 flex-col gap-1">ユーザー名検索<input type="search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="ユーザー名の一部を入力" className="w-full rounded-lg border bg-white p-2"/></label>
    <label className="flex flex-col gap-1">アカウント状態<select value={statusFilter} onChange={event=>setStatusFilter(event.target.value)} className="rounded-lg border bg-white p-2"><option value="all">すべて</option><option value="banned">BAN中</option><option value="traffic">通信停止中</option><option value="active">有効</option><option value="master">マスター</option><option value="viewing">閲覧中</option><option value="offline">オフライン</option></select></label>

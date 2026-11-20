@@ -1,7 +1,7 @@
 import {boundedRequestBody} from "../server/lib/requestSecurity.mjs";
 import {fetchApiResponse} from "../server/lib/apiRequest.mjs";
 import {apiSelector} from "../server/lib/apiAvailability.mjs";
-import { apiPool, canRetry } from "../server/lib/apiPool.mjs";
+import { apiPool, canRetry, orderApiPool } from "../server/lib/apiPool.mjs";
 export const config = { runtime: "edge" };
 const forwarded = [
   "accept",
@@ -126,7 +126,10 @@ export default async function handler(request: Request) {
   const linkedAccountRoute = /^\/api\/(auth|user)(\/|$)/.test(path)
     || path === '/api/account/cloudflare-session';
   if (linkedAccountRoute) pool = pool.filter(origin => origin !== secondaryOrigin);
-  else pool = await apiSelector.plan(pool, headers, headersFor);
+  else {
+    const preferred = request.headers.get('X-XeroxYT-Prefer-API');
+    pool = await apiSelector.plan(orderApiPool(pool, secondaryOrigin, preferred), headers, headersFor);
+  }
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
   // Metadata piggybacks on foreground YouTube API reads; no background polling.
   const wantsSidecar = request.method === 'GET'
@@ -134,8 +137,7 @@ export default async function handler(request: Request) {
     && isYouTubeRead(path)
     && !!headers.get('cookie');
   const readonly = ["GET", "HEAD"].includes(request.method);
-  const sharedAccountRead = Boolean(secondaryOrigin)
-    && /^\/api\/account\/(session|history|visual-mode)$/.test(path);
+  const sharedAccountRead = Boolean(secondaryOrigin) && /^\/api\/account(?:\/|$)/.test(path);
   const canTryAnother = readonly && (!/^\/api\/(account|auth)(\/|$)/.test(path) || sharedAccountRead);
   let body: Uint8Array | undefined;
   try{body=readonly?undefined:await boundedRequestBody(request);}catch{return respond(Response.json({error:'Request too large'},{status:413}));}
