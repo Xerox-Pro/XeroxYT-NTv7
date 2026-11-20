@@ -20,9 +20,9 @@ export async function workerQuotaExceeded(response) {
  const type=response.headers.get('content-type')||'';
  if(type.includes('json')){
   const data=await response.clone().json().catch(()=>null);
-  return data?.cloudflare_error===true&&data.error_code===1027;
+  return data?.cloudflare_error===true&&Number(data.error_code)===1027;
  }
- if(!response.body||!/(?:html|plain)/i.test(type))return false;
+ if(!response.body)return false;
  const reader=response.clone().body.getReader();
  const decoder=new TextDecoder();
  let prefix='';

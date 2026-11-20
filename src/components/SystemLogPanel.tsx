@@ -4,7 +4,7 @@ import {useEffect,useRef,useState} from 'react';
 
 type AccountOption={id:string;username:string};
 type LogEntry={
- id:number;at:number;route:string;method:string;status:number;duration_ms:number;
+ id:number|string;at:number;route:string;method:string;status:number;duration_ms:number;
  user_id:string|null;username:string|null;
 };
 
@@ -66,6 +66,14 @@ export default function SystemLogPanel({
  useEffect(()=>{
   if(!enabled||paused||!expanded)return;
   let closed=false,inFlight=false,queued=false;
+  const merge=(incoming:LogEntry[])=>{
+   if(incoming.length)setLogs(previous=>{
+    const rows=new Map(previous.map(log=>[log.id,log]));
+    for(const log of incoming)rows.set(log.id,log);
+    return [...rows.values()].sort((a,b)=>b.at-a.at).slice(0,200);
+   });
+   setUpdatedAt(Date.now());setError('');
+  };
   const poll=async()=>{
    if(closed||document.hidden)return;
    if(inFlight){queued=true;return;}
@@ -85,11 +93,7 @@ export default function SystemLogPanel({
     if(closed)return;
     const incoming=data.logs as LogEntry[];
     if(Number.isInteger(data.nextAfter)&&data.nextAfter>=cursor.current)cursor.current=data.nextAfter;
-    if(incoming.length)setLogs(previous=>{
-     const known=new Set(previous.map(log=>log.id));
-     return [...incoming.filter(log=>!known.has(log.id)).reverse(),...previous].slice(0,200);
-    });
-    setUpdatedAt(Date.now());setError('');
+    merge(incoming);
    }catch(cause){
     if(!closed)setError(cause instanceof Error?cause.message:'通信ログを取得できませんでした。');
    }finally{
@@ -99,7 +103,12 @@ export default function SystemLogPanel({
    }
   };
   void poll();
-  const unsubscribe=onRealtime('admin',({type})=>{if(type==='ready'||type==='logs')void poll();});
+  const unsubscribe=onRealtime('admin',({type,logs})=>{
+   if(type==='ready'||type==='logs')void poll();
+   if(type==='log-stream'&&Array.isArray(logs)){
+    merge((logs as LogEntry[]).filter(log=>(!selectedUserId||log.user_id===selectedUserId)&&(!errorsOnly||log.status>=400)));
+   }
+  });
   const visibility=()=>{if(!document.hidden)void poll();};
   document.addEventListener('visibilitychange',visibility);
   return()=>{closed=true;unsubscribe();document.removeEventListener('visibilitychange',visibility);};
@@ -110,7 +119,7 @@ export default function SystemLogPanel({
   <div className="flex flex-wrap items-center justify-between gap-3">
    <div>
     <h3 className="text-base font-bold">リアルタイム通信モニター</h3>
-    <p className="mt-1 text-xs text-gray-500">サイトのAPI通信を約2秒間隔で更新。ログ画面を閉じている間は取得しません。</p>
+    <p className="mt-1 text-xs text-gray-500">サイトのAPI通信を WebSocket で受信します。履歴は画面を開いたときや再接続時に取得します。</p>
    </div>
    <div className="flex items-center gap-2 text-xs">
     <span className={paused?'text-gray-500':error?'text-red-700':'text-emerald-700'} role="status">
