@@ -111,17 +111,30 @@ export default async function handler(request: Request) {
   if (!headers.has('Origin')) headers.set('Origin', url.origin);
   if (process.env.API_SHARED_SECRET) headers.set('Authorization','Bearer '+process.env.API_SHARED_SECRET);
   const configuredPool = pool;
-  const cloudflareOnly=/^\/api\/(auth|user|instagram|tiktok)(\/|$)/.test(path)||path==='/api/account/cloudflare-session';
-  if(cloudflareOnly)pool=pool.filter(origin=>new URL(origin).hostname.endsWith('.workers.dev'));
-  else pool=await apiSelector.plan(pool,headers);
+  const secondarySecret = process.env.API_SHARED_SECRET_2;
+  const secondaryOrigin = secondarySecret ? apiPool({API_BASE_URL_2: process.env.API_BASE_URL_2})[0] : undefined;
+  const headersFor = (origin: string) => {
+    if (!secondarySecret || origin !== secondaryOrigin) return headers;
+    const peerHeaders = new Headers(headers);
+    peerHeaders.set('Authorization', 'Bearer ' + secondarySecret);
+    return peerHeaders;
+  };
+  // Linked provider credentials use the primary Worker's encryption key.
+  const linkedAccountRoute = /^\/api\/(auth|user|instagram|tiktok)(\/|$)/.test(path)
+    || path === '/api/account/cloudflare-session';
+  if (linkedAccountRoute) pool = pool.filter(origin => origin !== secondaryOrigin);
+  else pool = await apiSelector.plan(pool, headers, headersFor);
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
   // Metadata piggybacks on foreground YouTube API reads; no background polling.
   const wantsSidecar = request.method === 'GET'
     && request.headers.get('x-xeroxyt-sidecar') === '1'
     && isYouTubeRead(path)
     && !!headers.get('cookie');
-  const sidecarTask = wantsSidecar ? accountSidecar(pool[0], headers) : null;
+  const sidecarTask = wantsSidecar ? accountSidecar(pool[0], headersFor(pool[0])) : null;
   const readonly = ["GET", "HEAD"].includes(request.method);
+  const sharedAccountRead = Boolean(secondaryOrigin)
+    && /^\/api\/account\/(session|history|visual-mode)$/.test(path);
+  const canTryAnother = readonly && (!/^\/api\/(account|auth)(\/|$)/.test(path) || sharedAccountRead);
   let body: Uint8Array | undefined;
   try{body=readonly?undefined:await boundedRequestBody(request);}catch{return respond(Response.json({error:'Request too large'},{status:413}));}
   if (body && body.byteLength > 1024 * 1024)
@@ -134,14 +147,14 @@ export default async function handler(request: Request) {
     try {
       const response = await fetchApiResponse(pool[i] + path + query, {
         method: request.method,
-        headers,
+        headers: headersFor(pool[i]),
         body,
         redirect: "manual",
         signal: request.signal,
       }, Math.max(1, Math.min(loginStart ? 22000 : 12000, deadline - Date.now())));
       // A route error or a per-user quota does not tell us whether this API is healthy.
       if (
-        canRetry(request.method, path, response.status) &&
+        canRetry(request.method, path, response.status, sharedAccountRead) &&
         i < pool.length - 1
       ) {
         await response.body?.cancel();
@@ -175,7 +188,7 @@ export default async function handler(request: Request) {
       lastFailure = error instanceof Error ? error.name : 'upstream_error';
       console.warn(JSON.stringify({event:'api_upstream_failure',operation:routeName,method:request.method,upstreamIndex,durationMs:Date.now()-startedAt,reason:lastFailure}));
       if (request.signal.aborted) throw error;
-      if (!readonly || /^\/api\/(account|auth)(\/|$)/.test(path)) break;
+      if (!canTryAnother) break;
     }
   }
   return respond(Response.json(
