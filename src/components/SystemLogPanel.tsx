@@ -19,15 +19,15 @@ async function monitorSetting(enabled?: boolean, signal?: AbortSignal): Promise<
 }
 
 export default function SystemLogPanel({
- accounts,selectedUserId,onUserChange,onSettingChange,identity,
+ accounts,selectedUserId,onUserChange,onSettingChange,identity,initialMode,
 }:{
- accounts:AccountOption[];selectedUserId:string;onUserChange:(id:string)=>void;onSettingChange:()=>void;identity:string;
+ accounts:AccountOption[];selectedUserId:string;onUserChange:(id:string)=>void;onSettingChange:()=>void;identity:string;initialMode:'manual'|'live';
 }){
  const [enabled,setEnabled]=useState<boolean|null>(null);
  const [changing,setChanging]=useState(false);
  const [settingsError,setSettingsError]=useState('');
  const [logs,setLogs]=useState<LogEntry[]>([]);
- const [mode,setMode]=useState<'manual'|'live'>('manual');
+ const [mode,setMode]=useState(initialMode);
  const [playing,setPlaying]=useState(false);
  const [manualRefresh,setManualRefresh]=useState(0);
  const handledRefresh=useRef(0);
