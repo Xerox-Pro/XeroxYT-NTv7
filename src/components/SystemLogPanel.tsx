@@ -6,20 +6,20 @@ type LogEntry={
  user_id:string|null;username:string|null;
 };
 
-async function monitorSetting(enabled?: boolean, signal?: AbortSignal): Promise<boolean> {
+async function monitorSetting(enabled?: boolean, signal?: AbortSignal): Promise<{enabled:boolean;auditRecorded?:boolean}> {
  const response=await fetch('/api/account/admin/system-monitor',{
   credentials:'same-origin',cache:'no-store',signal:signal??AbortSignal.timeout(10000),
   ...(enabled===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})}),
  });
  const data=await response.json().catch(()=>({}));
  if(!response.ok||typeof data.enabled!=='boolean')throw new Error(data.error||'監視設定を取得できませんでした。');
- return data.enabled;
+ return data;
 }
 
 export default function SystemLogPanel({
- accounts,selectedUserId,onUserChange,
+ accounts,selectedUserId,onUserChange,onSettingChange,
 }:{
- accounts:AccountOption[];selectedUserId:string;onUserChange:(id:string)=>void;
+ accounts:AccountOption[];selectedUserId:string;onUserChange:(id:string)=>void;onSettingChange:()=>void;
 }){
  const [enabled,setEnabled]=useState<boolean|null>(null);
  const [changing,setChanging]=useState(false);
@@ -36,16 +36,22 @@ export default function SystemLogPanel({
 
  useEffect(()=>{
   const controller=new AbortController();
-  void monitorSetting(undefined,controller.signal)
-   .then(value=>{if(!controller.signal.aborted)setEnabled(value);})
+  const refresh=()=>void monitorSetting(undefined,controller.signal)
+   .then(value=>{if(!controller.signal.aborted)setEnabled(value.enabled);})
    .catch(cause=>{if(!controller.signal.aborted)setSettingsError(cause.message);});
-  return()=>controller.abort();
+  refresh();
+  window.addEventListener('xerox-system-monitor-updated',refresh);
+  return()=>{controller.abort();window.removeEventListener('xerox-system-monitor-updated',refresh);};
  },[]);
 
  const toggleMonitoring=async()=>{
   if(changing)return;
   setChanging(true);setSettingsError('');
-  try{setEnabled(await monitorSetting(enabled===null?undefined:!enabled));}
+  try{
+   const next=await monitorSetting(enabled===null?undefined:!enabled);
+   setEnabled(next.enabled);onSettingChange();
+   if(next.auditRecorded===false)setSettingsError('設定を保存しましたが、操作履歴を記録できませんでした。');
+  }
   catch(cause){setSettingsError(cause instanceof Error?cause.message:'監視設定を変更できませんでした。');}
   finally{setChanging(false);}
  };
