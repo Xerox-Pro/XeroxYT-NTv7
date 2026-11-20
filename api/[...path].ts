@@ -93,11 +93,15 @@ export default async function handler(request: Request) {
   // Linked provider credentials use the primary Worker's encryption key.
   const linkedAccountRoute = /^\/api\/(auth|user)(\/|$)/.test(path)
     || path === '/api/account/cloudflare-session';
-  if (path === realtimeTicketPath) pool = pool.slice(0, 1);
-  else if (linkedAccountRoute) pool = pool.filter(origin => origin !== secondaryOrigin);
+  if (linkedAccountRoute) pool = pool.filter(origin => origin !== secondaryOrigin);
   else {
     const preferred = request.headers.get('X-XeroxYT-Prefer-API');
-    pool = await apiSelector.plan(orderApiPool(pool, secondaryOrigin, preferred), headers, headersFor);
+    let ordered=orderApiPool(pool, secondaryOrigin, preferred);
+    if(path===realtimeTicketPath){
+      const unavailable=configuredPool[Number(request.headers.get('X-XeroxYT-Realtime-Avoid'))-1];
+      if(unavailable&&ordered.length>1)ordered=[...ordered.filter(origin=>origin!==unavailable),unavailable];
+    }
+    pool = await apiSelector.plan(ordered, headers, headersFor);
   }
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
   const readonly = ["GET", "HEAD"].includes(request.method);
@@ -143,6 +147,7 @@ export default async function handler(request: Request) {
         ), 'upstream_redirect');
       }
       const outgoing = new Headers(response.headers);
+      if (path === realtimeTicketPath) outgoing.set('X-XeroxYT-Realtime-Preferred', pool[i] === (request.headers.get('X-XeroxYT-Prefer-API') === '2' ? secondaryOrigin || configuredPool[0] : configuredPool[0]) ? '1' : '0');
       outgoing.delete("content-encoding");
       outgoing.delete("content-length");
       outgoing.set("Cache-Control", "private, no-store");

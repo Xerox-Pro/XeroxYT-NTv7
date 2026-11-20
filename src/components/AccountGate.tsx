@@ -287,9 +287,9 @@ export default function AccountGate({ children }: { children: ReactNode }) {
 
   useAccountRealtime('account', (phase==='ready'&&serverAuthenticated.current)||phase==='banned', user?.id??banRecord?.userId);
   useEffect(()=>onRealtime('account',({type,banned})=>{
-    if(type==='banned'||(type==='ready'&&banned)){
+    if(type==='ready'&&banned){
       if(phase!=='banned')lockBanned();
-    }else if(type==='session'||type==='unbanned'||(type==='ready'&&phase==='banned')){
+    }else if(type==='session'||type==='banned'||type==='unbanned'||(type==='ready'&&phase==='banned')){
       window.dispatchEvent(new Event('xerox-ban-check'));
     }
   }),[phase,lockBanned]);

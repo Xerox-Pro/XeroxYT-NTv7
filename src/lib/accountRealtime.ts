@@ -11,8 +11,10 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
   const controller=new AbortController();
   let socket:WebSocket|undefined;
   let retry:ReturnType<typeof setTimeout>|undefined;
+  let failback:ReturnType<typeof setTimeout>|undefined;
   let watchdog:ReturnType<typeof setInterval>|undefined;
   let delay=1000;
+  let avoid='';
   let lastSeen=0;
   let expires=Infinity;
   const emit=(type:RealtimeEvent,banned?:boolean)=>{
@@ -20,6 +22,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
   };
   const reconnect=()=>{
    clearInterval(watchdog);
+   clearTimeout(failback);
    if(controller.signal.aborted||retry)return;
    retry=setTimeout(()=>{retry=undefined;void connect();},delay+Math.random()*500);
    delay=Math.min(delay*2,300000);
@@ -27,7 +30,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
   const connect=async()=>{
    try{
     const response=await apiFetch('/api/account/realtime/ticket?scope='+scope,{
-     cache:'no-store',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(10000)]),
+     cache:'no-store',headers:avoid?{'X-XeroxYT-Realtime-Avoid':avoid}:undefined,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(10000)]),
     });
     if(controller.signal.aborted)return;
     if(response.status===401||response.status===403||response.status===423){
@@ -43,6 +46,8 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
     url.protocol='wss:';
     const connection=new WebSocket(url,['xerox-realtime-v1',ticket]);
     socket=connection;
+    let ready=false;
+    if(response.headers.get('X-XeroxYT-Realtime-Preferred')==='0')failback=setTimeout(()=>connection.close(),120000+Math.random()*30000);
     lastSeen=Date.now();
     expires=Infinity;
     connection.onmessage=event=>{
@@ -51,12 +56,17 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
      if(event.data==='pong')return;
      const data=JSON.parse(event.data);
      if(data.type==='ready'){
+      ready=true;
+      avoid='';
       delay=1000;
       expires=Number(data.expires);
      }
      emit(data.type,data.banned);
     };
-    connection.onclose=reconnect;
+    connection.onclose=()=>{
+     if(!ready)avoid=response.headers.get('X-XeroxYT-API-Index')||'';
+     reconnect();
+    };
     watchdog=setInterval(()=>{
      const now=Date.now();
      if(now>=expires||now-lastSeen>90000)connection.close();
@@ -72,6 +82,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
    controller.abort();
    clearTimeout(retry);
    clearInterval(watchdog);
+   clearTimeout(failback);
    socket?.close();
   };
  },[scope,enabled,identity]);
