@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {apiFetch} from '../lib/apiTransport.mjs';
-import './burning.css';
+import {Campfire} from './Campfire';
 import {useSiteAccount} from './AccountGate';
 
 type Mode='off'|'chaos'|'chaos2'|'jelly'|'spin'|'quake'|'zero'|'mirror'|'burning';
@@ -67,16 +67,7 @@ export default function VisualModes({initialMode, initialMonitoring}: {initialMo
    setSensorGranted(results.some(value=>value==='granted'));setSensorMessage(results.some(value=>value==='granted')?'センサーを有効にしました。端末を傾けたり、軽く振ってください。':'センサーの利用が許可されませんでした。「揺らす」を使えます。');
   }catch{setSensorMessage('ブラウザの制限によりセンサーを使えません。「揺らす」を使えます。');}
  };
- if(mode==='burning')return createPortal(
-  <div className="xerox-campfire">
-   <div className="xerox-campfire-horizon"/>
-   <div className="xerox-fire" aria-hidden="true">
-    <i/><i/><i/><i/><i/>
-    <b/><b/>
-   </div>
-   <div className="xerox-embers" aria-hidden="true">{Array.from({length:20},(_,i)=><i key={i} style={{left:(i*37%100)+'%',animationDelay:(i%9)*-.48+'s',animationDuration:(2.4+i%5*.6)+'s'}}/>)}</div>
-   <p className="xerox-chill" role="status">チルしましょう</p>
-  </div>,document.body);
+ if(mode==='burning')return createPortal(<Campfire/>,document.body);
  if(mode==='off'||mode==='jelly'||mode==='spin'||mode==='quake'||mode==='zero'||mode==='mirror'||!requiresPermission||sensorGranted)return null;
  return <aside data-effect-controls className="fixed bottom-3 right-3 z-[290] max-w-xs rounded-xl bg-white p-2 text-xs shadow"><button onClick={()=>void enableSensors()}>傾き操作を許可</button>{sensorMessage&&<p role="status">{sensorMessage}</p>}</aside>;
 }
