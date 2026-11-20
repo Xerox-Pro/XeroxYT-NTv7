@@ -1,11 +1,17 @@
-import {useEffect,useRef} from 'react';
-import {apiFetch} from './apiTransport.mjs';
+import {useEffect,useRef,useState} from 'react';
+import {apiFetch,getApiPreference} from './apiTransport.mjs';
 
 type Scope = 'account' | 'admin';
 type RealtimeEvent = 'ready' | 'mode' | 'banned' | 'unbanned' | 'session' | 'dm' | 'rooms' | 'accounts' | 'logs' | 'monitor';
 const eventName = (scope:Scope) => 'xerox-realtime-' + scope;
 
 export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:string) {
+ const [preference,setPreference]=useState(getApiPreference);
+ useEffect(()=>{
+  const update=()=>setPreference(getApiPreference());
+  window.addEventListener('xerox-api-preference',update);
+  return()=>window.removeEventListener('xerox-api-preference',update);
+ },[]);
  useEffect(()=>{
   if(!enabled)return;
   const controller=new AbortController();
@@ -85,7 +91,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
    clearTimeout(failback);
    socket?.close();
   };
- },[scope,enabled,identity]);
+ },[scope,enabled,identity,preference]);
 }
 
 export function onRealtime(scope:Scope, listener:(detail:{type:RealtimeEvent;banned?:boolean})=>void) {

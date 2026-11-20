@@ -14,6 +14,7 @@ export function setApiPreference(value){
   try{
     if(value==='2')sessionStorage.setItem(apiPreferenceKey,'2');
     else sessionStorage.removeItem(apiPreferenceKey);
+    window.dispatchEvent(new Event('xerox-api-preference'));
   }catch{}
 }
 
