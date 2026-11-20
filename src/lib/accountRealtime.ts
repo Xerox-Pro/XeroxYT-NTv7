@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {apiFetch,getApiPreference} from './apiTransport.mjs';
 
 type Scope = 'account' | 'admin';
-type RealtimeEvent = 'ready' | 'mode' | 'banned' | 'unbanned' | 'session' | 'dm' | 'rooms' | 'accounts' | 'logs' | 'monitor';
+type RealtimeEvent = 'ready' | 'mode' | 'banned' | 'unbanned' | 'session' | 'dm' | 'rooms' | 'accounts' | 'logs' | 'monitor' | 'log-stream';
 const eventName = (scope:Scope) => 'xerox-realtime-' + scope;
 
 export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:string) {
@@ -23,8 +23,8 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
   let avoid='';
   let lastSeen=0;
   let expires=Infinity;
-  const emit=(type:RealtimeEvent,banned?:boolean)=>{
-   window.dispatchEvent(new CustomEvent(eventName(scope),{detail:{type,banned}}));
+  const emit=(type:RealtimeEvent,banned?:boolean,logs?:unknown)=>{
+   window.dispatchEvent(new CustomEvent(eventName(scope),{detail:{type,banned,logs}}));
   };
   const reconnect=()=>{
    clearInterval(watchdog);
@@ -67,7 +67,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
       delay=1000;
       expires=Number(data.expires);
      }
-     emit(data.type,data.banned);
+     emit(data.type,data.banned,data.logs);
     };
     connection.onclose=()=>{
      if(!ready)avoid=response.headers.get('X-XeroxYT-API-Index')||'';
@@ -94,7 +94,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
  },[scope,enabled,identity,preference]);
 }
 
-export function onRealtime(scope:Scope, listener:(detail:{type:RealtimeEvent;banned?:boolean})=>void) {
+export function onRealtime(scope:Scope, listener:(detail:{type:RealtimeEvent;banned?:boolean;logs?:unknown})=>void) {
  const receive=(event:Event)=>listener((event as CustomEvent).detail);
  window.addEventListener(eventName(scope),receive);
  return()=>window.removeEventListener(eventName(scope),receive);
