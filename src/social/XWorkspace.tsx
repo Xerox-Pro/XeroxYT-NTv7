@@ -7,14 +7,31 @@ export default function XWorkspace() {
  const [query, setQuery] = useState('');
  const [postUrl, setPostUrl] = useState('');
  const [post, setPost] = useState<{url:string; author:string; text:string} | null>(null);
+ const [embed, setEmbed] = useState<{id:string;url:string} | null>(null);
  const [error, setError] = useState('');
  const [loading, setLoading] = useState(false);
 
  const loadPost = async () => {
   if (loading || !postUrl.trim()) return;
-  setLoading(true);setError('');setPost(null);
+  let target: URL;
   try {
-   const response = await fetch('/api/x-public-post?' + new URLSearchParams({url:postUrl.trim()}), {signal:AbortSignal.timeout(10000)});
+   target = new URL(postUrl.trim());
+  } catch {
+   setError('Xの公開投稿のURLを入力してください。');
+   return;
+  }
+  const match = /^\/([A-Za-z0-9_]{1,15})\/status\/(\d{1,25})\/?$/.exec(target.pathname);
+  if (target.protocol !== 'https:' || target.username || target.password || target.port
+   || !['x.com','www.x.com','twitter.com','www.twitter.com'].includes(target.hostname) || !match) {
+   setError('Xの公開投稿のURLを入力してください。');
+   return;
+  }
+  const publicUrl = 'https://x.com/' + match[1] + '/status/' + match[2];
+  const showEmbed = () => setEmbed({id:match[2],url:publicUrl});
+  setLoading(true);setError('');setPost(null);setEmbed(null);
+  try {
+   const response = await fetch('/api/x-public-post?' + new URLSearchParams({url:publicUrl}), {signal:AbortSignal.timeout(10000)});
+   if (response.status >= 500) { showEmbed(); return; }
    const result = await response.json();
    if (!response.ok) throw new Error(result.error || '投稿を取得できませんでした。');
    setPost(result);
@@ -40,6 +57,7 @@ export default function XWorkspace() {
     <div><input id="x-post-url" type="url" value={postUrl} onChange={event=>setPostUrl(event.target.value)} required maxLength={2048} placeholder="https://x.com/…/status/…"/><button type="submit" disabled={loading || !postUrl.trim()}>{loading?'取得中…':'表示'}</button></div>
    </form>
    {error && <p role="alert" className="x-post-error">{error}</p>}
+   {embed && <article className="x-post-preview"><iframe title="Xの公開投稿" src={'https://platform.twitter.com/embed/Tweet.html?' + new URLSearchParams({id:embed.id,lang:'ja',theme:'dark'})} width="100%" height={410} referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups" style={{border:0}}/><a href={embed.url} target="_blank" rel="noopener noreferrer">Xで投稿を開く</a></article>}
    {post && <article className="x-post-preview"><b>{post.author}</b><p>{post.text}</p><a href={post.url} target="_blank" rel="noopener noreferrer">Xで投稿を開く</a></article>}
   </section>
   <aside className="x-discovery">
