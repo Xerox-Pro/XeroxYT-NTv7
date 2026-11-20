@@ -37,6 +37,7 @@ async function accountSidecar(origin: string, headers: Headers): Promise<string 
     const [visual, messages, rooms] = data;
     const sidecar: Record<string, unknown> = {capturedAt: Date.now()};
     if (typeof visual?.mode === 'string') sidecar.mode = visual.mode;
+    if (typeof visual?.monitoring === 'boolean') sidecar.monitoring = visual.monitoring;
     if (Array.isArray(messages?.threads)) sidecar.threads = messages.threads.slice(0, 16).map((t: any) => ({
       id: t.id, status: t.status, incoming: t.incoming, updatedAt: t.updatedAt, lastMine: t.lastMine, label: t.label,
     }));

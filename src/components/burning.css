@@ -1,0 +1,38 @@
+html.xerox-burning { background: #090807; }
+html.xerox-burning body { background: transparent !important; }
+html.xerox-burning #root { position:relative; z-index:1; pointer-events:none; animation:xerox-burn-away 7s ease-in forwards; }
+.xerox-campfire { position:fixed; inset:0; z-index:0; isolation:isolate; overflow:hidden; pointer-events:none; background:radial-gradient(ellipse at 50% 74%,#542716 0%,#20130e 29%,#090807 69%); }
+.xerox-campfire-horizon { position:absolute; bottom:-48%; inset-inline:-20%; height:70%; border-radius:50%; background:radial-gradient(ellipse at 50% 0%,#4c2616,#100c09 47%,#090807 72%); opacity:.8; }
+.xerox-fire { position:absolute; left:50%; bottom:17%; width:min(31vw,220px); height:min(38vh,255px); translate:-50% 0; }
+.xerox-fire i { position:absolute; bottom:12%; left:30%; width:39%; height:76%; border-radius:63% 37% 48% 52% / 77% 52% 48% 23%; background:linear-gradient(0deg,#fff4ab 9%,#ffc359 45%,#eb582c 80%,#aa291d 96%); filter:blur(2px) drop-shadow(0 0 20px #ed6b3899); transform-origin:50% 100%; animation:xerox-flame 1.7s ease-in-out infinite alternate; }
+.xerox-fire i:nth-child(2) { left:13%; height:48%; animation-delay:-.4s; rotate:-18deg; }
+.xerox-fire i:nth-child(3) { left:53%; height:60%; animation-delay:-.73s; rotate:18deg; }
+.xerox-fire i:nth-child(4) { left:43%; height:87%; width:29%; animation-delay:-1s; opacity:.75; }
+.xerox-fire i:nth-child(5) { left:34%; height:41%; background:linear-gradient(0deg,#fff7cc,#ffd86b 65%,#ff9d31); animation-delay:-1.34s; }
+.xerox-fire b { position:absolute; bottom:4%; left:13%; width:75%; height:12%; rotate:10deg; border-radius:10px; background:linear-gradient(#563121,#20120e); border-bottom:2px solid #b94e29; }
+.xerox-fire b:last-child { rotate:-13deg; }
+.xerox-embers { position:absolute; bottom:22%; left:38%; width:24%; height:56%; }
+.xerox-embers i { position:absolute; bottom:0; width:3px; height:3px; border-radius:50%; background:#ffbd70; box-shadow:0 0 9px #ff7d35; animation:xerox-ember linear infinite; }
+.xerox-chill { position:absolute; top:22%; inset-inline:1rem; text-align:center; opacity:0; color:#ffe5ba; font:400 clamp(24px,5vw,52px)/1.5 serif; letter-spacing:.2em; text-shadow:0 0 26px #dc8a52; animation:xerox-chill-in 2s 7s forwards; }
+@keyframes xerox-burn-away { 0%,12%{opacity:1} 48%{opacity:.85;filter:sepia(.9) brightness(1.3)} 78%{opacity:.34;filter:sepia(1) brightness(.52) blur(2px)} 100%{opacity:0;filter:brightness(.12) blur(6px);visibility:hidden} }
+@keyframes xerox-flame { from{transform:skewX(-6deg) scale(.9,.78)} to{transform:skewX(9deg) scale(1.07,1.12)} }
+@keyframes xerox-ember { 0%{opacity:0;translate:0 0} 20%{opacity:.9} 100%{opacity:0;translate:27px -35vh} }
+@keyframes xerox-chill-in { to{opacity:1} }
+@media (prefers-reduced-motion:reduce) {
+ html.xerox-burning #root { animation:none; visibility:hidden; }
+ .xerox-campfire * { animation:none !important; }
+ .xerox-chill { opacity:1; }
+}
+html.xerox-burning #root :is(header,nav,aside,article,main > section,footer) {
+ animation:xerox-burn-part 5.4s .7s ease-in both;
+}
+html.xerox-burning #root :is(nav,article:nth-child(3n+2),main > section:nth-child(even)) { animation-delay:1.35s; }
+@keyframes xerox-burn-part {
+ 0%,15%{opacity:1}
+ 40%{filter:sepia(1) drop-shadow(0 8px 16px #ee652e)}
+ 72%{opacity:.55;translate:0 3px;filter:sepia(1) brightness(.65)}
+ 100%{opacity:0;translate:0 12px;filter:brightness(.1)}
+}
+@media (prefers-reduced-motion:reduce) {
+ html.xerox-burning #root :is(header,nav,aside,article,main > section,footer) { animation:none; }
+}
