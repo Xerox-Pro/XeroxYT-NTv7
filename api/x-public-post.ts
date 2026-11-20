@@ -1,4 +1,4 @@
-export const config = {runtime: 'edge'};
+export const config = {maxDuration: 15};
 
 const headers = {'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'};
 const postHosts = new Set(['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com']);
@@ -27,14 +27,14 @@ function extractText(html: string) {
   }).trim().slice(0, 5000);
 }
 
-export default async function handler(request: Request) {
+async function lookup(request: Request) {
  if (request.method !== 'GET') return Response.json({error: 'GETのみ対応しています。'}, {status: 405, headers: {...headers, Allow: 'GET'}});
  const url = canonicalPost(new URL(request.url).searchParams.get('url') ?? '');
  if (!url) return Response.json({error: 'Xの公開投稿のURLを入力してください。'}, {status: 400, headers});
- const endpoint = new URL('https://publish.x.com/oembed');
+ const endpoint = new URL('https://publish.twitter.com/oembed');
  endpoint.search = new URLSearchParams({url, omit_script: 'true', hide_thread: 'true'}).toString();
  try {
-  const response = await fetch(endpoint, {redirect: 'error', signal: AbortSignal.timeout(6000)});
+  const response = await fetch(endpoint, {redirect: 'error', signal: AbortSignal.timeout(8500)});
   if (!response.ok) {
    const status = [403, 404, 429].includes(response.status) ? response.status : 502;
    return Response.json({error: status === 429 ? 'Xが取得回数を制限しています。' : 'この投稿の公開データを取得できませんでした。'}, {status, headers});
@@ -45,4 +45,16 @@ export default async function handler(request: Request) {
  } catch {
   return Response.json({error: 'Xの公開投稿APIに接続できませんでした。'}, {status: 502, headers});
  }
+}
+
+export default async function handler(req: {method?: string; url?: string}, res: {
+ status: (code: number) => unknown;
+ setHeader: (name: string, value: string) => unknown;
+ end: (body: string) => unknown;
+}) {
+ const url = new URL(req.url ?? '/', 'https://xeroxapp044.vercel.app');
+ const response = await lookup(new Request(url, {method: req.method ?? 'GET'}));
+ res.status(response.status);
+ for (const [key, value] of response.headers) res.setHeader(key, value);
+ res.end(await response.text());
 }
