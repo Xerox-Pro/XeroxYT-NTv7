@@ -1,10 +1,11 @@
-import {useAccountRealtime,useRealtimeRefresh} from '../lib/accountRealtime';
 import {apiFetch,getApiPreference,setApiPreference} from '../lib/apiTransport.mjs';
-import {useCallback,useEffect,useRef,useState} from 'react';
+import {Fragment,useCallback,useEffect,useRef,useState} from 'react';
 import {useSiteAccount} from './AccountGate';
 import ReleaseStatus from './ReleaseStatus';
-import AdminActionHistory,{type Entry} from './AdminActionHistory';
+import AdminActionHistory,{modeLabels,type Entry} from './AdminActionHistory';
 import SystemLogPanel from './SystemLogPanel';
+
+const accountDate=new Intl.DateTimeFormat('ja-JP',{dateStyle:'short',timeStyle:'medium',timeZone:'Asia/Tokyo'});
 
 type Account={id:string;username:string;created_at:number;banned:number;traffic_stopped:number;requests:number;videos:number;searches:number;last_seen?:number;visual_mode?:string;monitoring?:boolean;is_master?:boolean;viewing?:boolean;viewing_last_seen?:number;viewing_page?:string;viewing_title?:string};
 async function request(path:string,method='GET',body?:unknown){
@@ -17,6 +18,9 @@ export default function AdminPanel(){
  const [sort,setSort]=useState('communication');
  const loadSeq=useRef(0);
  const [search,setSearch]=useState(''),[statusFilter,setStatusFilter]=useState('all'),[modeFilter,setModeFilter]=useState('all');
+ const [view,setView]=useState<'users'|'logs'|'history'|'releases'>('users');
+ const [selectedUserId,setSelectedUserId]=useState('');
+ const [logMode,setLogMode]=useState<'manual'|'live'>('manual');
  const [logUserId,setLogUserId]=useState('');
  const [auditRevision,setAuditRevision]=useState(0);
  const refreshAudit=()=>setAuditRevision(value=>value+1);
@@ -42,8 +46,6 @@ export default function AdminPanel(){
    return rows;
  },[account?.isMaster,account?.username]);
  useEffect(()=>{void load().catch(()=>{});},[load]);
- useAccountRealtime('admin',!!account?.isMaster,account?.username);
- useRealtimeRefresh('admin',['accounts'],async()=>{if(!busy)await load(true);},!!account?.isMaster,false);
 
  useEffect(()=>{
   const next=accountRows.reduce((earliest,row)=>{
@@ -58,7 +60,13 @@ export default function AdminPanel(){
  const accounts=accountRows.map(row=>row.viewing_last_seen&&row.viewing_last_seen+90000<=clock?{...row,viewing:false,viewing_page:'',viewing_title:''}:row).sort((a,b)=>sort==='viewing'?Number(!!b.viewing)-Number(!!a.viewing)||(b.last_seen||0)-(a.last_seen||0):sort==='communication'?(b.last_seen||0)-(a.last_seen||0)||b.created_at-a.created_at:sort==='oldest'?a.created_at-b.created_at:b.created_at-a.created_at);
  const searchText=search.trim().toLowerCase();
  const filteredAccounts=accounts.filter(item=>(!searchText||item.username.toLowerCase().includes(searchText))&&(statusFilter==='all'||(statusFilter==='banned'&&!!item.banned)||(statusFilter==='traffic'&&!!item.traffic_stopped)||(statusFilter==='active'&&!item.banned&&!item.traffic_stopped)||(statusFilter==='master'&&!!item.is_master)||(statusFilter==='viewing'&&!!item.viewing)||(statusFilter==='offline'&&!item.viewing))&&(modeFilter==='all'||(item.visual_mode||'off')===modeFilter));
+ const item=filteredAccounts.find(item=>item.id===selectedUserId);
  if(!account?.isMaster)return null;
+ const openUserLogs=(id:string)=>{
+   setLogUserId(id);
+   setLogMode('live');
+   setView('logs');
+ };
  const action=async(item:Account,body:Record<string,unknown>)=>{
    if(busy)return;
    const key=item.id+String(body.action);setBusy(key);setMessage('');
@@ -124,18 +132,24 @@ export default function AdminPanel(){
    if(target)await action(target,{action:entry.action,...(entry.action==='visualMode'?{mode:value}:{enabled:value})});
  };
  return <section className="my-section rounded-2xl border border-gray-200 p-5" aria-label="システム管理">
-  <div className="my-section-heading"><h2>システム管理</h2><button onClick={()=>void load().catch(()=>{})}>更新</button></div>
+  <div className="my-section-heading"><h2>システム管理</h2>{view==='users'&&<button disabled={!!busy} onClick={()=>void load().catch(()=>{})}>更新</button>}</div>
   <label className="my-3 flex flex-wrap items-center gap-2 text-sm">
    接続先
    <select className="rounded-lg border px-2 py-1" value={preferredApi} disabled={!!busy}
     onChange={event=>{
      setApiPreference(event.target.value);setPreferredApi(getApiPreference());
      void load().catch(()=>{});refreshAudit();
-     window.dispatchEvent(new Event('xerox-system-monitor-updated'));
     }}>
     <option value="auto">自動</option><option value="2">予備APIを優先</option>
    </select>
   </label>
+  <nav className="my-4 flex flex-wrap gap-2" aria-label="管理画面の表示">
+   {([['users','ユーザー管理'],['logs','通信ログ'],['history','操作履歴'],['releases','連携状況']] as const).map(([value,label])=>
+    <button key={value} type="button" aria-pressed={view===value} onClick={()=>{setView(value);if(value==='logs'&&view!=='logs')setLogMode('manual');}}
+     className="rounded-lg border px-3 py-2 text-sm aria-pressed:border-indigo-400 aria-pressed:bg-indigo-100">{label}</button>)}
+  </nav>
+  {message&&<p role="status" className="my-3 text-sm">{message}</p>}
+  {view==='users'&&<>
   <div className="my-4 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm" role="search" aria-label="管理対象アカウントの絞り込み">
    <label className="flex min-w-[170px] flex-1 flex-col gap-1">ユーザー名検索<input type="search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="ユーザー名の一部を入力" className="w-full rounded-lg border bg-white p-2"/></label>
    <label className="flex flex-col gap-1">アカウント状態<select value={statusFilter} onChange={event=>setStatusFilter(event.target.value)} className="rounded-lg border bg-white p-2"><option value="all">すべて</option><option value="banned">BAN中</option><option value="traffic">通信停止中</option><option value="active">有効</option><option value="master">マスター</option><option value="viewing">閲覧中</option><option value="offline">オフライン</option></select></label>
@@ -144,11 +158,77 @@ export default function AdminPanel(){
    <button type="button" className="rounded-lg border bg-white px-3 py-2 disabled:opacity-40" disabled={!search&&statusFilter==='all'&&modeFilter==='all'} onClick={()=>{setSearch('');setStatusFilter('all');setModeFilter('all');}}>絞り込み解除</button>
   </div>
   <p className="text-xs text-gray-500" role="status">{filteredAccounts.length} / {accountRows.length} アカウント表示</p>
-  {isOwner&&<div className="rounded-xl bg-gray-50 p-4 text-sm"><h3 className="font-bold">推薦用Googleアカウント</h3><p className="mt-2 text-xs text-gray-600">一般アカウントには接続情報を公開せず、ホームとShortsの読み取りだけに使用します。高評価・登録・コメントなどの操作には使用されません。</p><p className="mt-2">{source?.configured?`${source.user?.name||'Googleアカウント'}を使用中`:'未設定'}</p><div className="mt-3 flex flex-wrap gap-2"><button disabled={busy==='source'} className="rounded-full bg-gray-900 px-4 py-2 text-xs text-white disabled:opacity-50" onClick={()=>void sourceAction('useCurrent')}>現在のGoogle連携を推薦用に設定</button>{source?.configured&&<button disabled={busy==='source'} className="rounded-full bg-gray-200 px-4 py-2 text-xs disabled:opacity-50" onClick={()=>void sourceAction('remove')}>解除</button>}</div></div>}
-  {message&&<p role="status" className="my-3 text-sm">{message}</p>}
-  <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[850px] text-left text-xs"><thead><tr className="border-b"><th className="p-2">アカウント</th><th className="p-2">利用量</th><th className="p-2">最終通信</th><th className="p-2">状態</th><th className="p-2">閲覧状態</th><th className="p-2">パスワード再設定</th><th className="p-2">画面モード・会話</th><th className="p-2">操作</th></tr></thead><tbody>{filteredAccounts.map(item=><tr key={item.id} className="border-b align-top"><td className="p-2"><b>{item.username}</b>{item.username.toLowerCase()==='xerox0521'?<small className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-amber-900">保護対象</small>:null}{item.is_master?<small className="ml-2 rounded bg-purple-100 px-2 py-0.5 text-purple-800">マスター</small>:null}<small className="block text-gray-500">{new Date(item.created_at).toLocaleString('ja-JP')}</small></td><td className="p-2">通信 {item.requests||0}<br/>動画 {item.videos||0}・検索 {item.searches||0}</td><td className="whitespace-nowrap p-2">{item.last_seen?new Date(item.last_seen).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):'記録なし'}</td><td className="p-2">{item.banned?'BAN中':item.traffic_stopped?'通信停止中':'有効'}</td><td className="p-2"><span className={item.viewing?'font-semibold text-green-700':'text-gray-500'}>{item.viewing?'● 閲覧中':'オフライン'}</span>{item.viewing&&<div className="mt-1 max-w-64 text-xs"><span className="block text-gray-600">{item.viewing_page||'ページ情報を取得中'}</span>{item.viewing_title&&<span className="mt-1 block break-words font-medium text-gray-800" title={item.viewing_title}>{item.viewing_title}</span>}</div>}</td><td className="p-2"><input type="password" minLength={12} value={passwords[item.id]||''} onChange={event=>setPasswords(value=>({...value,[item.id]:event.target.value}))} placeholder="新しいパスワード（12文字以上）" className="w-56 rounded-lg border px-2 py-1.5"/><button disabled={(passwords[item.id]||'').length<12||!!busy||item.username.toLowerCase()==='xerox0521'||!!item.is_master} className="ml-2 rounded-lg bg-gray-200 px-3 py-1.5 disabled:opacity-40" onClick={()=>void action(item,{action:'resetPassword',password:passwords[item.id]})}>変更</button></td><td className="p-2"><div className="flex max-w-xs flex-wrap gap-2"><button type="button" role="switch" aria-checked={!!item.monitoring} disabled={!!busy} className="rounded-lg border px-3 py-2 aria-checked:bg-amber-200 aria-checked:text-black" onClick={()=>void action(item,{action:'monitoring',enabled:!item.monitoring})}>1分監視 {item.monitoring?'オン':'オフ'}</button>{[['off','通常'],['chaos','カオス'],['chaos2','カオス2'],['jelly','ゼリー'],['spin','スピン'],['quake','地震'],['zero','無重力'],['mirror','ミラー'],['burning','バーニング']].map(([mode,label])=><button key={mode} type="button" aria-pressed={(item.visual_mode||'off')===mode} disabled={!!busy||item.username.toLowerCase()==='xerox0521'} className="rounded-lg border px-3 py-2 aria-pressed:bg-purple-200" onClick={()=>void action(item,{action:'visualMode',mode})}>{label}</button>)}<button type="button" className="rounded-lg bg-indigo-100 px-3 py-2" onClick={()=>window.dispatchEvent(new CustomEvent('xerox-open-dm',{detail:{target:item.username}}))}>会話</button></div></td><td className="p-2"><div className="flex flex-wrap gap-2"><button type="button" className="rounded-lg bg-sky-100 px-3 py-1.5" onClick={()=>{setLogUserId(item.id);document.getElementById('system-live-logs')?.scrollIntoView({behavior:'smooth',block:'start'});}}>通信ログ</button><button title={!item.is_master&&account?.username?.toLowerCase()!=='xerox0521'?'マスター付与はXerox0521のみ実行できます':undefined} disabled={!!busy||item.username===account?.username||item.username.toLowerCase()==='xerox0521'||(!item.is_master&&account?.username?.toLowerCase()!=='xerox0521')} className="rounded-lg bg-purple-100 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>{if(confirm(`${item.username} のマスター権限を${item.is_master?'取り消し':'付与'}しますか？`))void action(item,{action:'master',enabled:!item.is_master});}}>{item.is_master?'マスター解除':'マスター付与'}</button><button disabled={!!busy||item.username.toLowerCase()==='xerox0521'||(!!item.is_master&&!item.traffic_stopped)} className="rounded-lg bg-amber-100 px-3 py-1.5" onClick={()=>void action(item,{action:'traffic',enabled:!item.traffic_stopped})}>{item.traffic_stopped?'通信再開':'通信停止'}</button><button disabled={!!busy||item.username.toLowerCase()==='xerox0521'||(!!item.is_master&&!item.banned)} className="rounded-lg bg-red-100 px-3 py-1.5" onClick={()=>void action(item,{action:'ban',enabled:!item.banned})}>{item.banned?'BAN解除':'BAN'}</button><button disabled={!!busy||item.username.toLowerCase()==='xerox0521'||!!item.is_master} className="rounded-lg border border-red-300 px-3 py-1.5 text-red-700" onClick={()=>{if(confirm(`${item.username} を削除しますか？この操作は元に戻せません。`))void action(item,{action:'delete'});}}>削除</button></div></td></tr>)}</tbody></table></div>
+  <label className="my-3 flex max-w-md flex-col gap-1 text-sm">管理対象ユーザー
+   <select value={item?.id||''} onChange={event=>setSelectedUserId(event.target.value)}
+    disabled={!filteredAccounts.length} className="rounded-lg border bg-white p-2">
+    <option value="">ユーザーを選択</option>
+    {filteredAccounts.map(item=><option key={item.id} value={item.id}>@{item.username}</option>)}
+   </select>
+  </label>
+  {!!filteredAccounts.length&&<div className="mb-4 max-h-[65vh] overflow-auto rounded-xl border">
+   <table className="w-full min-w-[38rem] text-left text-xs" aria-label="アカウント一覧">
+    <thead className="sticky top-0 bg-gray-100 text-gray-800">
+     <tr>
+      <th scope="col" className="px-3 py-2">ユーザー</th>
+      <th scope="col" className="px-3 py-2" aria-sort={sort==='registered'?'descending':sort==='oldest'?'ascending':'none'}>
+       <button type="button" onClick={()=>setSort(sort==='registered'?'oldest':'registered')}>
+        登録日時 {sort==='registered'?'↓':sort==='oldest'?'↑':''}
+       </button>
+      </th>
+      <th scope="col" className="px-3 py-2" aria-sort={sort==='communication'?'descending':'none'}>
+       <button type="button" onClick={()=>setSort('communication')}>最終通信 {sort==='communication'?'↓':''}</button>
+      </th>
+      <th scope="col" className="px-3 py-2">状態</th>
+      <th scope="col" className="px-3 py-2">操作</th>
+     </tr>
+    </thead>
+    <tbody>
+     {filteredAccounts.map(item=>{
+      const selected=item.id===selectedUserId;
+      return <Fragment key={item.id}>
+       <tr className={selected?'border-t bg-indigo-50 text-gray-900':'border-t'}>
+        <th scope="row" className="px-3 py-2 font-semibold">
+         @{item.username}
+         {item.is_master&&<small className="ml-1 rounded bg-purple-100 px-1 text-purple-800">マスター</small>}
+        </th>
+        <td className="whitespace-nowrap px-3 py-2">{accountDate.format(item.created_at)}</td>
+        <td className="whitespace-nowrap px-3 py-2">{item.last_seen?accountDate.format(item.last_seen):'記録なし'}</td>
+        <td className="whitespace-nowrap px-3 py-2">
+         {item.banned?'BAN中':item.traffic_stopped?'通信停止中':'有効'}
+         {item.viewing&&<span className="ml-2 text-green-700">閲覧中</span>}
+        </td>
+        <td className="whitespace-nowrap px-3 py-2">
+         <button type="button" aria-expanded={selected} aria-label={item.username+' の操作を'+(selected?'閉じる':'開く')}
+          className="rounded-md border px-2 py-1" onClick={()=>setSelectedUserId(selected?'':item.id)}>{selected?'閉じる':'操作'}</button>
+         <button type="button" aria-label={item.username+' のリアルタイムログ'}
+          className="ml-2 rounded-md border px-2 py-1" onClick={()=>openUserLogs(item.id)}>ログ</button>
+        </td>
+       </tr>
+       {selected&&<tr className="border-t"><td colSpan={5} className="p-3">
+        <div className="text-sm">
+         {item.username.toLowerCase()==='xerox0521'&&<small className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">保護対象</small>}
+         <p className="text-xs">通信 {item.requests||0}・動画 {item.videos||0}・検索 {item.searches||0}</p>
+         {item.viewing&&<p className="mt-1 break-words text-xs">{item.viewing_page||'ページ情報を取得中'}{item.viewing_title&&' ／ '+item.viewing_title}</p>}
+   <div className="mt-4 flex flex-wrap gap-2"><button type="button" role="switch" aria-checked={!!item.monitoring} disabled={!!busy} className="rounded-lg border px-3 py-2 aria-checked:bg-amber-200 aria-checked:text-black" onClick={()=>void action(item,{action:'monitoring',enabled:!item.monitoring})}>1分監視 {item.monitoring?'オン':'オフ'}</button><select aria-label="画面モード" value={item.visual_mode||'off'} disabled={!!busy||item.username.toLowerCase()==='xerox0521'}
+      className="rounded-lg border px-2 py-2" onChange={event=>void action(item,{action:'visualMode',mode:event.target.value})}>
+      {Object.entries(modeLabels).map(([mode,label])=><option key={mode} value={mode}>{label}</option>)}
+     </select><button type="button" className="rounded-lg bg-indigo-100 px-3 py-2" onClick={()=>window.dispatchEvent(new CustomEvent('xerox-open-dm',{detail:{target:item.username}}))}>会話</button></div>
+   <div className="mt-3"><div className="flex flex-wrap gap-2"><button title={!item.is_master&&account?.username?.toLowerCase()!=='xerox0521'?'マスター付与はXerox0521のみ実行できます':undefined} disabled={!!busy||item.username===account?.username||item.username.toLowerCase()==='xerox0521'||(!item.is_master&&account?.username?.toLowerCase()!=='xerox0521')} className="rounded-lg bg-purple-100 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>{if(confirm(`${item.username} のマスター権限を${item.is_master?'取り消し':'付与'}しますか？`))void action(item,{action:'master',enabled:!item.is_master});}}>{item.is_master?'マスター解除':'マスター付与'}</button><button disabled={!!busy||item.username.toLowerCase()==='xerox0521'||(!!item.is_master&&!item.traffic_stopped)} className="rounded-lg bg-amber-100 px-3 py-1.5" onClick={()=>void action(item,{action:'traffic',enabled:!item.traffic_stopped})}>{item.traffic_stopped?'通信再開':'通信停止'}</button><button disabled={!!busy||item.username.toLowerCase()==='xerox0521'||(!!item.is_master&&!item.banned)} className="rounded-lg bg-red-100 px-3 py-1.5" onClick={()=>void action(item,{action:'ban',enabled:!item.banned})}>{item.banned?'BAN解除':'BAN'}</button><button disabled={!!busy||item.username.toLowerCase()==='xerox0521'||!!item.is_master} className="rounded-lg border border-red-300 px-3 py-1.5 text-red-700" onClick={()=>{if(confirm(`${item.username} を削除しますか？この操作は元に戻せません。`))void action(item,{action:'delete'});}}>削除</button></div></div>
+   <details className="mt-3">
+    <summary className="cursor-pointer">パスワード再設定</summary>
+    <div className="mt-2 flex max-w-sm"><input aria-label="新しいパスワード" type="password" minLength={12} value={passwords[item.id]||''} onChange={event=>setPasswords(value=>({...value,[item.id]:event.target.value}))} placeholder="新しいパスワード（12文字以上）" className="w-full min-w-0 flex-1 rounded-lg border px-2 py-1.5"/><button disabled={(passwords[item.id]||'').length<12||!!busy||item.username.toLowerCase()==='xerox0521'||!!item.is_master} className="ml-2 rounded-lg bg-gray-200 px-3 py-1.5 disabled:opacity-40" onClick={()=>void action(item,{action:'resetPassword',password:passwords[item.id]})}>変更</button></div>
+   </details>
+        </div>
+       </td></tr>}
+      </Fragment>;
+     })}
+    </tbody>
+   </table>
+  </div>}
  {!filteredAccounts.length&&<p className="mt-3 text-sm text-gray-500">条件に一致するアカウントはありません。</p>}
- <AdminActionHistory revision={auditRevision} busy={!!busy} canApply={canApply} apply={(entry,value)=>void applyHistory(entry,value)}/>
- <SystemLogPanel onSettingChange={refreshAudit} accounts={accountRows} selectedUserId={logUserId} onUserChange={setLogUserId}/>
- <ReleaseStatus/></section>;
+  {isOwner&&<div className="rounded-xl bg-gray-50 p-4 text-sm"><h3 className="font-bold">推薦用Googleアカウント</h3><p className="mt-2 text-xs text-gray-600">一般アカウントには接続情報を公開せず、ホームとShortsの読み取りだけに使用します。高評価・登録・コメントなどの操作には使用されません。</p><p className="mt-2">{source?.configured?`${source.user?.name||'Googleアカウント'}を使用中`:'未設定'}</p><div className="mt-3 flex flex-wrap gap-2"><button disabled={busy==='source'} className="rounded-full bg-gray-900 px-4 py-2 text-xs text-white disabled:opacity-50" onClick={()=>void sourceAction('useCurrent')}>現在のGoogle連携を推薦用に設定</button>{source?.configured&&<button disabled={busy==='source'} className="rounded-full bg-gray-200 px-4 py-2 text-xs disabled:opacity-50" onClick={()=>void sourceAction('remove')}>解除</button>}</div></div>}
+ </>}
+ {view==='history'&&<AdminActionHistory revision={auditRevision} busy={!!busy} canApply={canApply} apply={(entry,value)=>void applyHistory(entry,value)}/>}
+ {view==='logs'&&<SystemLogPanel key={preferredApi} identity={account.username} initialMode={logMode} onSettingChange={refreshAudit} accounts={accountRows} selectedUserId={logUserId} onUserChange={setLogUserId}/>}
+ {view==='releases'&&<ReleaseStatus/>}</section>;
 }
