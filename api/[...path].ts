@@ -16,40 +16,7 @@ const forwarded = [
   "x-usage-token",
   "x-client-usage",
 ];
-const sidecarCache = new Map<string, {expires: number; value: Promise<string | null>}>();
-const SIDECAR_PATHS = ['/api/account/visual-mode', '/api/account/dm', '/api/account/dm/rooms'];
-const isYouTubeRead = (path: string) => /^\/api\/(?:recommendations|trending|search|suggestions|video|channel|channels|home|mix|shorts|shorts-ranking|user|playlists|playlist|sync)(?:[/?]|$)/.test(path);
-
-async function accountSidecar(origin: string, headers: Headers): Promise<string | null> {
-  const session = /(?:^|;\s*)__Host-xy_session=([^;]+)/.exec(headers.get('cookie') || '')?.[1];
-  if (!session) return null;
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(session));
-  const key = Array.from(new Uint8Array(hash).slice(0, 12), b => b.toString(16).padStart(2, '0')).join('');
-  const previous = sidecarCache.get(key);
-  if (previous && previous.expires > Date.now()) return previous.value;
-  const value = (async () => {
-    const metadataHeaders = new Headers(headers);
-    metadataHeaders.set('accept', 'application/json');
-    const data = await Promise.all(SIDECAR_PATHS.map(path =>
-      fetchApiResponse(origin + path, { method: 'GET', headers: metadataHeaders, redirect: 'manual' }, 2000)
-        .then(response => response.ok ? response.json() : null).catch(() => null)
-    ));
-    const [visual, messages, rooms] = data;
-    const sidecar: Record<string, unknown> = {capturedAt: Date.now()};
-    if (typeof visual?.mode === 'string') sidecar.mode = visual.mode;
-    if (typeof visual?.monitoring === 'boolean') sidecar.monitoring = visual.monitoring;
-    if (Array.isArray(messages?.threads)) sidecar.threads = messages.threads.slice(0, 16).map((t: any) => ({
-      id: t.id, status: t.status, incoming: t.incoming, updatedAt: t.updatedAt, lastMine: t.lastMine, label: t.label,
-    }));
-    if (Array.isArray(rooms?.rooms)) sidecar.rooms = rooms.rooms.slice(0, 10).map((room: any) => ({
-      id: room.id, status: room.status, lastAt: room.lastAt, lastMine: room.lastMine, name: room.name,
-    }));
-    return Object.keys(sidecar).length > 1 ? JSON.stringify(sidecar) : null;
-  })().catch(() => null);
-  if (sidecarCache.size >= 64) sidecarCache.delete(sidecarCache.keys().next().value!);
-  sidecarCache.set(key, {expires: Date.now() + 12000, value});
-  return value;
-}
+const realtimeTicketPath = '/api/account/realtime/ticket';
 
 export default async function handler(request: Request) {
   const startedAt = Date.now();
@@ -129,14 +96,14 @@ export default async function handler(request: Request) {
   if (linkedAccountRoute) pool = pool.filter(origin => origin !== secondaryOrigin);
   else {
     const preferred = request.headers.get('X-XeroxYT-Prefer-API');
-    pool = await apiSelector.plan(orderApiPool(pool, secondaryOrigin, preferred), headers, headersFor);
+    let ordered=orderApiPool(pool, secondaryOrigin, preferred);
+    if(path===realtimeTicketPath){
+      const unavailable=configuredPool[Number(request.headers.get('X-XeroxYT-Realtime-Avoid'))-1];
+      if(unavailable&&ordered.length>1)ordered=[...ordered.filter(origin=>origin!==unavailable),unavailable];
+    }
+    pool = await apiSelector.plan(ordered, headers, headersFor);
   }
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
-  // Metadata piggybacks on foreground YouTube API reads; no background polling.
-  const wantsSidecar = request.method === 'GET'
-    && request.headers.get('x-xeroxyt-sidecar') === '1'
-    && isYouTubeRead(path)
-    && !!headers.get('cookie');
   const readonly = ["GET", "HEAD"].includes(request.method);
   const sharedAccountRead = Boolean(secondaryOrigin) && /^\/api\/account(?:\/|$)/.test(path);
   const canTryAnother = readonly && (!/^\/api\/(account|auth)(\/|$)/.test(path) || sharedAccountRead);
@@ -180,16 +147,11 @@ export default async function handler(request: Request) {
         ), 'upstream_redirect');
       }
       const outgoing = new Headers(response.headers);
+      if (path === realtimeTicketPath) outgoing.set('X-XeroxYT-Realtime-Preferred', pool[i] === (request.headers.get('X-XeroxYT-Prefer-API') === '2' ? secondaryOrigin || configuredPool[0] : configuredPool[0]) ? '1' : '0');
       outgoing.delete("content-encoding");
       outgoing.delete("content-length");
       outgoing.set("Cache-Control", "private, no-store");
-      if (wantsSidecar && response.ok) {
-        const sidecar = await Promise.race<string | null>([
-          accountSidecar(pool[i], headersFor(pool[i])),
-          new Promise(resolve => setTimeout(() => resolve(null), 850)),
-        ]);
-        if (sidecar && sidecar.length < 3500) outgoing.set('X-XeroxYT-Sidecar', encodeURIComponent(sidecar));
-      }
+      if (path === realtimeTicketPath && response.ok) outgoing.set('X-XeroxYT-Realtime-Origin', pool[i]);
       outgoing.set("X-XeroxYT-Transport", "proxy");
       outgoing.set("X-XeroxYT-API-Index", String(configuredPool.indexOf(pool[i]) + 1));
       return respond(new Response(response.body, {

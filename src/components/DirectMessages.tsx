@@ -1,3 +1,4 @@
+import {useRealtimeRefresh} from '../lib/accountRealtime';
 import {apiFetch} from '../lib/apiTransport.mjs';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {ArrowLeft,MessageCircle,Send,SquarePen,Users,ShieldCheck} from 'lucide-react';
@@ -11,8 +12,9 @@ export default function DirectMessages({appealOnly=false}:{appealOnly?:boolean})
  const [open,setOpen]=useState(!appealOnly),[threads,setThreads]=useState<any[]>([]),[selected,setSelected]=useState(''),[messages,setMessages]=useState<any[]>([]),[target,setTarget]=useState(''),[text,setText]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[compose,setCompose]=useState(false),[tab,setTab]=useState('direct'),[reports,setReports]=useState<any[]|null>(null);
  const end=useRef<HTMLDivElement>(null),generation=useRef(0),loading=useRef(false),posting=useRef(false),stickToBottom=useRef(true),drafts=useRef<Record<string,string>>({});
  const [search,setSearch]=useState('');
- const load=useCallback(async()=>{if(loading.current)return;loading.current=true;const epoch=++generation.current;try{const data=await api();if(epoch!==generation.current)return;setThreads(data.threads||[]);if(selected&&tab==='direct'){const result=await api('/'+selected);if(epoch===generation.current)setMessages(result.messages||[]);}}catch(e){if(epoch===generation.current)setNotice((e as Error).message);}finally{loading.current=false;}},[selected,tab]);
- useEffect(()=>{if(!open)return;void load();const timer=setInterval(()=>{if(!document.hidden)void load();},3000);return()=>{generation.current++;clearInterval(timer);};},[open,load]);
+ const load=useCallback(async()=>{if(loading.current)return;loading.current=true;const epoch=++generation.current;try{const data=await api();if(epoch!==generation.current)return;setThreads(data.threads||[]);if(selected&&tab==='direct'){const result=await api('/'+selected);if(epoch===generation.current)setMessages(result.messages||[]);}}catch(e){if(epoch===generation.current)setNotice((e as Error).message);}finally{if(epoch===generation.current)loading.current=false;}},[selected,tab]);
+ useRealtimeRefresh('account',['dm'],load,open,true,selected+':'+tab);
+ useEffect(()=>()=>{generation.current++;loading.current=false;},[open,selected,tab]);
  useEffect(()=>{if(stickToBottom.current)end.current?.scrollIntoView?.({block:'nearest',behavior:'smooth'});},[messages.at(-1)?.id,selected]);
  const action=async(path:string,body:unknown)=>{if(posting.current)return;posting.current=true;setBusy(true);setNotice('');try{const result=await api(path,body);if(path==='/request'){setNotice(result.message||'会話を開始しました。');if(result.threadId)setSelected(result.threadId);setCompose(false);}if(path==='/'+selected){setText('');drafts.current[selected]='';stickToBottom.current=true;}await load();}catch(e){setNotice((e as Error).message);}finally{posting.current=false;setBusy(false);}};
  useEffect(()=>{if(!admin)return;const pending=sessionStorage.getItem('xerox_dm_compose');if(pending){sessionStorage.removeItem('xerox_dm_compose');void action('/request',{target:pending});}},[admin]);
