@@ -1,3 +1,4 @@
+import {onRealtime,useAccountRealtime} from '../lib/accountRealtime';
 import {apiFetch} from '../lib/apiTransport.mjs';
 import { useCallback, useEffect, useRef, useState, createContext, useContext, type ReactNode, type FormEvent } from 'react';
 import {useLocation} from 'react-router-dom';
@@ -251,11 +252,11 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       }catch(err:any){
         if(cancelled||authEpoch.current!==epoch)return;
         if(err.code==='ACCOUNT_BANNED'){lockBanned();return;}
-        if(err.status===401){
+        if(err.status===401||err.status===423){
           serverAuthenticated.current=false;
           stopAllPlaybackNow();
           setPhase('login');
-          setMessage(banRef.current?'解除状況の確認には、同じアカウントで本人確認してください。':'ログインが必要です。アカウントにログインしてください。');
+          setMessage(err.status===423?'このアカウントの通信は停止されています。':banRef.current?'解除状況の確認には、同じアカウントで本人確認してください。':'ログインが必要です。アカウントにログインしてください。');
           return;
         }
         // A temporary network failure must not log out a previously verified session.
@@ -283,6 +284,15 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     window.addEventListener('xerox-ban-check',recheck);
     return ()=>{cancelled=true;window.removeEventListener('storage',sessionChanged);window.removeEventListener('xerox-ban-check',recheck);if(timer.current)clearTimeout(timer.current);};
   },[initialize,cachedUser,initialBan,lockBanned]);
+
+  useAccountRealtime('account', (phase==='ready'&&serverAuthenticated.current)||phase==='banned', user?.id??banRecord?.userId);
+  useEffect(()=>onRealtime('account',({type,banned})=>{
+    if(type==='banned'||(type==='ready'&&banned)){
+      if(phase!=='banned')lockBanned();
+    }else if(type==='session'||type==='unbanned'||(type==='ready'&&phase==='banned')){
+      window.dispatchEvent(new Event('xerox-ban-check'));
+    }
+  }),[phase,lockBanned]);
 
   // Each foreground tab reports its current in-site section. The video title is
   // sent only for a watch page; search terms, DMs and external URLs stay private.
@@ -365,7 +375,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     catch { setMessage('ログアウトできませんでした。'); }
   }
   if (phase === 'checking') return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><p role="status" className="text-sm text-gray-600">ログイン状態を確認しています…</p></main>;
-  if (phase === 'ready' && user && serverAuthenticated.current) return <AccountContext.Provider value={{ username: user.username, ...(user.admin?{isMaster:true}:{}), logout }}><TermsGate key={user.id} alreadyAccepted={user.termsAccepted===true} onAccepted={()=>{if(active.current)void initialize(active.current,false,true);}} onLogout={()=>void logout(true)}><VisualModes initialMode={user.mode} initialMonitoring={user.monitoring}/><MessageNotifications/>{children}{message && <div role="status" className="fixed top-16 right-4 z-[200] bg-gray-900 text-white text-xs p-3 rounded-xl max-w-xs shadow-lg">{message}{!serverAuthenticated.current&&<button type="button" className="block mt-2 underline" onClick={()=>{setPassword('');setPhase('login');setMessage('端末内のデータを保持したまま再接続します。');}}>再ログインして同期を再開</button>}</div>}</TermsGate></AccountContext.Provider>;
+  if (phase === 'ready' && user && serverAuthenticated.current) return <AccountContext.Provider value={{ username: user.username, ...(user.admin?{isMaster:true}:{}), logout }}><TermsGate key={user.id} alreadyAccepted={user.termsAccepted===true} onAccepted={()=>{if(active.current)void initialize(active.current,false,true);}} onLogout={()=>void logout(true)}><VisualModes initialMode={user.mode}/><MessageNotifications/>{children}{message && <div role="status" className="fixed top-16 right-4 z-[200] bg-gray-900 text-white text-xs p-3 rounded-xl max-w-xs shadow-lg">{message}{!serverAuthenticated.current&&<button type="button" className="block mt-2 underline" onClick={()=>{setPassword('');setPhase('login');setMessage('端末内のデータを保持したまま再接続します。');}}>再ログインして同期を再開</button>}</div>}</TermsGate></AccountContext.Provider>;
 
   if(phase==='banned')return <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-5"><section className="w-full max-w-md rounded-3xl border border-red-900 bg-gray-900 p-8 text-center shadow-2xl" role="alert"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-950 text-3xl" aria-hidden="true">!</div><h1 className="mt-5 text-2xl font-bold">このアカウントはBANされています</h1><p className="mt-3 text-sm leading-6 text-gray-300">この端末では、新しいアカウントの作成、ログアウト、アカウント切り替えなどの操作はできません。</p>{banRecord?.username&&<p className="mt-4 text-xs text-gray-500">対象アカウント: @{banRecord.username}</p>}<p className="mt-5 text-xs text-gray-500">BAN解除後は下のボタンで状態を再確認できます。認証が期限切れの場合は再ログインが必要です。</p><button type="button" className="mt-4 w-full rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900" onClick={()=>window.dispatchEvent(new Event('xerox-ban-check'))}>BAN解除状況を確認</button></section></main>;
 

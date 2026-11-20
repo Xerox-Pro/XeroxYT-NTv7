@@ -1,3 +1,4 @@
+import {useRealtimeRefresh} from '../lib/accountRealtime';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {apiFetch} from '../lib/apiTransport.mjs';
@@ -9,45 +10,23 @@ type Controls={shake:()=>void;reset:()=>void;destroy:()=>void};
 const modes = ['off','chaos','chaos2','jelly','spin','quake','zero','mirror','burning'];
 const asMode = (value?: string): Mode => modes.includes(value ?? '') ? value as Mode : 'off';
 
-export default function VisualModes({initialMode, initialMonitoring}: {initialMode?: string; initialMonitoring?: boolean}) {
+export default function VisualModes({initialMode}: {initialMode?: string}) {
  const username=useSiteAccount()?.username;
  const [mode,setMode]=useState<Mode>(()=>asMode(initialMode));
- const [monitoring,setMonitoring]=useState(initialMonitoring===true);
  const [sensorMessage,setSensorMessage]=useState('');
  const controls=useRef<Controls|null>(null);
  const [sensorGranted,setSensorGranted]=useState(false);
  const requiresPermission=[(window as any).DeviceOrientationEvent,(window as any).DeviceMotionEvent].some(type=>typeof type?.requestPermission==='function');
  useEffect(()=>{
   setMode(asMode(initialMode));
-  setMonitoring(initialMonitoring===true);
- },[username,initialMode,initialMonitoring]);
- useEffect(()=>{
-  const apply=(event:Event)=>{
-   const detail=(event as CustomEvent<{mode?:string;monitoring?:boolean}>).detail;
-   if(typeof detail?.mode==='string')setMode(asMode(detail.mode));
-   if(typeof detail?.monitoring==='boolean')setMonitoring(detail.monitoring);
-  };
-  window.addEventListener('xerox-api-sidecar',apply);
-  return()=>window.removeEventListener('xerox-api-sidecar',apply);
- },[]);
- useEffect(()=>{
-  if(!monitoring||!username)return;
-  const controller=new AbortController();
-  let pending=false;
-  const interval=setInterval(async()=>{
-   if(pending)return;
-   pending=true;
-   try{
-    const response=await apiFetch('/api/account/visual-mode',{cache:'no-store',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});
-    if(!response.ok)return;
-    const status=await response.json();
-    if(controller.signal.aborted)return;
-    if(typeof status.mode==='string')setMode(asMode(status.mode));
-    if(typeof status.monitoring==='boolean')setMonitoring(status.monitoring);
-   }catch{}finally{pending=false;}
-  },60000);
-  return()=>{controller.abort();clearInterval(interval);};
- },[username,monitoring]);
+ },[username,initialMode]);
+ useRealtimeRefresh('account',['mode'],async()=>{
+  const response=await apiFetch('/api/account/visual-mode',{cache:'no-store',signal:AbortSignal.timeout(10000)});
+  if(response.ok){
+   const status=await response.json();
+   if(typeof status.mode==='string')setMode(asMode(status.mode));
+  }
+ },!!username,false,username);
  useEffect(()=>{
   if(mode==='off'||mode==='quake'||mode==='zero'||mode==='mirror'||mode==='burning')return;
   let disposed=false;const timer=setTimeout(()=>{void import('../lib/visualPhysics.mjs').then(({startVisualPhysics})=>{if(!disposed){const root=document.getElementById('root');if(root)controls.current=startVisualPhysics(root,mode);}});},350);

@@ -1,3 +1,4 @@
+import {onRealtime} from '../lib/accountRealtime';
 import {apiFetch} from '../lib/apiTransport.mjs';
 import {useEffect,useRef,useState} from 'react';
 
@@ -41,8 +42,9 @@ export default function SystemLogPanel({
    .then(value=>{if(!controller.signal.aborted)setEnabled(value.enabled);})
    .catch(cause=>{if(!controller.signal.aborted)setSettingsError(cause.message);});
   refresh();
+  const unsubscribe=onRealtime('admin',({type})=>{if(type==='ready'||type==='monitor')refresh();});
   window.addEventListener('xerox-system-monitor-updated',refresh);
-  return()=>{controller.abort();window.removeEventListener('xerox-system-monitor-updated',refresh);};
+  return()=>{controller.abort();unsubscribe();window.removeEventListener('xerox-system-monitor-updated',refresh);};
  },[]);
 
  const toggleMonitoring=async()=>{
@@ -63,9 +65,11 @@ export default function SystemLogPanel({
 
  useEffect(()=>{
   if(!enabled||paused||!expanded)return;
-  let closed=false,inFlight=false;
+  let closed=false,inFlight=false,queued=false;
   const poll=async()=>{
-   if(closed||inFlight||document.hidden)return;
+   if(closed||document.hidden)return;
+   if(inFlight){queued=true;return;}
+   queued=false;
    inFlight=true;
    try{
     const params=new URLSearchParams();
@@ -91,13 +95,14 @@ export default function SystemLogPanel({
    }finally{
     if(!closed)setLoading(false);
     inFlight=false;
+    if(queued&&!closed)void poll();
    }
   };
   void poll();
-  const interval=setInterval(()=>void poll(),2000);
+  const unsubscribe=onRealtime('admin',({type})=>{if(type==='ready'||type==='logs')void poll();});
   const visibility=()=>{if(!document.hidden)void poll();};
   document.addEventListener('visibilitychange',visibility);
-  return()=>{closed=true;clearInterval(interval);document.removeEventListener('visibilitychange',visibility);};
+  return()=>{closed=true;unsubscribe();document.removeEventListener('visibilitychange',visibility);};
  },[enabled,paused,expanded,selectedUserId,errorsOnly]);
 
  const displayed=logs.filter(log=>methodFilter==='all'||log.method===methodFilter);

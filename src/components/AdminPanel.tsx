@@ -1,3 +1,4 @@
+import {useAccountRealtime,useRealtimeRefresh} from '../lib/accountRealtime';
 import {apiFetch,getApiPreference,setApiPreference} from '../lib/apiTransport.mjs';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {useSiteAccount} from './AccountGate';
@@ -5,13 +6,14 @@ import ReleaseStatus from './ReleaseStatus';
 import AdminActionHistory,{type Entry} from './AdminActionHistory';
 import SystemLogPanel from './SystemLogPanel';
 
-type Account={id:string;username:string;created_at:number;banned:number;traffic_stopped:number;requests:number;videos:number;searches:number;last_seen?:number;visual_mode?:string;monitoring?:boolean;is_master?:boolean;viewing?:boolean;viewing_page?:string;viewing_title?:string};
+type Account={id:string;username:string;created_at:number;banned:number;traffic_stopped:number;requests:number;videos:number;searches:number;last_seen?:number;visual_mode?:string;monitoring?:boolean;is_master?:boolean;viewing?:boolean;viewing_last_seen?:number;viewing_page?:string;viewing_title?:string};
 async function request(path:string,method='GET',body?:unknown){
  const response=await apiFetch(path,{method,credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(25000),...(body===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
  const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'操作に失敗しました。');return data;
 }
 export default function AdminPanel(){
  const [preferredApi,setPreferredApi]=useState(getApiPreference);
+ const [clock,setClock]=useState(Date.now);
  const [sort,setSort]=useState('communication');
  const loadSeq=useRef(0);
  const [search,setSearch]=useState(''),[statusFilter,setStatusFilter]=useState('all'),[modeFilter,setModeFilter]=useState('all');
@@ -28,7 +30,7 @@ export default function AdminPanel(){
      const list=await request('/api/account/admin/accounts');
      if(!Array.isArray(list.accounts))throw new Error('ユーザー一覧の形式が不正です。');
      rows=list.accounts;
-     if(seq===loadSeq.current){setAccounts(rows);if(!silent)setMessage('');}
+     if(seq===loadSeq.current){setClock(Date.now());setAccounts(rows);if(!silent)setMessage('');}
    }catch(error){
      if(!silent&&seq===loadSeq.current)setMessage(error instanceof Error?error.message:'管理情報を取得できません。');
      throw error;
@@ -40,17 +42,20 @@ export default function AdminPanel(){
    return rows;
  },[account?.isMaster,account?.username]);
  useEffect(()=>{void load().catch(()=>{});},[load]);
- // Refresh viewing indicators while this admin page is visible, without refreshing Google configuration.
- useEffect(()=>{
-   if(!account?.isMaster)return;
-   const tick=()=>{if(!document.hidden&&!busy)void load(true).catch(()=>{});};
-   const timer=setInterval(tick,5000);
-   const focus=()=>tick();
-   window.addEventListener('focus',focus);
-   return()=>{clearInterval(timer);window.removeEventListener('focus',focus);};
- },[load,account?.isMaster,busy]);
+ useAccountRealtime('admin',!!account?.isMaster,account?.username);
+ useRealtimeRefresh('admin',['accounts'],async()=>{if(!busy)await load(true);},!!account?.isMaster,false);
 
- const accounts=[...accountRows].sort((a,b)=>sort==='viewing'?Number(!!b.viewing)-Number(!!a.viewing)||(b.last_seen||0)-(a.last_seen||0):sort==='communication'?(b.last_seen||0)-(a.last_seen||0)||b.created_at-a.created_at:sort==='oldest'?a.created_at-b.created_at:b.created_at-a.created_at);
+ useEffect(()=>{
+  const next=accountRows.reduce((earliest,row)=>{
+   const expiry=(row.viewing_last_seen??0)+90000;
+   return expiry>clock?Math.min(earliest,expiry):earliest;
+  },Infinity);
+  if(!Number.isFinite(next))return;
+  const timer=setTimeout(()=>setClock(Date.now()),Math.max(1,next-Date.now()));
+  return()=>clearTimeout(timer);
+ },[accountRows,clock]);
+
+ const accounts=accountRows.map(row=>row.viewing_last_seen&&row.viewing_last_seen+90000<=clock?{...row,viewing:false,viewing_page:'',viewing_title:''}:row).sort((a,b)=>sort==='viewing'?Number(!!b.viewing)-Number(!!a.viewing)||(b.last_seen||0)-(a.last_seen||0):sort==='communication'?(b.last_seen||0)-(a.last_seen||0)||b.created_at-a.created_at:sort==='oldest'?a.created_at-b.created_at:b.created_at-a.created_at);
  const searchText=search.trim().toLowerCase();
  const filteredAccounts=accounts.filter(item=>(!searchText||item.username.toLowerCase().includes(searchText))&&(statusFilter==='all'||(statusFilter==='banned'&&!!item.banned)||(statusFilter==='traffic'&&!!item.traffic_stopped)||(statusFilter==='active'&&!item.banned&&!item.traffic_stopped)||(statusFilter==='master'&&!!item.is_master)||(statusFilter==='viewing'&&!!item.viewing)||(statusFilter==='offline'&&!item.viewing))&&(modeFilter==='all'||(item.visual_mode||'off')===modeFilter));
  if(!account?.isMaster)return null;
