@@ -132,7 +132,6 @@ export default async function handler(request: Request) {
     && request.headers.get('x-xeroxyt-sidecar') === '1'
     && isYouTubeRead(path)
     && !!headers.get('cookie');
-  const sidecarTask = wantsSidecar ? accountSidecar(pool[0], headersFor(pool[0])) : null;
   const readonly = ["GET", "HEAD"].includes(request.method);
   const sharedAccountRead = Boolean(secondaryOrigin)
     && /^\/api\/account\/(session|history|visual-mode)$/.test(path);
@@ -173,9 +172,9 @@ export default async function handler(request: Request) {
       outgoing.delete("content-encoding");
       outgoing.delete("content-length");
       outgoing.set("Cache-Control", "private, no-store");
-      if (sidecarTask) {
+      if (wantsSidecar && response.ok) {
         const sidecar = await Promise.race<string | null>([
-          sidecarTask,
+          accountSidecar(pool[i], headersFor(pool[i])),
           new Promise(resolve => setTimeout(() => resolve(null), 850)),
         ]);
         if (sidecar && sidecar.length < 3500) outgoing.set('X-XeroxYT-Sidecar', encodeURIComponent(sidecar));
