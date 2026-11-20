@@ -34,7 +34,7 @@ export default function XWorkspace() {
    <a className="x-login" href="https://x.com/i/flow/login" target="_blank" rel="noopener noreferrer">Xでログイン <ArrowUpRight size={16}/></a>
   </aside>
   <section className="x-workspace-content" aria-labelledby="x-home-title">
-   <header className="x-workspace-intro"><span className="x-service-mark" aria-hidden="true">↗</span><h1 id="x-home-title">ホーム</h1></header>
+   <header className="x-workspace-intro"><img className="x-service-mark" src="/app-icons/x.webp" alt="" width={30} height={30}/><h1 id="x-home-title">ホーム</h1></header>
    <form className="x-preview-form" onSubmit={event=>{event.preventDefault();void loadPost();}}>
     <label htmlFor="x-post-url">公開投稿をプレビュー</label>
     <div><input id="x-post-url" type="url" value={postUrl} onChange={event=>setPostUrl(event.target.value)} required maxLength={2048} placeholder="https://x.com/…/status/…"/><button type="submit" disabled={loading || !postUrl.trim()}>{loading?'取得中…':'表示'}</button></div>
