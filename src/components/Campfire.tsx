@@ -1,7 +1,8 @@
 import {useLayoutEffect,useRef,useState} from 'react';
 import './burning.css';
 
-const targets='header,nav,aside,footer,article,.video-card,.my-video-card,.watch-details-row,main > section,main img,main button,main video';
+const targets='video,iframe,canvas,button,input,select,a,img,h1,h2,h3,p,li,article,header,nav,aside,footer,section,.video-card,.watch-channel-name,.watch-actions,.shorts-player-row,.mini-player-body,.watch-details-row';
+const atomic='video,iframe,canvas,button,input,select,a';
 const clamp=(n:number)=>Math.max(0,Math.min(1,n));
 const edge=(x:number,p:number,seed:number)=>100-124*p+Math.min(1,p*12)*8*(Math.sin(x*.19+seed)+.45*Math.sin(x*.49+seed));
 
@@ -17,8 +18,8 @@ export function Campfire(){
    const r=el.getBoundingClientRect();
    return r.width>12&&r.height>12&&r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth;
   });
-  const pieces=candidates.filter(el=>!candidates.some(parent=>parent!==el&&parent.contains(el)&&!parent.matches('main > section')))
-   .filter(el=>!el.matches('main > section')||!candidates.some(child=>child!==el&&el.contains(child)));
+  const surfaces=candidates.filter(el=>!el.parentElement?.closest(atomic));
+  const pieces=surfaces.filter(el=>!surfaces.some(child=>child!==el&&el.contains(child)));
   if(!pieces.length)pieces.push(root);
   pieces.sort((a,b)=>b.getBoundingClientRect().bottom-a.getBoundingClientRect().bottom);
   const sheet=pieces.map((el,i)=>({el,i,progress:-1,anim:el.animate([
@@ -50,10 +51,18 @@ export function Campfire(){
     if(p>0&&p<1){
      const r=s.el.getBoundingClientRect();
      for(let j=0;j<6;j++){
-      const u=Math.random()*100,x=r.left+r.width*u/100,y=r.top+r.height*edge(u,p,s.i)/100;
-      const size=5+Math.random()*14;
-      const light=ctx!.createRadialGradient(x,y,0,x,y,size);light.addColorStop(0,'#fff3aa');light.addColorStop(.21,'#ff9a29');light.addColorStop(1,'#e6420300');
-      ctx!.fillStyle=light;ctx!.save();ctx!.translate(x,y);ctx!.scale(.55,1);ctx!.translate(-x,-y);ctx!.fillRect(x-size,y-size,size*2,size*2);ctx!.restore();
+      const phase=elapsed*.004+s.i*2.4+j*1.73;
+      const u=(j+.5+.23*Math.sin(phase*.6))*100/6,x=r.left+r.width*u/100,y=r.top+r.height*edge(u,p,s.i)/100;
+      const width=Math.min(23,r.width/8)*(1+.15*Math.sin(phase));
+      const height=width*(1.8+.65*Math.sin(phase*1.7))*(.65+Math.sin(p*Math.PI));
+      const bend=width*(.55*Math.sin(phase)+.32*Math.sin(phase*2.3));
+      const flame=ctx!.createLinearGradient(x,y,x,y-height);
+      flame.addColorStop(0,'#fff4ad');flame.addColorStop(.24,'#ffc04c');
+      flame.addColorStop(.65,'#ff6123cc');flame.addColorStop(1,'#b5351200');
+      ctx!.fillStyle=flame;ctx!.beginPath();ctx!.moveTo(x-width*.5,y);
+      ctx!.bezierCurveTo(x-width,y-height*.4,x+bend+width*.4,y-height*.64,x+bend,y-height);
+      ctx!.bezierCurveTo(x+bend+width,y-height*.52,x+width,y-height*.2,x+width*.5,y);
+      ctx!.closePath();ctx!.fill();
       if(j===0&&ashes.length<130)ashes.push({x,y,vx:Math.random()*2-1,vy:-1-Math.random()*2,life:1,angle:x});
      }
     }
@@ -66,7 +75,8 @@ export function Campfire(){
    for(let step=0;step<(elapsed<=64?96:3);step++){
     for(let x=0;x<112;x++){
      const d=(x-56)/44;
-     heat[95*112+x]=Math.max(0,1-d*d*1.6)*(.58+Math.random()*.68);
+     const pocket=.71+.23*Math.sin(x*.34+elapsed*.003)+.16*Math.sin(x*.71-elapsed*.006);
+     heat[95*112+x]=Math.max(0,1-d*d*1.6)*pocket*(.8+Math.random()*.45);
     }
     for(let y=0;y<95;y++)for(let x=1;x<111;x++){
      const drift=Math.round(Math.sin(y*.12+elapsed*.002)*.95+Math.random()-.5);
