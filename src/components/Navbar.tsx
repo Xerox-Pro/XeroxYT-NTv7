@@ -417,7 +417,7 @@ export default function Navbar({
         <button type="button" className="flex items-center gap-2 whitespace-nowrap font-bold" onClick={onHome} aria-label="XeroxYT-NTv7のホーム">
           <img className="app-icon-light object-contain" src="/app-icons/youtube.png" width={48} height={32} alt=""/>
           <img className="app-icon-dark object-contain" src="/app-icons/youtube-dark.png" width={48} height={32} alt=""/>
-          <span className="text-[18px] leading-none tracking-tight md:text-[20px]">XeroxYT-NTv7</span>
+          <span className="hidden leading-none tracking-tight md:inline md:text-[20px]">XeroxYT-NTv7</span>
         </button>
       </div>
       
