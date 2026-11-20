@@ -88,3 +88,37 @@
 .tt-account-active{background:#16432d;border-color:#2c6a48;color:#c6ffe0}
 .tt-account-row .tt-account-remove{padding:8px;background:transparent;border:0;color:#bbb}
 @media(max-width:420px){.tt-account-row{gap:7px}.tt-account-row button,.tt-account-active{padding:6px;font-size:11px}}
+
+.x-workspace{min-height:100dvh;background:#151123;color:#f5efff;padding:clamp(16px,4vw,48px)}
+.x-workspace>header,.x-workspace-content{width:min(100%,880px);margin-inline:auto}
+.x-workspace>header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.x-workspace a,.x-workspace button{color:inherit}
+.x-workspace>header>a,.x-workspace button,.x-workspace nav>a{display:flex;align-items:center;gap:10px;border:1px solid #7964a8;border-radius:12px;padding:12px;background:#231a3a}
+.x-workspace-content{margin-top:clamp(28px,8vh,80px);animation:x-workspace-enter 200ms ease-out}
+.x-workspace-intro{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.x-workspace-intro h1{font-size:36px;margin:0}
+.x-workspace form{display:grid;gap:8px}
+.x-workspace form>div{display:flex;gap:8px}
+.x-workspace input{flex:1;min-width:0;border:1px solid #7964a8;border-radius:12px;background:#231a3a;color:inherit;padding:12px}
+.x-workspace nav{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;margin-block:20px}
+.x-workspace nav span{flex:1}
+.x-workspace p{color:#cdbde9}
+@keyframes x-workspace-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.x-workspace-content{animation:none}}
+@media (pointer:coarse) and (min-width:768px) and (max-width:1366px){
+ .social-page-heading button,.social-search button,.social-browser-login button{min-height:44px}
+ .social-reel-viewer{overscroll-behavior-y:contain}
+ .social-dialog{max-height:calc(100dvh - 32px);overscroll-behavior:contain}
+}
+@media (pointer:coarse) and (orientation:landscape) and (min-width:768px) and (max-width:1366px){
+ .social-app .social-sidebar{width:188px;padding:18px 12px;overflow-y:auto}
+ .social-app .social-sidebar>a,.social-app .social-sidebar>button{justify-content:flex-start;min-height:44px;padding:10px 12px}
+ .social-app .social-sidebar>a>span,.social-app .social-sidebar>button>span{display:inline}
+ .social-app .social-body{padding-inline:24px}
+ .social-login-fields{max-width:600px}
+}
+@media(prefers-reduced-motion:no-preference){
+ .social-modal-backdrop{animation:x-workspace-enter 150ms ease-out}
+ .x-workspace nav>a,.x-workspace button{transition:background-color 160ms ease,border-color 160ms ease}
+ .x-workspace nav>a:hover,.x-workspace button:hover{background:#312350;border-color:#b398ec}
+}

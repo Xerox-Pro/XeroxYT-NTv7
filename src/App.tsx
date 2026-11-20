@@ -3,6 +3,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import MainApp from './MainApp';
 import {serviceForPath,services} from './social/services.mjs';
 const SocialApp=lazy(()=>import('./social/SocialApp'));
+const XWorkspace=lazy(()=>import('./social/XWorkspace'));
 import AccountGate from './components/AccountGate';
 import PWAUpdateIndicator from './components/PWAUpdateIndicator';
 import PrivateModeGate from './components/PrivateModeGate';
@@ -33,7 +34,7 @@ export default function App() {
     <>
       <PWAUpdateIndicator />
       <Routes>
-        <Route path="/*" element={<PrivateModeGate><AccountGate><MainApp socialContent={service==='youtube'?undefined:<ServiceBoundary key={service}><Suspense fallback={<div role="status" className="p-10 text-center text-gray-500">アプリを読み込み中…</div>}><SocialApp key={service} service={service}/></Suspense></ServiceBoundary>}/></AccountGate></PrivateModeGate>} />
+        <Route path="/*" element={<PrivateModeGate><AccountGate><MainApp socialContent={service==='youtube'?undefined:<ServiceBoundary key={service}><Suspense fallback={<div role="status" className="p-10 text-center text-gray-500">アプリを読み込み中…</div>}>{service==='x'?<XWorkspace/>:<SocialApp key={service} service={service}/>}</Suspense></ServiceBoundary>}/></AccountGate></PrivateModeGate>} />
       </Routes>
     </>
   );

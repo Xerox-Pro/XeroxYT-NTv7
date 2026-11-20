@@ -7,3 +7,6 @@
 .app-switcher>.app-picker-trigger>svg{display:block!important}
 
 .app-switcher>button[data-app-logo]{min-width:0;flex:1}.app-switcher>button>img{flex:none}.app-switcher>button>span{min-width:0}.app-picker-grid img{max-width:100%}.app-picker-grid>button>span{overflow-wrap:anywhere;line-height:1.35;min-height:2.7em;text-align:center}
+
+.x-service-mark{display:inline-grid;place-items:center;flex-shrink:0;width:30px;height:30px;border-radius:9px;background:#31235c;color:#eee3ff;font-size:22px;font-weight:700;line-height:1}
+.app-picker-grid .x-service-mark{width:42px;height:42px;font-size:28px}
