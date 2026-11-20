@@ -1,14 +1,18 @@
+import {workerQuotaExceeded} from './apiPool.mjs';
 // Best-effort per-isolate hints; a cold instance safely probes again.
 export function createApiSelector(fetcher=fetch,now=Date.now){
- const health=new Map(),pending=new Map();
+ const health=new Map(),pending=new Map(),quotaUntil=new Map();
+ const atQuota=origin=>(quotaUntil.get(origin)||0)>now();
+ const reportQuota=origin=>quotaUntil.set(origin,(Math.floor(now()/86400000)+1)*86400000);
  const key=(origin,headers)=>origin+'|'+(headers.get('origin')||'');
  const remember=(origin,headers,ok)=>{if(health.size>512)health.clear();health.set(key(origin,headers),{ok,until:now()+(ok?30000:10000)});};
  const probe=(origin,headers)=>{
   const k=key(origin,headers),cached=health.get(k);if(cached&&cached.until>now())return Promise.resolve(cached.ok);
   if(pending.has(k))return pending.get(k);
-  const task=(async()=>{let ok=false;try{const safe=new Headers();for(const n of ['origin','authorization'])if(headers.has(n))safe.set(n,headers.get(n));const response=await fetcher(origin+'/health',{headers:safe,redirect:'manual',signal:AbortSignal.timeout(1500)});if(response.ok){const body=await response.json();ok=body?.status==='ok'||body?.ok===true;}else await response.body?.cancel();}catch{}remember(origin,headers,ok);return ok;})().finally(()=>pending.delete(k));pending.set(k,task);return task;
+  const task=(async()=>{let ok=false;try{const safe=new Headers();for(const n of ['origin','authorization'])if(headers.has(n))safe.set(n,headers.get(n));const response=await fetcher(origin+'/health',{headers:safe,redirect:'manual',signal:AbortSignal.timeout(1500)});if(response.ok){const body=await response.json();ok=body?.status==='ok'||body?.ok===true;}else {if(await workerQuotaExceeded(response))reportQuota(origin);await response.body?.cancel();}}catch{}remember(origin,headers,ok);return ok;})().finally(()=>pending.delete(k));pending.set(k,task);return task;
  };
- return {report:remember,async plan(pool,headers,headersFor=()=>headers){
+ return {report:remember,reportQuota,async plan(pool,headers,headersFor=()=>headers){
+  pool=pool.filter(origin=>!atQuota(origin));
   if(pool.length<2)return pool;
   const good=pool.filter(origin=>{const v=health.get(key(origin,headers));return v?.ok&&v.until>now();});
   const unknown=pool.filter(origin=>{const v=health.get(key(origin,headers));return !v||v.until<=now();});

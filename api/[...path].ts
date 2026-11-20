@@ -1,7 +1,7 @@
 import {boundedRequestBody} from "../server/lib/requestSecurity.mjs";
 import {fetchApiResponse} from "../server/lib/apiRequest.mjs";
 import {apiSelector} from "../server/lib/apiAvailability.mjs";
-import { apiPool, canRetry, orderApiPool } from "../server/lib/apiPool.mjs";
+import { apiPool, canRetry, orderApiPool, workerQuotaExceeded } from "../server/lib/apiPool.mjs";
 export const config = { runtime: "edge" };
 const forwarded = [
   "accept",
@@ -111,6 +111,7 @@ export default async function handler(request: Request) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
+  if (/^\/api(?:\/|$)/.test(path)) headers.set('Accept','application/json');
   if (!headers.has('Origin')) headers.set('Origin', url.origin);
   if (process.env.API_SHARED_SECRET) headers.set('Authorization','Bearer '+process.env.API_SHARED_SECRET);
   const configuredPool = pool;
@@ -156,6 +157,13 @@ export default async function handler(request: Request) {
         redirect: "manual",
         signal: request.signal,
       }, Math.max(1, Math.min(12000, deadline - Date.now())));
+      if (await workerQuotaExceeded(response)) {
+        apiSelector.reportQuota(pool[i]);
+        await response.body?.cancel();
+        lastFailure = 'worker_daily_quota';
+        console.warn(JSON.stringify({event:'api_worker_quota',operation:routeName,upstreamIndex}));
+        continue;
+      }
       // A route error or a per-user quota does not tell us whether this API is healthy.
       if (
         canRetry(request.method, path, response.status, sharedAccountRead) &&
@@ -197,7 +205,7 @@ export default async function handler(request: Request) {
   }
   return respond(Response.json(
     {
-      error: "登録されているAPIに接続できませんでした。",
+      error: lastFailure === 'worker_daily_quota' ? "APIの利用上限に達しました。利用できる接続先がありません。" : "登録されているAPIに接続できませんでした。",
       code: Date.now() >= deadline ? "API_TIMEOUT" : "API_UNAVAILABLE",
     },
     { status: Date.now() >= deadline ? 504 : 502, headers: {'Cache-Control':'no-store'} },

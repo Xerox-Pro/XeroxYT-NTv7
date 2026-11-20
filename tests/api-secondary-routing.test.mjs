@@ -23,3 +23,21 @@ test('the secondary can receive account mutations using its own proxy credential
  assert.equal(canRetry('GET','/api/account/admin/action-history',503,true),true);
  assert.equal(canRetry('GET','/api/account/admin/action-history',403,true),false);
 });
+
+test('Cloudflare daily quota removes the primary from the pool until reset',async()=>{
+ const {workerQuotaExceeded}=await import('../server/lib/apiPool.mjs');
+ const primary='https://main.workers.dev';
+ const secondary='https://backup.workers.dev';
+ const headers=new Headers({Origin:'https://app.example'});
+ const exhausted=()=>Response.json({cloudflare_error:true,error_code:1027},{status:503,headers:{'cf-ray':'test'}});
+ assert.equal(await workerQuotaExceeded(exhausted()),true);
+ assert.equal(await workerQuotaExceeded(new Response('<title>Error 1027</title>',{status:429,headers:{'cf-ray':'test','content-type':'text/html'}})),true);
+ assert.equal(await workerQuotaExceeded(Response.json({code:'ACCOUNT_TIMEOUT'},{status:429,headers:{'cf-ray':'test'}})),false);
+ let now=0;
+ const selector=createApiSelector(async url=>url.startsWith(primary)&&now===0?exhausted():Response.json({ok:true}),()=>now);
+ assert.deepEqual(await selector.plan([primary,secondary],headers),[secondary]);
+ now=30001;
+ assert.deepEqual(await selector.plan([primary,secondary],headers),[secondary]);
+ now=86400000;
+ assert.deepEqual(await selector.plan([primary,secondary],headers),[primary,secondary]);
+});
