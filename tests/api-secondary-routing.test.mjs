@@ -41,3 +41,12 @@ test('Cloudflare daily quota removes the primary from the pool until reset',asyn
  now=86400000;
  assert.deepEqual(await selector.plan([primary,secondary],headers),[primary,secondary]);
 });
+
+test('the gateway recognizes the live 1027 response even if CF-Ray is missing',async()=>{
+ const {workerQuotaExceeded}=await import('../server/lib/apiPool.mjs');
+ const plain=(body,headers={})=>new Response(body,{status:429,headers:{'content-type':'text/plain; charset=UTF-8',...headers}});
+ assert.equal(await workerQuotaExceeded(plain('error code: 1027\n')),true);
+ assert.equal(await workerQuotaExceeded(plain('error code: 1027\n',{'x-xeroxyt-proxy':'cloudflare'})),false);
+ assert.equal(await workerQuotaExceeded(plain('application error code: 1027')),false);
+ assert.equal(await workerQuotaExceeded(plain('error code: 1015')),false);
+});

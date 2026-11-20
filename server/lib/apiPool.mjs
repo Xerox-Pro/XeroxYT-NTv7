@@ -16,8 +16,13 @@ export function orderApiPool(pool, secondary, preference) {
 
 // 1027 is returned by Cloudflare before the Worker can execute the request.
 export async function workerQuotaExceeded(response) {
- if(response.ok||!response.headers.has('cf-ray')||response.headers.has('x-xeroxyt-proxy'))return false;
+ if(response.ok||response.headers.has('x-xeroxyt-proxy'))return false;
  const type=response.headers.get('content-type')||'';
+ const cloudflareHeader=response.headers.has('cf-ray');
+ // A gateway can omit CF-Ray from Cloudflare's terse, pre-Worker error.
+ // Without that header, require the exact plain-text error and status.
+ const plainQuotaResponse=[429,503].includes(response.status)&&/^text\/plain(?:\s*;|$)/i.test(type);
+ if(!cloudflareHeader&&!plainQuotaResponse)return false;
  if(type.includes('json')){
   const data=await response.clone().json().catch(()=>null);
   return data?.cloudflare_error===true&&Number(data.error_code)===1027;
@@ -32,6 +37,7 @@ export async function workerQuotaExceeded(response) {
    if(done)break;
    prefix+=decoder.decode(value,{stream:true});
   }
+  if(!cloudflareHeader)return prefix.length<8192&&/^error code: 1027$/i.test(prefix.trim());
   return /\bError(?:\s+(?:code|number))?\s*(?:[:#]\s*)?1027\b|\b1027\s*[:—-]\s*Worker/i.test(prefix.slice(0,8192));
  }catch{return false;}
  finally{void reader.cancel().catch(()=>{});}
