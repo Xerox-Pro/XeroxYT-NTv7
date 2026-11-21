@@ -15,82 +15,62 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
  useEffect(()=>{
   if(!enabled)return;
   const controller=new AbortController();
-  let socket:WebSocket|undefined;
   let retry:ReturnType<typeof setTimeout>|undefined;
-  let failback:ReturnType<typeof setTimeout>|undefined;
-  let watchdog:ReturnType<typeof setInterval>|undefined;
   let delay=1000;
   let avoid='';
-  let lastSeen=0;
-  let expires=Infinity;
   const emit=(type:RealtimeEvent,banned?:boolean,logs?:unknown)=>{
    window.dispatchEvent(new CustomEvent(eventName(scope),{detail:{type,banned,logs}}));
   };
-  const reconnect=()=>{
-   clearInterval(watchdog);
-   clearTimeout(failback);
-   if(controller.signal.aborted||retry)return;
-   retry=setTimeout(()=>{retry=undefined;void connect();},delay+Math.random()*500);
-   delay=Math.min(delay*2,300000);
-  };
   const connect=async()=>{
+   let ready=false;
+   let index='';
+   let reader:ReadableStreamDefaultReader<Uint8Array>|undefined;
    try{
-    const response=await apiFetch('/api/account/realtime/ticket?scope='+scope,{
-     cache:'no-store',headers:avoid?{'X-XeroxYT-Realtime-Avoid':avoid}:undefined,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(10000)]),
+    const response=await apiFetch('/api/account/realtime/events?scope='+scope,{
+     cache:'no-store',
+     headers:avoid?{'X-XeroxYT-Realtime-Avoid':avoid}:undefined,
+     signal:AbortSignal.any([controller.signal,AbortSignal.timeout(115000)]),
     });
     if(controller.signal.aborted)return;
-    if(response.status===401||response.status===403||response.status===423){
+    if([401,403,423].includes(response.status)){
      if(scope==='account')emit('session');
      return;
     }
-    if(!response.ok){reconnect();return;}
-    const origin=new URL(response.headers.get('X-XeroxYT-Realtime-Origin')||'');
-    if(origin.protocol!=='https:'||!origin.hostname.endsWith('.workers.dev'))throw Error('Invalid realtime origin');
-    const {ticket}=await response.json();
-    if(controller.signal.aborted)return;
-    const url=new URL('/api/account/realtime/socket',origin);
-    url.protocol='wss:';
-    const connection=new WebSocket(url,['xerox-realtime-v1',ticket]);
-    socket=connection;
-    let ready=false;
-    if(response.headers.get('X-XeroxYT-Realtime-Preferred')==='0')failback=setTimeout(()=>connection.close(),120000+Math.random()*30000);
-    lastSeen=Date.now();
-    expires=Infinity;
-    connection.onmessage=event=>{
-     if(controller.signal.aborted)return;
-     lastSeen=Date.now();
-     if(event.data==='pong')return;
-     const data=JSON.parse(event.data);
-     if(data.type==='ready'){
-      ready=true;
-      avoid='';
-      delay=1000;
-      expires=Number(data.expires);
+    index=response.headers.get('X-XeroxYT-API-Index')||'';
+    if(!response.ok||!response.body)throw Error('Realtime stream unavailable');
+    reader=response.body.getReader();
+    const decoder=new TextDecoder();
+    let pending='';
+    while(!controller.signal.aborted){
+     const {done,value}=await reader.read();
+     if(done)break;
+     pending+=decoder.decode(value,{stream:true});
+     if(pending.length>2*1024*1024)throw Error('Realtime event too large');
+     const frames=pending.split('\n\n');
+     pending=frames.pop()??'';
+     for(const frame of frames){
+      if(!frame.startsWith('data: '))continue;
+      const data=JSON.parse(frame.slice(6));
+      if(data.type==='ready'){
+       ready=true;
+       delay=1000;
+       avoid='';
+      }
+      emit(data.type,data.banned,data.logs);
      }
-     emit(data.type,data.banned,data.logs);
-    };
-    connection.onclose=()=>{
-     if(!ready)avoid=response.headers.get('X-XeroxYT-API-Index')||'';
-     reconnect();
-    };
-    watchdog=setInterval(()=>{
-     const now=Date.now();
-     if(now>=expires||now-lastSeen>90000)connection.close();
-     else if(connection.readyState===WebSocket.OPEN)connection.send('ping');
-     else if(connection.readyState===WebSocket.CONNECTING)connection.close();
-    },30000);
+    }
    }catch{
-    reconnect();
+    // A disconnected stream is reopened below.
+   }finally{
+    void reader?.cancel().catch(()=>{});
    }
+   if(controller.signal.aborted)return;
+   if(!ready)avoid=index;
+   retry=setTimeout(()=>void connect(),delay+Math.random()*500);
+   delay=Math.min(delay*2,30000);
   };
   void connect();
-  return()=>{
-   controller.abort();
-   clearTimeout(retry);
-   clearInterval(watchdog);
-   clearTimeout(failback);
-   socket?.close();
-  };
+  return()=>{controller.abort();clearTimeout(retry);};
  },[scope,enabled,identity,preference]);
 }
 
