@@ -96,12 +96,15 @@ export default async function handler(request: Request) {
   if (linkedAccountRoute) pool = pool.filter(origin => origin !== secondaryOrigin);
   else {
     const preferred = request.headers.get('X-XeroxYT-Prefer-API');
-    let ordered=orderApiPool(pool, secondaryOrigin, preferred);
+    const ordered=orderApiPool(pool, secondaryOrigin, preferred);
+    pool = await apiSelector.plan(ordered, headers, headersFor);
+    // A Worker's HTTP health check can pass while its Durable Object rejects upgrades.
     if(path===realtimeTicketPath){
       const unavailable=configuredPool[Number(request.headers.get('X-XeroxYT-Realtime-Avoid'))-1];
-      if(unavailable&&ordered.length>1)ordered=[...ordered.filter(origin=>origin!==unavailable),unavailable];
+      if(unavailable&&pool.length>1&&pool.includes(unavailable)){
+        pool=[...pool.filter(origin=>origin!==unavailable),unavailable];
+      }
     }
-    pool = await apiSelector.plan(ordered, headers, headersFor);
   }
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
   const readonly = ["GET", "HEAD"].includes(request.method);

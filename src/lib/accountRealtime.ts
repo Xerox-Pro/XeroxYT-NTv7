@@ -18,6 +18,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
   let retry:ReturnType<typeof setTimeout>|undefined;
   let delay=1000;
   let avoid='';
+  let avoidUntil=0;
   const emit=(type:RealtimeEvent,banned?:boolean,logs?:unknown)=>{
    window.dispatchEvent(new CustomEvent(eventName(scope),{detail:{type,banned,logs}}));
   };
@@ -26,6 +27,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
    let index='';
    let reader:ReadableStreamDefaultReader<Uint8Array>|undefined;
    try{
+    if(Date.now()>=avoidUntil)avoid='';
     const response=await apiFetch('/api/account/realtime/events?scope='+scope,{
      cache:'no-store',
      headers:avoid?{'X-XeroxYT-Realtime-Avoid':avoid}:undefined,
@@ -54,7 +56,6 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
       if(data.type==='ready'){
        ready=true;
        delay=1000;
-       avoid='';
       }
       emit(data.type,data.banned,data.logs);
      }
@@ -65,7 +66,10 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
     void reader?.cancel().catch(()=>{});
    }
    if(controller.signal.aborted)return;
-   if(!ready)avoid=index;
+   if(!ready&&index){
+    avoid=index;
+    avoidUntil=Date.now()+600000;
+   }
    retry=setTimeout(()=>void connect(),delay+Math.random()*500);
    delay=Math.min(delay*2,30000);
   };

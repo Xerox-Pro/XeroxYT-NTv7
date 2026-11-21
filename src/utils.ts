@@ -178,7 +178,10 @@ export function formatDuration(seconds: number): string {
 const CACHE_TTL_DEFAULT = 30 * 60 * 1000; // 30 minutes
 
 // エンドポイント別のキャッシュ保持時間 (ms)
+const channelSearch = /^\/api\/channel\/[^/?]+\/search(?:\?|$)/;
+
 function getCacheTTL(url: string): number {
+  if (channelSearch.test(url)) return 10 * 60 * 1000;
   if (url.includes('/api/recommendations')) return 5 * 60 * 1000; // 5 minutes
   if (url.includes('/api/trending')) return 15 * 60 * 1000; // 15 minutes
   if (url.includes('/api/search') || url.includes('/api/suggestions')) return 10 * 60 * 1000; // 10 minutes
@@ -204,7 +207,6 @@ async function fetchJSONRequest(url: string, options?: RequestInit) {
       url.startsWith('/api/shorts?') ||
       url.startsWith('/api/shorts-ranking') ||
       url.startsWith('/api/home/') ||
-      /^\/api\/channel\/[^/]+\/search(?:\?|$)/.test(url) ||
       url.includes('/sync/') || 
       url.includes('/auth/') || 
       url.includes('/stream');
@@ -327,7 +329,7 @@ async function fetchJSONRequest(url: string, options?: RequestInit) {
     if (isGet && !url.startsWith('/api/user/') && !url.startsWith('/api/auth/')) {
        try {
          const cached = await get(url);
-         if (cached && hasValidContent(cached.data)) {
+         if (cached && hasValidContent(cached.data) && (!channelSearch.test(url) || Date.now() - cached.timestamp < getCacheTTL(url))) {
            return cached.data;
          }
        } catch (e) {

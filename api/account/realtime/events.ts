@@ -19,7 +19,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const ticketResponse=await fetch(url,{headers,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(18000)]),redirect:'error'});
   if(!ticketResponse.ok){
    await ticketResponse.body?.cancel();
-   res.writeHead(ticketResponse.status,{'Cache-Control':'no-store'}).end();
+   const index=ticketResponse.headers.get('X-XeroxYT-API-Index');
+   res.writeHead(ticketResponse.status,{
+    'Cache-Control':'no-store',
+    ...(index?{'X-XeroxYT-API-Index':index}:{}),
+   }).end();
    return;
   }
   const index=ticketResponse.headers.get('X-XeroxYT-API-Index')??'';
