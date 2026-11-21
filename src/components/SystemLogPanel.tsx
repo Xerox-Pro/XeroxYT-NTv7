@@ -131,6 +131,13 @@ export default function SystemLogPanel({
   return()=>{controller.abort();unsubscribe();document.removeEventListener('visibilitychange',visibility);};
  },[enabled,live,mode,manualRefresh,selectedUserId,errorsOnly]);
 
+ useEffect(()=>{
+  if(!logs.length)return;
+  const expires=Math.min(...logs.map(log=>log.at))+600000;
+  const timer=setTimeout(()=>setLogs(previous=>previous.filter(log=>log.at>Date.now()-600000)),Math.max(0,expires-Date.now()));
+  return()=>clearTimeout(timer);
+ },[logs]);
+
  const displayed=logs.filter(log=>methodFilter==='all'||log.method===methodFilter);
  return <section id="system-live-logs" className="mt-6 rounded-2xl border border-gray-200 p-4" aria-label="システムの通信ログ">
   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -198,7 +205,7 @@ export default function SystemLogPanel({
     </table>
     {!displayed.length&&!error&&<p className="p-5 text-center text-sm text-gray-500">{loading?'通信ログを読み込んでいます。':updatedAt?'条件に合う通信はまだありません。':mode==='live'?'「再生」で受信を開始します。':'「更新」でログを取得します。'}</p>}
    </div>
-   <p className="mt-3 text-xs text-gray-500">Cloudflare APIに到達した通信のメタデータだけを記録します。検索語句、DM本文、Cookie、IPアドレス、パスワードは記録しません。履歴は7日を超えると表示されません。</p>
+   <p className="mt-3 text-xs text-gray-500">Cloudflare APIに到達した通信のメタデータだけを記録します。検索語句、DM本文、Cookie、IPアドレス、パスワードは記録しません。直近10分の履歴を表示します。</p>
   </>}
  </section>;
 }
