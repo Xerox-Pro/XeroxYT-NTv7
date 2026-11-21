@@ -1,6 +1,5 @@
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import WebSocket from 'ws';
-import ticketHandler from '../../[...path]';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
  if(req.method!=='GET'){
@@ -17,7 +16,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
    const value=req.headers[name];
    if(typeof value==='string')headers.set(name,value);
   }
-  const ticketResponse=await ticketHandler(new Request(url,{headers,signal:controller.signal}));
+  const ticketResponse=await fetch(url,{headers,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(18000)]),redirect:'error'});
   if(!ticketResponse.ok){
    await ticketResponse.body?.cancel();
    res.writeHead(ticketResponse.status,{'Cache-Control':'no-store'}).end();
