@@ -5,3 +5,9 @@
 .burn-scene p {position:absolute;top:24%;width:100%;text-align:center;font:400 clamp(26px,5vw,52px)/1.5 serif;letter-spacing:.16em;color:#ffe7cf;text-shadow:0 2px 20px #72391a;animation:fire-caption 1.6s both}
 @keyframes fire-caption {from {opacity:0} to {opacity:1}}
 @media(prefers-reduced-motion:reduce){.burn-scene p{animation:none}}
+
+.wash-scene {position:fixed;inset:0;z-index:2147483646;overflow:hidden;pointer-events:none;display:grid;place-items:center}
+.wash-wave {position:absolute;inset:-120% -10% auto;height:120%;border-radius:0 0 45% 25%;background:repeating-linear-gradient(82deg,transparent 0 22px,#e4ffff55 26px,transparent 34px),linear-gradient(#0069ad26,#039deaae 85%,#bfffffee);box-shadow:0 12px 24px #9df4ff;animation:wash-down 2.8s ease-in both}
+@keyframes wash-down {to{transform:translateY(210%)}}
+.wash-scene.complete {background:#e9fcff;color:#075877;font-size:clamp(28px,6vw,76px)}
+@media(prefers-reduced-motion:reduce){.wash-wave{display:none}}

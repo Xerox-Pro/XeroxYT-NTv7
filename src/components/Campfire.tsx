@@ -18,7 +18,7 @@ export function Campfire(){
    const r=el.getBoundingClientRect();
    return r.width>12&&r.height>12&&r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth;
   });
-  const surfaces=candidates.filter(el=>!el.parentElement?.closest(atomic));
+  const surfaces=candidates.filter(el=>el.matches('img')||!el.parentElement?.closest(atomic));
   const pieces=surfaces.filter(el=>!surfaces.some(child=>child!==el&&el.contains(child)));
   if(!pieces.length)pieces.push(root);
   pieces.sort((a,b)=>b.getBoundingClientRect().bottom-a.getBoundingClientRect().bottom);
@@ -29,9 +29,9 @@ export function Campfire(){
   ],{duration:1000,fill:'both'}),clip:el.style.clipPath}));
   sheet.forEach(s=>s.anim.pause());
   // Transport heat upward through a turbulent fuel bed, then map temperature to light.
-  const fire=document.createElement('canvas');fire.width=112;fire.height=96;
-  const fc=fire.getContext('2d')!, pixels=fc.createImageData(112,96);
-  let heat=new Float32Array(112*96),next=heat.slice();
+  const fire=document.createElement('canvas');fire.width=384;fire.height=192;
+  const fc=fire.getContext('2d')!, pixels=fc.createImageData(fire.width,fire.height);
+  let heat=new Float32Array(fire.width*fire.height),next=heat.slice();
   const ashes:{x:number;y:number;vx:number;vy:number;life:number;angle:number}[]=[];
   let frame=0,last=-100,elapsed=0,done=false;
   function draw(now:number){
@@ -69,19 +69,19 @@ export function Campfire(){
    }
    const fuel=consumed/sheet.length;
    ctx!.fillStyle='rgba(16,11,9,'+(.08+.92*fuel**3)+')';ctx!.fillRect(0,0,w,h);
-   const fw=Math.min(w*.85,240+fuel*330),fh=Math.min(h*.62,125+fuel*280),base=h*.88;
+   const fw=w*1.1,fh=h*(1.2+.55*fuel),base=h+8;
    const glow=ctx!.createRadialGradient(w/2,base,0,w/2,base,fw*.78);
    glow.addColorStop(0,'#d85a2266');glow.addColorStop(1,'#a83e0800');ctx!.fillStyle=glow;ctx!.fillRect(0,0,w,h);
-   for(let step=0;step<(elapsed<=64?96:3);step++){
-    for(let x=0;x<112;x++){
-     const d=(x-56)/44;
+   for(let step=0;step<(elapsed<=64?fire.height:4);step++){
+    for(let x=0;x<fire.width;x++){
+     const d=(x/fire.width-.5)*1.2;
      const pocket=.71+.23*Math.sin(x*.34+elapsed*.003)+.16*Math.sin(x*.71-elapsed*.006);
-     heat[95*112+x]=Math.max(0,1-d*d*1.6)*pocket*(.8+Math.random()*.45);
+     heat[(fire.height-1)*fire.width+x]=Math.max(0,1-d*d*1.6)*pocket*(.8+Math.random()*.45);
     }
-    for(let y=0;y<95;y++)for(let x=1;x<111;x++){
+    for(let y=0;y<fire.height-1;y++)for(let x=1;x<fire.width-1;x++){
      const drift=Math.round(Math.sin(y*.12+elapsed*.002)*.95+Math.random()-.5);
-     const k=(y+1)*112+x+drift;
-     next[y*112+x]=Math.max(0,(heat[k-1]+2*heat[k]+heat[k+1])*.25-.005-Math.random()*.011);
+     const k=(y+1)*fire.width+Math.max(1,Math.min(fire.width-2,x+drift));
+     next[y*fire.width+x]=Math.max(0,(heat[k-1]+2*heat[k]+heat[k+1])*.25-.002-Math.random()*.004);
     }
     [heat,next]=[next,heat];
    }

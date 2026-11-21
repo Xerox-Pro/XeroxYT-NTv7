@@ -12,7 +12,7 @@ const labels:Record<string,string>={
 };
 export const modeLabels:Record<string,string>={
  off:'通常',chaos:'カオス',chaos2:'カオス2',jelly:'ゼリー',spin:'スピン',
- quake:'地震',zero:'無重力',mirror:'ミラー',burning:'バーニング',
+ quake:'地震',zero:'無重力',mirror:'ミラー',burning:'バーニング',cleaning:'クリーニング',
 };
 const display=(value:Entry['before'])=>typeof value==='boolean'?(value?'オン':'オフ'):value===null?'':modeLabels[value]??value;
 const date=new Intl.DateTimeFormat('ja-JP',{dateStyle:'short',timeStyle:'medium',timeZone:'Asia/Tokyo'});
