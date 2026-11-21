@@ -140,7 +140,8 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     authEpoch.current++; // Ignore any in-flight session/history response that predates this BAN.
     const current=active.current||cachedUser;
     const record={...(current?.id?{userId:current.id}:{}),...(current?.username?{username:current.username}:{}),detectedAt:Date.now()};
-    localStorage.setItem(BAN_LOCK_KEY,JSON.stringify(record));
+    banRef.current=record;
+    try{localStorage.setItem(BAN_LOCK_KEY,JSON.stringify(record));}catch{}
     serverAuthenticated.current=false;
     flushSync(()=>{setBanRecord(record);setPhase('banned');});
   },[cachedUser]);
@@ -151,7 +152,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       if(event.key!==BAN_LOCK_KEY||!event.newValue)return;
       try{
         const record=JSON.parse(event.newValue) as BanRecord;
-        if(record.userId&&record.userId===active.current?.id)lockBanned();
+        if(record.userId&&record.userId===active.current?.id&&banRef.current?.userId!==record.userId)lockBanned();
       }catch{}
     };
     window.addEventListener('xerox-account-banned',banned);
@@ -301,9 +302,9 @@ export default function AccountGate({ children }: { children: ReactNode }) {
 
   useAccountRealtime('account', (phase==='ready'&&serverAuthenticated.current)||phase==='banned', user?.id??banRecord?.userId);
   useEffect(()=>onRealtime('account',({type,banned})=>{
-    if(type==='ready'&&banned){
+    if(type==='banned'||(type==='ready'&&banned)){
       if(phase!=='banned')lockBanned();
-    }else if(type==='session'||type==='banned'||type==='unbanned'||(type==='ready'&&phase==='banned')){
+    }else if(type==='session'||type==='unbanned'||(type==='ready'&&phase==='banned')){
       window.dispatchEvent(new Event('xerox-ban-check'));
     }
   }),[phase,lockBanned]);
