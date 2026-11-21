@@ -28,17 +28,16 @@ export function Campfire(){
    {transform:'perspective(680px) translate3d(0,-18px,45px) rotateX(47deg) rotateY(-16deg)',filter:'sepia(.85) brightness(.38)'}
   ],{duration:1000,fill:'both'}),clip:el.style.clipPath}));
   sheet.forEach(s=>s.anim.pause());
-  // Transport heat upward through a turbulent fuel bed, then map temperature to light.
-  const fire=document.createElement('canvas');fire.width=384;fire.height=192;
-  const fc=fire.getContext('2d')!, pixels=fc.createImageData(fire.width,fire.height);
-  let heat=new Float32Array(fire.width*fire.height),next=heat.slice();
   const ashes:{x:number;y:number;vx:number;vy:number;life:number;angle:number}[]=[];
   let frame=0,last=-100,elapsed=0,done=false;
   function draw(now:number){
    if(now-last<32){frame=requestAnimationFrame(draw);return;}
    elapsed+=Math.min(64,now-last);last=now;
    const w=innerWidth,h=innerHeight;
-   if(layer.width!==w||layer.height!==h){layer.width=w;layer.height=h}
+   const scale=Math.min(window.devicePixelRatio||1,3840/Math.max(w,h),2160/Math.min(w,h));
+   const width=Math.max(1,Math.round(w*scale)),height=Math.max(1,Math.round(h*scale));
+   if(layer.width!==width||layer.height!==height){layer.width=width;layer.height=height}
+   ctx!.setTransform(width/w,0,0,height/h,0,0);
    let consumed=0;
    ctx!.clearRect(0,0,w,h);
    for(const s of sheet){
@@ -72,25 +71,29 @@ export function Campfire(){
    const fw=w*1.1,fh=h*(1.2+.55*fuel),base=h+8;
    const glow=ctx!.createRadialGradient(w/2,base,0,w/2,base,fw*.78);
    glow.addColorStop(0,'#d85a2266');glow.addColorStop(1,'#a83e0800');ctx!.fillStyle=glow;ctx!.fillRect(0,0,w,h);
-   for(let step=0;step<(elapsed<=64?fire.height:4);step++){
-    for(let x=0;x<fire.width;x++){
-     const d=(x/fire.width-.5)*1.2;
-     const pocket=.71+.23*Math.sin(x*.34+elapsed*.003)+.16*Math.sin(x*.71-elapsed*.006);
-     heat[(fire.height-1)*fire.width+x]=Math.max(0,1-d*d*1.6)*pocket*(.8+Math.random()*.45);
+   // Draw curved flame fronts directly at the display resolution.
+   const time=elapsed/1000;
+   for(let band=0;band<3;band++){
+    const count=18+band*9;
+    for(let i=0;i<count;i++){
+     const phase=i*2.39996+band*1.7;
+     const sway=Math.sin(time*1.8+phase);
+     const x=w*(i+.5+.25*sway)/count;
+     const radius=w/count*(1.2+.35*Math.sin(phase));
+     const rise=fh*(.52+.18*Math.sin(phase*3)+.13*Math.sin(time*2.4+phase))/(1+band*.6);
+     const tip=x+radius*(sway+.55*Math.sin(time*3+phase));
+     const y=base-rise;
+     const gradient=ctx!.createLinearGradient(x,base,tip,y);
+     gradient.addColorStop(0,['#ff5a12','#ffae29','#fff6b0'][band]);
+     gradient.addColorStop(.65,['#ff360ec9','#ff801bea','#ffca50ec'][band]);
+     gradient.addColorStop(1,['#ee300800','#ff610d55','#ffc22655'][band]);
+     ctx!.fillStyle=gradient;
+     ctx!.beginPath();ctx!.moveTo(x-radius,base);
+     ctx!.bezierCurveTo(x-radius*.8,base-rise*.48,tip+radius*sway,y+rise*.3,tip,y);
+     ctx!.bezierCurveTo(tip-radius*sway,y+rise*.28,x+radius,base-rise*.42,x+radius,base);
+     ctx!.closePath();ctx!.fill();
     }
-    for(let y=0;y<fire.height-1;y++)for(let x=1;x<fire.width-1;x++){
-     const drift=Math.round(Math.sin(y*.12+elapsed*.002)*.95+Math.random()-.5);
-     const k=(y+1)*fire.width+Math.max(1,Math.min(fire.width-2,x+drift));
-     next[y*fire.width+x]=Math.max(0,(heat[k-1]+2*heat[k]+heat[k+1])*.25-.002-Math.random()*.004);
-    }
-    [heat,next]=[next,heat];
    }
-   for(let i=0;i<heat.length;i++){
-    const t=heat[i],k=i*4;
-    pixels.data[k]=255*clamp(t*4.8);pixels.data[k+1]=255*clamp((t-.17)*1.85);
-    pixels.data[k+2]=235*clamp((t-.52)*2.5);pixels.data[k+3]=255*clamp((t-.025)*5);
-   }
-   fc.putImageData(pixels,0,0);ctx!.drawImage(fire,(w-fw)/2,base-fh,fw,fh);
    for(const tilt of [-.14,.12]){
     ctx!.save();ctx!.translate(w/2,base-2);ctx!.rotate(tilt);
     const log=ctx!.createLinearGradient(0,-6,0,8);log.addColorStop(0,'#ffa148');log.addColorStop(.2,'#67321f');log.addColorStop(.7,'#2b1812');log.addColorStop(1,'#160f0d');
