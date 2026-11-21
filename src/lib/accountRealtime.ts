@@ -29,7 +29,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
     const response=await apiFetch('/api/account/realtime/events?scope='+scope,{
      cache:'no-store',
      headers:avoid?{'X-XeroxYT-Realtime-Avoid':avoid}:undefined,
-     signal:AbortSignal.any([controller.signal,AbortSignal.timeout(115000)]),
+     signal:AbortSignal.any([controller.signal,AbortSignal.timeout(290000)]),
     });
     if(controller.signal.aborted)return;
     if([401,403,423].includes(response.status)){

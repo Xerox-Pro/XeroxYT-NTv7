@@ -129,6 +129,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   const active = useRef<User | null>(cachedUser);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sending = useRef(false);
+  const historyRetry = useRef({id:'', delay:5000, after:0});
   const serverAuthenticated=useRef(Boolean(cachedUser&&!initialBan));
   const authEpoch = useRef(0);
   const sync = useRef<() => Promise<void>>(async () => {});
@@ -206,6 +207,13 @@ export default function AccountGate({ children }: { children: ReactNode }) {
   sync.current = async () => {
     const u = active.current;
     if (!u || !serverAuthenticated.current || sending.current || !cache.current.dirty) return;
+    if(historyRetry.current.id!==u.id)historyRetry.current={id:u.id,delay:5000,after:0};
+    const retry=historyRetry.current;
+    if(retry.after>Date.now()){
+      clearTimeout(timer.current);
+      timer.current=setTimeout(()=>void sync.current(),retry.after-Date.now());
+      return;
+    }
     sending.current = true;
     const snapshot = cache.current;
     const epoch = authEpoch.current;
@@ -214,10 +222,13 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       const result = await api('/history', 'PUT', { history: snapshot.history, version: snapshot.version });
       if (!isCurrent()) return;
       cache.current = { ...cache.current, version: result.version, dirty: cache.current.history !== snapshot.history };
+      retry.delay=5000;retry.after=0;
       persist(u); setMessage('');
     } catch (err: any) {
       if (!isCurrent()) return;
       if(err.status===401)serverAuthenticated.current=false;
+      retry.after=Date.now()+retry.delay+Math.random()*1000;
+      retry.delay=Math.min(retry.delay*2,300000);
       if (err.status === 409) {
         try {
           const remote = await api('/history');
@@ -230,7 +241,10 @@ export default function AccountGate({ children }: { children: ReactNode }) {
       } else setMessage('履歴は端末に保存されています。同期を再試行します。');
     } finally {
       sending.current = false;
-      if (cache.current.dirty && active.current && serverAuthenticated.current) timer.current = setTimeout(() => void sync.current(), 5000);
+      if (cache.current.dirty && active.current && serverAuthenticated.current){
+        clearTimeout(timer.current);
+        timer.current=setTimeout(()=>void sync.current(),Math.max(5000,isCurrent()?retry.after-Date.now():0));
+      }
     }
   };
 
@@ -303,11 +317,12 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     let lastSent='';
     const send=(visible:boolean,force=false)=>{
       if(stopped&&visible)return;
+      if(!visible&&!lastSent)return;
       const page=visible?presencePage(pagePath.current):{page:'',title:''};
       const payload={tabId,visible,...page};
       const serialized=JSON.stringify(payload);
       if(visible&&!force&&serialized===lastSent)return;
-      if(visible)lastSent=serialized;
+      lastSent=visible?serialized:'';
       void apiFetch('/api/account/presence',{
         method:'POST',credentials:'same-origin',cache:'no-store',keepalive:!visible,
         headers:{'Content-Type':'application/json'},

@@ -3,7 +3,7 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "functions": {"api/account/realtime/events.ts": {"maxDuration": 120}},
+  "functions": {"api/account/realtime/events.ts": {"maxDuration": 300}},
   "routes": [
     {
       "src": "/(?:open\\.html|open-launch\\.js|api/open-xerox\\.html)",

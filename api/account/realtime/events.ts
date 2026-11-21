@@ -34,7 +34,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
    const ping=setInterval(()=>{
     if(socket.readyState===WebSocket.OPEN)socket.send('ping');
    },25000);
-   const expires=setTimeout(stop,95000);
+   const expires=setTimeout(stop,250000+Math.random()*15000);
    const initialMessage=setTimeout(stop,11000);
    let stopped=false;
    function stop(){
