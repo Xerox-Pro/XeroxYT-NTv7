@@ -3,6 +3,7 @@ import {apiFetch,getApiPreference} from './apiTransport.mjs';
 
 type Scope = 'account' | 'admin';
 type RealtimeEvent = 'ready' | 'mode' | 'banned' | 'unbanned' | 'session' | 'dm' | 'rooms' | 'accounts' | 'logs' | 'monitor' | 'log-stream';
+type RealtimeDetail={type:RealtimeEvent;banned?:boolean;logs?:unknown;apiIndex?:string};
 const eventName = (scope:Scope) => 'xerox-realtime-' + scope;
 
 export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:string) {
@@ -19,8 +20,8 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
   let delay=1000;
   let avoid='';
   let avoidUntil=0;
-  const emit=(type:RealtimeEvent,banned?:boolean,logs?:unknown)=>{
-   window.dispatchEvent(new CustomEvent(eventName(scope),{detail:{type,banned,logs}}));
+  const emit=(type:RealtimeEvent,banned?:boolean,logs?:unknown,apiIndex?:string)=>{
+   window.dispatchEvent(new CustomEvent(eventName(scope),{detail:{type,banned,logs,apiIndex}}));
   };
   const connect=async()=>{
    let ready=false;
@@ -57,7 +58,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
        ready=true;
        delay=1000;
       }
-      emit(data.type,data.banned,data.logs);
+      emit(data.type,data.banned,data.logs,index);
      }
     }
    }catch{
@@ -78,7 +79,7 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
  },[scope,enabled,identity,preference]);
 }
 
-export function onRealtime(scope:Scope, listener:(detail:{type:RealtimeEvent;banned?:boolean;logs?:unknown})=>void) {
+export function onRealtime(scope:Scope, listener:(detail:RealtimeDetail)=>void) {
  const receive=(event:Event)=>listener((event as CustomEvent).detail);
  window.addEventListener(eventName(scope),receive);
  return()=>window.removeEventListener(eventName(scope),receive);
