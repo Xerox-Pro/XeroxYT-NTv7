@@ -1,4 +1,4 @@
-import {onRealtime,useRealtimeRefresh} from '../lib/accountRealtime';
+import {onRealtime} from '../lib/accountRealtime';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {apiFetch,getApiPreference} from '../lib/apiTransport.mjs';
@@ -34,7 +34,6 @@ export default function VisualModes({initialMode}: {initialMode?: string}) {
    if(request===modeRequest.current&&!signal?.aborted&&typeof status.mode==='string')setMode(asMode(status.mode));
   }
  };
- useRealtimeRefresh('account',['mode'],refreshMode,!!username,false,username);
  useEffect(()=>{
   if(!username)return;
   const controller=new AbortController();
@@ -45,6 +44,12 @@ export default function VisualModes({initialMode}: {initialMode?: string}) {
   };
   const unsubscribe=onRealtime('account',event=>{
    if(event.type==='ready')apiIndex.current=event.apiIndex??'';
+   if(event.type==='mode'&&event.mode&&modes.includes(event.mode)){
+    modeRequest.current++;
+    setMode(asMode(event.mode));
+   }else if(event.type==='ready'||event.type==='mode'){
+    void refreshMode(controller.signal).catch(()=>{});
+   }
   });
   document.addEventListener('visibilitychange',refresh);
   const timer=setInterval(refresh,60000);
