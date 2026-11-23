@@ -1,4 +1,3 @@
-import {onRealtime,useAccountRealtime} from '../lib/accountRealtime';
 import {apiFetch} from '../lib/apiTransport.mjs';
 import {useEffect,useRef,useState} from 'react';
 
@@ -19,7 +18,7 @@ async function monitorSetting(enabled?: boolean, signal?: AbortSignal): Promise<
 }
 
 export default function SystemLogPanel({
- accounts,selectedUserId,onUserChange,onSettingChange,identity,initialMode,
+ accounts,selectedUserId,onUserChange,onSettingChange,
 }:{
  accounts:AccountOption[];selectedUserId:string;onUserChange:(id:string)=>void;onSettingChange:()=>void;identity:string;initialMode:'manual'|'live';
 }){
@@ -27,18 +26,13 @@ export default function SystemLogPanel({
  const [changing,setChanging]=useState(false);
  const [settingsError,setSettingsError]=useState('');
  const [logs,setLogs]=useState<LogEntry[]>([]);
- const [mode,setMode]=useState(initialMode);
- const [playing,setPlaying]=useState(false);
  const [manualRefresh,setManualRefresh]=useState(0);
  const handledRefresh=useRef(0);
- const live=!!enabled&&mode==='live'&&playing;
- useAccountRealtime('admin',live,identity);
  const [errorsOnly,setErrorsOnly]=useState(false);
  const [methodFilter,setMethodFilter]=useState('all');
  const [error,setError]=useState('');
  const [updatedAt,setUpdatedAt]=useState(0);
  const [loading,setLoading]=useState(false);
- const cursor=useRef(0);
 
  useEffect(()=>{
   const controller=new AbortController();
@@ -46,13 +40,11 @@ export default function SystemLogPanel({
    .then(value=>{
     if(controller.signal.aborted)return;
     setEnabled(value.enabled);
-    if(!value.enabled)setPlaying(false);
    })
    .catch(cause=>{if(!controller.signal.aborted)setSettingsError(cause.message);});
   refresh();
-  const unsubscribe=onRealtime('admin',({type})=>{if(type==='monitor')refresh();});
   window.addEventListener('xerox-system-monitor-updated',refresh);
-  return()=>{controller.abort();unsubscribe();window.removeEventListener('xerox-system-monitor-updated',refresh);};
+  return()=>{controller.abort();window.removeEventListener('xerox-system-monitor-updated',refresh);};
  },[]);
 
  const toggleMonitoring=async()=>{
@@ -61,7 +53,6 @@ export default function SystemLogPanel({
   try{
    const next=await monitorSetting(enabled===null?undefined:!enabled);
    setEnabled(next.enabled);
-   if(!next.enabled)setPlaying(false);
    onSettingChange();
    if(next.auditRecorded===false)setSettingsError('設定を保存しましたが、操作履歴を記録できませんでした。');
   }
@@ -70,16 +61,15 @@ export default function SystemLogPanel({
  };
 
  useEffect(()=>{
-  cursor.current=0;setLogs([]);setUpdatedAt(0);setError('');
+  setLogs([]);setUpdatedAt(0);setError('');
  },[enabled,selectedUserId,errorsOnly]);
 
  useEffect(()=>{
   const requested=manualRefresh!==handledRefresh.current;
   handledRefresh.current=manualRefresh;
   setLoading(false);
-  if(!enabled||(!live&&!(mode==='manual'&&requested)))return;
+  if(!enabled||!requested)return;
   const controller=new AbortController();
-  let inFlight=false,queued=false;
   const merge=(incoming:LogEntry[])=>{
    if(incoming.length)setLogs(previous=>{
     const rows=new Map(previous.map(log=>[log.id,log]));
@@ -89,14 +79,9 @@ export default function SystemLogPanel({
    setUpdatedAt(Date.now());setError('');
   };
   const poll=async()=>{
-   if(controller.signal.aborted||(live&&document.hidden))return;
-   if(inFlight){queued=true;return;}
-   queued=false;
-   inFlight=true;
    setLoading(true);
    try{
     const params=new URLSearchParams();
-    if(live&&cursor.current>0)params.set('after',String(cursor.current));
     if(selectedUserId)params.set('userId',selectedUserId);
     if(errorsOnly)params.set('errors','1');
     const response=await apiFetch('/api/account/admin/system-logs?'+params.toString(),{
@@ -107,29 +92,17 @@ export default function SystemLogPanel({
     if(!Array.isArray(data.logs))throw new Error('ログデータの形式が不正です。');
     if(controller.signal.aborted)return;
     const incoming=data.logs as LogEntry[];
-    if(Number.isInteger(data.nextAfter)&&data.nextAfter>=cursor.current)cursor.current=data.nextAfter;
-    if(!live)setLogs([]);
+    setLogs([]);
     merge(incoming);
    }catch(cause){
     if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:'通信ログを取得できませんでした。');
    }finally{
     if(!controller.signal.aborted)setLoading(false);
-    inFlight=false;
-    if(queued&&!controller.signal.aborted)void poll();
    }
   };
   void poll();
-  if(!live)return()=>controller.abort();
-  const unsubscribe=onRealtime('admin',({type,logs})=>{
-   if(type==='ready'||type==='logs')void poll();
-   if(type==='log-stream'&&Array.isArray(logs)){
-    merge((logs as LogEntry[]).filter(log=>(!selectedUserId||log.user_id===selectedUserId)&&(!errorsOnly||log.status>=400)));
-   }
-  });
-  const visibility=()=>{if(!document.hidden)void poll();};
-  document.addEventListener('visibilitychange',visibility);
-  return()=>{controller.abort();unsubscribe();document.removeEventListener('visibilitychange',visibility);};
- },[enabled,live,mode,manualRefresh,selectedUserId,errorsOnly]);
+  return()=>controller.abort();
+ },[enabled,manualRefresh,selectedUserId,errorsOnly]);
 
  useEffect(()=>{
   if(!logs.length)return;
@@ -143,11 +116,11 @@ export default function SystemLogPanel({
   <div className="flex flex-wrap items-center justify-between gap-3">
    <div>
     <h3 className="text-base font-bold">通信ログ</h3>
-    <p className="mt-1 text-xs text-gray-500">「更新」で履歴を取得し、「再生」でリアルタイム受信を開始します。</p>
+    <p className="mt-1 text-xs text-gray-500">「更新」で履歴を取得します。</p>
    </div>
    <div className="flex items-center gap-2 text-xs">
-    <span className={error?'text-red-700':live?'text-emerald-700':'text-gray-500'} role="status">
-     {enabled===null?'● 設定未取得':!enabled?'● 無効':error?'● 取得エラー':loading?'● 取得中':live?'● 再生中':mode==='live'?'● 停止中':'● 手動更新'}
+    <span className={error?'text-red-700':'text-gray-500'} role="status">
+     {enabled===null?'● 設定未取得':!enabled?'● 無効':error?'● 取得エラー':loading?'● 取得中':'● 手動更新'}
     </span>
     <button type="button" disabled={changing} className="rounded-lg border px-3 py-1.5" onClick={()=>void toggleMonitoring()}>
      {enabled===null?'設定を再取得':enabled?'モニターを無効化':'モニターを有効化'}
@@ -157,15 +130,6 @@ export default function SystemLogPanel({
   {settingsError&&<p className="mt-3 text-sm text-red-700" role="alert">{settingsError}</p>}
   {enabled&&<>
    <div className="mt-4 flex flex-wrap items-end gap-3 rounded-xl bg-gray-50 p-3 text-sm">
-    <label className="flex flex-col gap-1">更新方法
-     <select value={mode} onChange={event=>{
-      setPlaying(false);
-      setMode(event.target.value==='live'?'live':'manual');
-     }} className="rounded-lg border bg-white p-2">
-      <option value="manual">手動更新</option>
-      <option value="live">リアルタイム</option>
-     </select>
-    </label>
     <label className="flex min-w-[180px] flex-1 flex-col gap-1">ユーザー
      <select value={selectedUserId} onChange={event=>onUserChange(event.target.value)} className="rounded-lg border bg-white p-2">
       <option value="">全ユーザー・未ログイン</option>
@@ -181,9 +145,7 @@ export default function SystemLogPanel({
      <input type="checkbox" checked={errorsOnly} onChange={event=>setErrorsOnly(event.target.checked)}/>
      エラーのみ（400以上）
     </label>
-    {mode==='live'
-     ?<button type="button" className="rounded-lg border bg-white px-3 py-2" onClick={()=>setPlaying(value=>!value)}>{playing?'停止':'再生'}</button>
-     :<button type="button" disabled={loading} className="rounded-lg border bg-white px-3 py-2 disabled:opacity-50" onClick={()=>setManualRefresh(value=>value+1)}>更新</button>}
+    <button type="button" disabled={loading} className="rounded-lg border bg-white px-3 py-2 disabled:opacity-50" onClick={()=>setManualRefresh(value=>value+1)}>更新</button>
     <button type="button" className="rounded-lg border bg-white px-3 py-2" onClick={()=>setLogs([])}>表示をクリア</button>
    </div>
    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">

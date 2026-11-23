@@ -3,11 +3,19 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "functions": {"api/account/realtime/events.ts": {"maxDuration": 300}},
   "routes": [
     {
+      "src": "/api/account/realtime(?:/.*)?",
+      "status": 403,
+      "headers": {
+        "Cache-Control": "no-store"
+      }
+    },
+    {
       "src": "/(?:open\\.html|open-launch\\.js|api/open-xerox\\.html)",
-      "headers": { "Cache-Control": "no-store" },
+      "headers": {
+        "Cache-Control": "no-store"
+      },
       "continue": true
     },
     {

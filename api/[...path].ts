@@ -16,7 +16,6 @@ const forwarded = [
   "x-usage-token",
   "x-client-usage",
 ];
-const realtimeTicketPath = '/api/account/realtime/ticket';
 
 export default async function handler(request: Request) {
   const startedAt = Date.now();
@@ -97,14 +96,8 @@ export default async function handler(request: Request) {
   else {
     const preferred = request.headers.get('X-XeroxYT-Prefer-API');
     const ordered=orderApiPool(pool, secondaryOrigin, preferred);
-    pool = await apiSelector.plan(ordered, headers, headersFor);
-    // A Worker's HTTP health check can pass while its Durable Object rejects upgrades.
-    if(path===realtimeTicketPath){
-      const unavailable=configuredPool[Number(request.headers.get('X-XeroxYT-Realtime-Avoid'))-1];
-      if(unavailable&&pool.length>1&&pool.includes(unavailable)){
-        pool=[...pool.filter(origin=>origin!==unavailable),unavailable];
-      }
-    }
+    const retryableRead = ['GET','HEAD'].includes(request.method) && canRetry(request.method,path,503,Boolean(secondaryOrigin));
+    pool = retryableRead ? apiSelector.available(ordered) : await apiSelector.plan(ordered, headers, headersFor);
   }
   if (!pool.length) return respond(Response.json({error:'利用できるAPIがありません。しばらくしてから再試行してください。',code:'API_UNAVAILABLE'}, {status:503,headers:{'Cache-Control':'no-store'}}), 'health_check_failed');
   const readonly = ["GET", "HEAD"].includes(request.method);
@@ -150,11 +143,9 @@ export default async function handler(request: Request) {
         ), 'upstream_redirect');
       }
       const outgoing = new Headers(response.headers);
-      if (path === realtimeTicketPath) outgoing.set('X-XeroxYT-Realtime-Preferred', pool[i] === (request.headers.get('X-XeroxYT-Prefer-API') === '2' ? secondaryOrigin || configuredPool[0] : configuredPool[0]) ? '1' : '0');
       outgoing.delete("content-encoding");
       outgoing.delete("content-length");
       outgoing.set("Cache-Control", "private, no-store");
-      if (path === realtimeTicketPath && response.ok) outgoing.set('X-XeroxYT-Realtime-Origin', pool[i]);
       outgoing.set("X-XeroxYT-Transport", "proxy");
       outgoing.set("X-XeroxYT-API-Index", String(configuredPool.indexOf(pool[i]) + 1));
       return respond(new Response(response.body, {
