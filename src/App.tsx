@@ -1,6 +1,8 @@
 import {useEffect} from 'react';
 import {Routes, Route, Navigate, useLocation} from 'react-router-dom';
 import MainApp from './MainApp';
+import InstagramWorkspace from './social/InstagramWorkspace';
+import './social/workspace.css';
 import AccountGate from './components/AccountGate';
 import PWAUpdateIndicator from './components/PWAUpdateIndicator';
 import PrivateModeGate from './components/PrivateModeGate';
@@ -15,6 +17,7 @@ export default function App() {
   useEffect(() => {
     try {
       const page = location.pathname + location.search + location.hash;
+      if (location.pathname === '/instagram' || location.pathname.startsWith('/instagram/')) return;
       localStorage.setItem('xerox_last_page', page);
       localStorage.setItem('xerox_last_service', 'youtube');
       sessionStorage.setItem('xerox_service_page_youtube', page);
@@ -33,7 +36,8 @@ export default function App() {
     <>
       <PWAUpdateIndicator />
       <Routes>
-        {['instagram','tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
+        <Route path="/instagram/*" element={<PrivateModeGate><AccountGate><InstagramWorkspace/></AccountGate></PrivateModeGate>} />
+        {['tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
         <Route path="/*" element={<PrivateModeGate><AccountGate><MainApp/></AccountGate></PrivateModeGate>} />
       </Routes>
     </>
