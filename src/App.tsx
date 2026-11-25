@@ -1,8 +1,6 @@
 import {useEffect} from 'react';
 import {Routes, Route, Navigate, useLocation} from 'react-router-dom';
 import MainApp from './MainApp';
-import InstagramWorkspace from './social/InstagramWorkspace';
-import './social/workspace.css';
 import AccountGate from './components/AccountGate';
 import PWAUpdateIndicator from './components/PWAUpdateIndicator';
 import PrivateModeGate from './components/PrivateModeGate';
@@ -36,8 +34,7 @@ export default function App() {
     <>
       <PWAUpdateIndicator />
       <Routes>
-        <Route path="/instagram/*" element={<PrivateModeGate><AccountGate><InstagramWorkspace/></AccountGate></PrivateModeGate>} />
-        {['tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
+        {['instagram','tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
         <Route path="/*" element={<PrivateModeGate><AccountGate><MainApp/></AccountGate></PrivateModeGate>} />
       </Routes>
     </>
