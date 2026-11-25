@@ -1,4 +1,5 @@
 import { randomBytes, scryptSync, createHash, timingSafeEqual } from 'node:crypto';
+import {sealHistory,openHistory,isEncryptedHistory} from './history-crypto.mjs';
 
 const MAX_AGE = 60 * 60 * 24 * 30;
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -68,21 +69,30 @@ export default {
       }
       if (request.method === 'GET' && path === '/history') {
         const row = await env.DB.prepare('SELECT data, version FROM history WHERE user_id = ?').bind(user.id).first();
-        return json({ history: row ? JSON.parse(row.data) : [], version: row?.version || 0 });
+        const version=row?.version||0;
+        const history=openHistory(row?.data||'[]',user.id,version,env);
+        if(row&&!isEncryptedHistory(row.data)){
+          const encrypted=sealHistory(JSON.stringify(history),user.id,version,env);
+          // Compare-and-swap avoids replacing a concurrent history write.
+          await env.DB.prepare('UPDATE history SET data = ? WHERE user_id = ? AND version = ? AND data = ?').bind(encrypted,user.id,version,row.data).run();
+        }
+        return json({history,version});
       }
       if (request.method === 'PUT' && path === '/history') {
         const body = await request.json();
         if (!Array.isArray(body.history) || body.history.length > 100 || !Number.isSafeInteger(body.version) || body.version < 0) return json({ error: '履歴データが不正です。' }, 400);
         const data = JSON.stringify(body.history);
         if (Buffer.byteLength(data) > 100000) return json({ error: '履歴データが大きすぎます。' }, 413);
-        await env.DB.prepare("INSERT OR IGNORE INTO history (user_id, data, version) VALUES (?, '[]', 0)").bind(user.id).run();
-        const result = await env.DB.prepare('UPDATE history SET data = ?, version = version + 1 WHERE user_id = ? AND version = ?').bind(data, user.id, body.version).run();
+        const empty=sealHistory('[]',user.id,0,env);
+        const encrypted=sealHistory(data,user.id,body.version+1,env);
+        await env.DB.prepare('INSERT OR IGNORE INTO history (user_id, data, version) VALUES (?, ?, 0)').bind(user.id,empty).run();
+        const result = await env.DB.prepare('UPDATE history SET data = ?, version = version + 1 WHERE user_id = ? AND version = ?').bind(encrypted,user.id,body.version).run();
         if (!result.meta.changes) return json({ error: '履歴が別の端末で更新されました。', conflict: true }, 409);
         return json({ version: body.version + 1 });
       }
       return json({ error: '見つかりません。' }, 404);
     } catch (err) {
-      console.error('account request failed', err);
+      console.error('account request failed', err instanceof Error ? err.name : 'unknown');
       return json({ error: '処理に失敗しました。時間をおいてお試しください。' }, 500);
     }
   }
