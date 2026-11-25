@@ -11,7 +11,7 @@ export function createApiSelector(fetcher=fetch,now=Date.now){
   if(pending.has(k))return pending.get(k);
   const task=(async()=>{let ok=false;try{const safe=new Headers();for(const n of ['origin','authorization'])if(headers.has(n))safe.set(n,headers.get(n));const response=await fetcher(origin+'/health',{headers:safe,redirect:'manual',signal:AbortSignal.timeout(1500)});if(response.ok){const body=await response.json();ok=body?.status==='ok'||body?.ok===true;}else {if(await workerQuotaExceeded(response))reportQuota(origin);await response.body?.cancel();}}catch{}remember(origin,headers,ok);return ok;})().finally(()=>pending.delete(k));pending.set(k,task);return task;
  };
- return {report:remember,reportQuota,available:pool=>pool.filter(origin=>!atQuota(origin)),async plan(pool,headers,headersFor=(_origin='')=>headers){
+ return {report:remember,reportQuota,async plan(pool,headers,headersFor=()=>headers){
   pool=pool.filter(origin=>!atQuota(origin));
   if(pool.length<2)return pool;
   const good=pool.filter(origin=>{const v=health.get(key(origin,headers));return v?.ok&&v.until>now();});

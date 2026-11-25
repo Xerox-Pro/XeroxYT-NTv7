@@ -33,8 +33,8 @@ export function apiFetch(path,options={}){
   }
   const headers=new Headers(options.headers);
   if(getApiPreference()==='2')headers.set('X-XeroxYT-Prefer-API','2');
-  return fetch(target,{...options,headers,credentials:'same-origin'}).then(async response=>{
-    if(response.status===403||response.status===429){await response.clone().json().then(data=>{
+  return fetch(target,{...options,headers,credentials:'same-origin'}).then(response=>{
+    if(response.status===403||response.status===429){void response.clone().json().then(data=>{
       if(data?.code==='ACCOUNT_BANNED')window.dispatchEvent(new CustomEvent('xerox-account-banned'));
       if(data?.code==='ACCOUNT_TIMEOUT')window.dispatchEvent(new CustomEvent('xerox-account-timeout',{detail:data}));
     }).catch(()=>{});}
