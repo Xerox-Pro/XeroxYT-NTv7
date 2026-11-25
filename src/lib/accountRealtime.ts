@@ -14,7 +14,8 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
   return()=>window.removeEventListener('xerox-api-preference',update);
  },[]);
  useEffect(()=>{
-  if(!enabled)return;
+  // Ordinary accounts never open a persistent connection. An explicitly started admin log viewer is separate.
+  if(!enabled||scope==='account')return;
   const controller=new AbortController();
   let retry:ReturnType<typeof setTimeout>|undefined;
   let delay=1000;

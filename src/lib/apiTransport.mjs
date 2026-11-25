@@ -25,6 +25,9 @@ function sameOriginPath(path){
   return url.pathname+url.search+url.hash;
 }
 
+const accountModes=new Set(['off','chaos','chaos2','jelly','spin','quake','zero','mirror','burning','cleaning']);
+let requestSequence=0;
+let lastModeSequence=0;
 export function apiFetch(path,options={}){
   const target=sameOriginPath(path);
   if(typeof sessionStorage!=='undefined'&&sessionStorage.getItem('xerox_guest')==='true'
@@ -33,7 +36,14 @@ export function apiFetch(path,options={}){
   }
   const headers=new Headers(options.headers);
   if(getApiPreference()==='2')headers.set('X-XeroxYT-Prefer-API','2');
+  const sequence=++requestSequence;
   return fetch(target,{...options,headers,credentials:'same-origin'}).then(response=>{
+    const id=response.headers.get('X-XeroxYT-Account-Id');
+    const mode=response.headers.get('X-XeroxYT-Account-Mode');
+    if(id&&accountModes.has(mode)&&sequence>=lastModeSequence){
+      lastModeSequence=sequence;
+      window.dispatchEvent(new CustomEvent('xerox-account-mode',{detail:{id,mode}}));
+    }
     if(response.status===403||response.status===429){void response.clone().json().then(data=>{
       if(data?.code==='ACCOUNT_BANNED')window.dispatchEvent(new CustomEvent('xerox-account-banned'));
       if(data?.code==='ACCOUNT_TIMEOUT')window.dispatchEvent(new CustomEvent('xerox-account-timeout',{detail:data}));

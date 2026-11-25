@@ -101,7 +101,7 @@ function gasRequest(request) {
     data=gasSanitize_(data,[api,account]);
     if(secret)data=gasSanitize_(data,[secret]);
     var safeHeaders={};
-    ['retry-after','x-daily-usage-token'].forEach(function(name){var value=gasHeader_(responseHeaders,name);if(value)safeHeaders[name]=gasSanitize_(String(value),[api,account]);});
+    ['retry-after','x-daily-usage-token','x-xeroxyt-account-id','x-xeroxyt-account-mode'].forEach(function(name){var value=gasHeader_(responseHeaders,name);if(value)safeHeaders[name]=gasSanitize_(String(value),[api,account]);});
     return gasResult_(status,data,safeHeaders);
   } catch (_) {
     // Upstream exceptions can contain private URLs, so never send raw exceptions.

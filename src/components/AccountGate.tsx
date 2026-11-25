@@ -1,10 +1,7 @@
-import {onRealtime,useAccountRealtime} from '../lib/accountRealtime';
 import {apiFetch} from '../lib/apiTransport.mjs';
 import { useCallback, useEffect, useRef, useState, createContext, useContext, type ReactNode, type FormEvent } from 'react';
-import {useLocation} from 'react-router-dom';
 import {flushSync} from 'react-dom';
 import VisualModes from './VisualModes';
-import MessageNotifications from './MessageNotifications';
 import TermsGate,{RegistrationTerms} from './TermsAgreement';
 import '../terms.css';
 
@@ -18,24 +15,6 @@ const LEGACY_KEY = 'xerox_watch_history';
 const SESSION_HINT_KEY = 'xerox_site_session_hint';
 const BAN_LOCK_KEY = 'xerox_device_ban_v2';
 const accountKey = (id: string) => `xerox_account_history_${id}`;
-// Share only an in-app section and, for watch pages, a public video title.
-// Never send full URLs, search queries, message text or other private page content.
-function presencePage(path:string):{page:string;title:string}{
- const labels:Record<string,string>={
-  '/':'ホーム','/watch':'動画','/shorts':'ショート','/results':'検索結果','/search':'検索',
-  '/feed/subscriptions':'登録チャンネル','/feed/library':'ライブラリ','/feed/history':'履歴',
-  '/settings':'設定','/announcements':'お知らせ','/messages':'メッセージ',
-  '/debug/api':'API情報','/system/settings':'システム管理','/license':'ライセンス',
- };
- const section=path.startsWith('/shorts/')?'ショート':path.startsWith('/channel/')?'チャンネル':labels[path]||'その他';
- let title='';
- if(path==='/watch'){
-  const current=document.title||'';
-  const match=/^(.{1,120}?) - XeroxYT-NTv7(?: for GAS)?$/.exec(current);
-  if(match&&match[1]!=='ショート'&&match[1]!=='XeroxYT-NTv7')title=match[1].replace(/[\x00-\x1f\x7f]/g,'').trim().slice(0,120);
- }
- return {page:'YouTube / '+section,title};
-}
 // These values are device-local; keep them separate when accounts share a browser.
 const deviceKeys = ['xerox_youtube_linked', 'xerox_short_history', 'xerox_youtube_credentials', 'xerox_user_info', 'xerox_subscriptions', 'xerox_user_playlists', 'xerox_ai_interests', 'xerox_video_cache'];
 function switchDeviceAccount(id: string) {
@@ -106,9 +85,6 @@ async function api(path: string, method = 'GET', body?: unknown) {
 }
 
 export default function AccountGate({ children }: { children: ReactNode }) {
-  const location=useLocation();
-  const pagePath=useRef(location.pathname);pagePath.current=location.pathname;
-  useEffect(()=>{window.dispatchEvent(new Event('xerox-presence-page-changed'));},[location.pathname]);
   const [timeoutUntil,setTimeoutUntil]=useState(0);
   useEffect(()=>{const listener=(event:Event)=>setTimeoutUntil(Number((event as CustomEvent).detail?.suspendedUntil)||Date.now()+600000);window.addEventListener('xerox-account-timeout',listener);const timer=setInterval(()=>setTimeoutUntil(value=>value&&value<=Date.now()?0:value),1000);return()=>{window.removeEventListener('xerox-account-timeout',listener);clearInterval(timer);};},[]);
   const [initialBan] = useState<BanRecord | null>(()=>read<BanRecord|null>(BAN_LOCK_KEY,null));
@@ -300,59 +276,17 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     return ()=>{cancelled=true;window.removeEventListener('storage',sessionChanged);window.removeEventListener('xerox-ban-check',recheck);if(timer.current)clearTimeout(timer.current);};
   },[initialize,cachedUser,initialBan,lockBanned]);
 
-  useAccountRealtime('account', (phase==='ready'&&serverAuthenticated.current)||phase==='banned', user?.id??banRecord?.userId);
-  useEffect(()=>onRealtime('account',({type,banned})=>{
-    if(type==='banned'||(type==='ready'&&banned)){
-      if(phase!=='banned')lockBanned();
-    }else if(type==='session'||type==='unbanned'||(type==='ready'&&phase==='banned')){
-      window.dispatchEvent(new Event('xerox-ban-check'));
-    }
-  }),[phase,lockBanned]);
-
-  // Each foreground tab reports its current in-site section. The video title is
-  // sent only for a watch page; search terms, DMs and external URLs stay private.
-  useEffect(() => {
-    if(phase!=='ready'||!user?.id)return;
-    const tabId=crypto.randomUUID().replace(/-/g,'');
-    let stopped=false,scheduled:ReturnType<typeof setTimeout>|undefined;
-    let lastSent='';
-    const send=(visible:boolean,force=false)=>{
-      if(stopped&&visible)return;
-      if(!visible&&!lastSent)return;
-      const page=visible?presencePage(pagePath.current):{page:'',title:''};
-      const payload={tabId,visible,...page};
-      const serialized=JSON.stringify(payload);
-      if(visible&&!force&&serialized===lastSent)return;
-      lastSent=visible?serialized:'';
-      void apiFetch('/api/account/presence',{
-        method:'POST',credentials:'same-origin',cache:'no-store',keepalive:!visible,
-        headers:{'Content-Type':'application/json'},
-        body:serialized,
-      }).catch(()=>{});
+  useEffect(()=>{
+    const update=(event:Event)=>{
+      const detail=(event as CustomEvent).detail;
+      if(!serverAuthenticated.current||!active.current||detail?.id!==active.current.id)return;
+      if(active.current.mode===detail.mode)return;
+      active.current={...active.current,mode:detail.mode};
+      setUser(previous=>previous?.id===detail.id?{...previous,mode:detail.mode}:previous);
     };
-    const schedule=()=>{
-      if(document.hidden)return;
-      if(scheduled)clearTimeout(scheduled);
-      scheduled=setTimeout(()=>send(true),300);
-    };
-    const onVisibility=()=>send(!document.hidden,true);
-    const onPageHide=()=>send(false,true);
-    const titleNode=document.querySelector('title');
-    const observer=titleNode?new MutationObserver(schedule):null;
-    if(titleNode)observer?.observe(titleNode,{childList:true,characterData:true,subtree:true});
-    if(!document.hidden)send(true,true);
-    document.addEventListener('visibilitychange',onVisibility);
-    window.addEventListener('pagehide',onPageHide);
-    window.addEventListener('xerox-presence-page-changed',schedule);
-    return()=>{
-      stopped=true;if(scheduled)clearTimeout(scheduled);observer?.disconnect();
-      document.removeEventListener('visibilitychange',onVisibility);
-      window.removeEventListener('pagehide',onPageHide);
-      window.removeEventListener('xerox-presence-page-changed',schedule);
-      send(false,true);
-    };
-  },[phase,user?.id]);
-
+    window.addEventListener('xerox-account-mode',update);
+    return()=>window.removeEventListener('xerox-account-mode',update);
+  },[]);
   useEffect(() => {
     const changed = (event: Event) => {
       const u = active.current;
@@ -391,7 +325,7 @@ export default function AccountGate({ children }: { children: ReactNode }) {
     catch { setMessage('ログアウトできませんでした。'); }
   }
   if (phase === 'checking') return <main className="min-h-screen bg-gray-50 flex items-center justify-center p-5"><p role="status" className="text-sm text-gray-600">ログイン状態を確認しています…</p></main>;
-  if (phase === 'ready' && user && serverAuthenticated.current) return <AccountContext.Provider value={{ username: user.username, ...(user.admin?{isMaster:true}:{}), logout }}><TermsGate key={user.id} alreadyAccepted={user.termsAccepted===true} onAccepted={()=>{if(active.current)void initialize(active.current,false,true);}} onLogout={()=>void logout(true)}><VisualModes initialMode={user.mode}/><MessageNotifications/>{children}{message && <div role="status" className="fixed top-16 right-4 z-[200] bg-gray-900 text-white text-xs p-3 rounded-xl max-w-xs shadow-lg">{message}{!serverAuthenticated.current&&<button type="button" className="block mt-2 underline" onClick={()=>{setPassword('');setPhase('login');setMessage('端末内のデータを保持したまま再接続します。');}}>再ログインして同期を再開</button>}</div>}</TermsGate></AccountContext.Provider>;
+  if (phase === 'ready' && user && serverAuthenticated.current) return <AccountContext.Provider value={{ username: user.username, ...(user.admin?{isMaster:true}:{}), logout }}><TermsGate key={user.id} alreadyAccepted={user.termsAccepted===true} onAccepted={()=>{if(active.current)void initialize(active.current,false,true);}} onLogout={()=>void logout(true)}><VisualModes initialMode={user.mode}/>{children}{message && <div role="status" className="fixed top-16 right-4 z-[200] bg-gray-900 text-white text-xs p-3 rounded-xl max-w-xs shadow-lg">{message}{!serverAuthenticated.current&&<button type="button" className="block mt-2 underline" onClick={()=>{setPassword('');setPhase('login');setMessage('端末内のデータを保持したまま再接続します。');}}>再ログインして同期を再開</button>}</div>}</TermsGate></AccountContext.Provider>;
 
   if(phase==='banned')return <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-5"><section className="w-full max-w-md rounded-3xl border border-red-900 bg-gray-900 p-8 text-center shadow-2xl" role="alert"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-950 text-3xl" aria-hidden="true">!</div><h1 className="mt-5 text-2xl font-bold">このアカウントはBANされています</h1><p className="mt-3 text-sm leading-6 text-gray-300">この端末では、新しいアカウントの作成、ログアウト、アカウント切り替えなどの操作はできません。</p>{banRecord?.username&&<p className="mt-4 text-xs text-gray-500">対象アカウント: @{banRecord.username}</p>}<p className="mt-5 text-xs text-gray-500">BAN解除後は下のボタンで状態を再確認できます。認証が期限切れの場合は再ログインが必要です。</p><button type="button" className="mt-4 w-full rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900" onClick={()=>window.dispatchEvent(new Event('xerox-ban-check'))}>BAN解除状況を確認</button></section></main>;
 

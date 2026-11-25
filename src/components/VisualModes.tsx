@@ -1,7 +1,5 @@
-import {onRealtime} from '../lib/accountRealtime';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {apiFetch,getApiPreference} from '../lib/apiTransport.mjs';
 import ElementalScene from './ElementalScene';
 import {useSiteAccount} from './AccountGate';
 
@@ -20,41 +18,6 @@ export default function VisualModes({initialMode}: {initialMode?: string}) {
  useEffect(()=>{
   setMode(asMode(initialMode));
  },[username,initialMode]);
- const apiIndex=useRef('');
- const modeRequest=useRef(0);
- const refreshMode=async(signal?:AbortSignal)=>{
-  const request=++modeRequest.current;
-  const response=await apiFetch('/api/account/visual-mode',{
-   cache:'no-store',
-   headers:apiIndex.current==='2'?{'X-XeroxYT-Prefer-API':'2'}:undefined,
-   signal:signal?AbortSignal.any([signal,AbortSignal.timeout(10000)]):AbortSignal.timeout(10000),
-  });
-  if(response.ok){
-   const status=await response.json();
-   if(request===modeRequest.current&&!signal?.aborted&&typeof status.mode==='string')setMode(asMode(status.mode));
-  }
- };
- useEffect(()=>{
-  if(!username)return;
-  const controller=new AbortController();
-  apiIndex.current='';
-  const refresh=()=>{
-   if(document.hidden||(apiIndex.current!=='2'&&getApiPreference()!=='2'))return;
-   void refreshMode(controller.signal).catch(()=>{});
-  };
-  const unsubscribe=onRealtime('account',event=>{
-   if(event.type==='ready')apiIndex.current=event.apiIndex??'';
-   if(event.type==='mode'&&event.mode&&modes.includes(event.mode)){
-    modeRequest.current++;
-    setMode(asMode(event.mode));
-   }else if(event.type==='ready'||event.type==='mode'){
-    void refreshMode(controller.signal).catch(()=>{});
-   }
-  });
-  document.addEventListener('visibilitychange',refresh);
-  const timer=setInterval(refresh,60000);
-  return()=>{modeRequest.current++;controller.abort();clearInterval(timer);unsubscribe();document.removeEventListener('visibilitychange',refresh);};
- },[username]);
  useEffect(()=>{
   if(mode==='off'||mode==='quake'||mode==='zero'||mode==='mirror'||mode==='burning'||mode==='cleaning')return;
   let disposed=false;const timer=setTimeout(()=>{void import('../lib/visualPhysics.mjs').then(({startVisualPhysics})=>{if(!disposed){const root=document.getElementById('root');if(root)controls.current=startVisualPhysics(root,mode);}});},350);
