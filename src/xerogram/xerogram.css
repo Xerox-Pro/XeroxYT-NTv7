@@ -44,13 +44,11 @@ html .xg-shell .xg-picker{background:var(--xg-panel);color:var(--xg-ink);border-
 .xg-toolbar h2{text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:1rem;font-weight:760}
 .xg-toolbar button{height:42px;display:grid;place-items:center;font-size:1.65rem}
 .xg-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:.8rem;scrollbar-gutter:stable}
-.xg-scroll.xg-reels{scroll-snap-type:y mandatory}
+.xg-scroll.xg-reels{scroll-snap-type:y proximity}
 .xg-post,.xg-profile-card,.xg-text-row{background:var(--xg-panel);border:1px solid var(--xg-line);border-radius:1rem;margin-bottom:.85rem;padding:.7rem;content-visibility:auto;contain-intrinsic-block-size:auto 460px}
 .xg-text-row,.xg-profile-card{contain-intrinsic-block-size:auto 90px}
 .xg-post p,.xg-message p,.xg-text-row p,.xg-profile-card p{white-space:pre-wrap;overflow-wrap:anywhere;margin:.45rem .25rem}
-.xg-post.xg-reel{scroll-snap-align:start;height:100%;display:flex;flex-direction:column}
-.xg-reel .xg-assets{flex:1;min-height:0;overflow:hidden;background:#080808}
-.xg-reel .xg-assets video,.xg-reel .xg-assets img{height:100%;max-height:none;object-fit:contain;width:100%}
+.xg-post.xg-reel{scroll-snap-align:start}
 .xg-person{display:flex;align-items:center;gap:.55rem;text-align:left;min-height:40px;padding:.15rem .3rem}
 .xg-avatar{width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex:none}
 .xg-avatar-placeholder{display:grid;place-items:center;background:var(--xg-soft);color:var(--xg-accent)}
@@ -113,7 +111,7 @@ html .xg-shell .xg-picker{background:var(--xg-panel);color:var(--xg-ink);border-
 .xg-toolbar{border-bottom:1px solid var(--xg-line)}
 .xg-toolbar h2{text-align:left;padding-inline:5px}
 .xg-post{padding:0 0 12px;border:0;border-radius:0;background:transparent;border-bottom:1px solid var(--xg-line)}
-.xg-section[data-view=feed] .xg-post{max-width:530px;margin:0 auto 23px}
+.xg-section:is([data-view=feed],[data-view=reels],[data-view=post]) .xg-post{max-width:530px;margin:0 auto 23px}
 .xg-assets>*{aspect-ratio:auto;max-height:72dvh;object-fit:contain}
 .xg-story-strip{display:flex;overflow:auto;gap:14px;max-width:640px;margin:6px auto 26px;padding:3px 2px 9px;scrollbar-width:thin}
 .xg-story-strip button{width:71px;min-width:71px;display:grid;justify-items:center;gap:5px}
@@ -139,9 +137,6 @@ html .xg-shell .xg-picker{background:var(--xg-panel);color:var(--xg-ink);border-
 .xg-profile-card>.xg-avatar{width:5.5rem;height:5.5rem;float:left;margin:0 18px 12px 0}
 .xg-profile-card h3{padding-top:8px;font-size:1.25rem;font-weight:750}
 .xg-profile-card .xg-actions{clear:both;padding-top:10px}
-.xg-section[data-view=reels]{max-width:100%}
-.xg-reels .xg-reel{margin:0 auto 8px;width:min(100%, 485px);height:100%;border:0}
-.xg-reels .xg-reel .xg-assets{border-radius:14px}
 @media(min-width:961px){.xg-rail{width:180px}.xg-section[data-view=profile],.xg-section[data-view=search]{max-width:960px}}
 @media(max-width:740px){.xg-dm-layout{display:flex}.xg-dm-placeholder,.xg-dm-layout[data-thread=true] .xg-section[data-view=inbox]{display:none}.xg-dm-layout .xg-section[data-view=inbox]{border:0}.xg-gallery{gap:3px}}
 

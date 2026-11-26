@@ -440,22 +440,47 @@ def xerogram():
         if op == "login":
             rate(("login", owner), 5, 300)
             username = field(body, "username", 30, r"[A-Za-z0-9_.]+")
-            password = field(body, "password", 512)
-            code = field(body, "code", 8, r"[0-9]{6,8}", optional=True)
+            code = field(body, "code", 8, r"(?:[0-9]{6}|[0-9]{8})", optional=True)
             pending = load(key, binding, "verify") if code else None
-            cl = client(pending["settings"] if pending and pending["username"] == username else None)
+            if pending and pending["username"].casefold() != username.casefold():
+                pending = None
+            context = pending.get("context") if pending else None
+            password = field(body, "password", 512, optional=bool(code))
+            if code and not context and not password:
+                raise Failure("VERIFY_EXPIRED", 409)
+            cl = client(pending["settings"] if pending else None)
             existing = [(slot, load(key, binding, slot)) for slot in SLOTS]
             slot = next((s for s, r in existing if r and (r["user"]["username"] or "").lower() == username.lower()), None)
             slot = slot or next((s for s, r in existing if r is None), None)
             if slot is None:
                 raise Failure("ACCOUNT_LIMIT", 409)
             try:
-                if not cl.login(username, password, verification_code=code):
-                    raise Failure("LOGIN_FAILED", 401)
-            except ig.TwoFactorRequired:
-                response = jsonify(error="TWO_FACTOR")
+                if context:
+                    accepted = cl._login_with_bloks_two_factor(code, context, ig.TwoFactorRequired())
+                else:
+                    accepted = cl.login(username, password, verification_code=code)
+                if not accepted:
+                    raise Failure("VERIFY_REJECTED" if code else "LOGIN_FAILED", 401)
+            except ig.TwoFactorRequired as error:
+                source = vars(error)
+                identifier = cl._extract_two_step_verification_context(source)
+                context = context or ({
+                    "two_step_verification_context": identifier,
+                    "sms_two_factor_on": cl._login_response_bool(source, "sms_two_factor_on"),
+                    "totp_two_factor_on": cl._login_response_bool(source, "totp_two_factor_on"),
+                } if identifier else None)
+                response = jsonify(error="VERIFY_REJECTED" if code else "TWO_FACTOR", passwordRequired=not bool(context))
                 response.status_code = 409
-                return set_session(response, key, binding, "verify", {"username": username, "settings": cl.get_settings()}, 300)
+                if pending and pending.get("context") == context:
+                    return response
+                try:
+                    return set_session(response, key, binding, "verify", {
+                        "username": username, "settings": cl.get_settings(), "context": context,
+                    }, 300)
+                except Failure as failure:
+                    if failure.code != "SESSION_SIZE":
+                        raise
+                    return jsonify(error="VERIFY_REJECTED" if code else "TWO_FACTOR", passwordRequired=True), 409
             if not cl.user_id:
                 raise Failure("LOGIN_FAILED", 401)
             user = {"id": str(cl.user_id), "username": username}

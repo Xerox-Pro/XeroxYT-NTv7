@@ -16,6 +16,8 @@ const errors: Record<string, string> = {
   UNCONFIGURED: 'この環境ではXerogramのAPIが設定されていません。',
   ORIGIN: 'このページからAPIに接続できません。',
   TWO_FACTOR: 'Instagramの二段階認証コードを入力してください。',
+  VERIFY_EXPIRED: '認証の有効期限が切れました。ログインからやり直してください。',
+  VERIFY_REJECTED: '認証コードを確認できませんでした。最新のコードを入力してください。',
   LOGIN_FAILED: 'Instagramへのログインに失敗しました。入力内容を確認してください。',
   IG_SESSION: 'Instagramのセッションが切れました。アカウントを接続し直してください。',
   ACCOUNT_LIMIT: 'この端末で接続できるのは3アカウントまでです。',
@@ -31,7 +33,7 @@ const errors: Record<string, string> = {
 };
 
 export class XerogramError extends Error {
-  constructor(public code: string) { super(errors[code] || 'サーバーに接続できませんでした。'); }
+  constructor(public code: string, public passwordRequired = true) { super(errors[code] || 'サーバーに接続できませんでした。'); }
 }
 
 const pending = new Map<string, Promise<unknown>>();
@@ -56,7 +58,7 @@ export function request<T>(op: string, args: Args = {}, dedupe = false): Promise
       blockedUntil = Date.now() + 1000 * (Number(response.headers.get('Retry-After')) || 60);
     }
     const data = await response.json().catch(() => null);
-    if (!response.ok || !data) throw new XerogramError(data?.error || 'UPSTREAM');
+    if (!response.ok || !data) throw new XerogramError(data?.error || 'UPSTREAM', data?.passwordRequired !== false);
     return data as T;
   }).finally(() => {
     const next = queue.shift();

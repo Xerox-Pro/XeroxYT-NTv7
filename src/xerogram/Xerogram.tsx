@@ -419,12 +419,13 @@ function writePreference(key: string, value: string) {
 export default function Xerogram() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [slot, setSlot] = useState(() => readPreference('slot', 'a'));
-  const [theme, setTheme] = useState(() => readPreference('theme', 'dark'));
+  const [theme, setTheme] = useState(() => readPreference('theme', 'auto'));
   const [stack, setStack] = useState([start]);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [verification, setVerification] = useState(false);
+  const [passwordRequired, setPasswordRequired] = useState(true);
   const [loginName, setLoginName] = useState('');
   const [settings, setSettings] = useState(false);
   const [storageStatus, setStorageStatus] = useState('');
@@ -463,7 +464,7 @@ export default function Xerogram() {
     const values = new FormData(form);
     const username = String(values.get('username') || '').trim();
     const password = String(values.get('password') || '');
-    const code = String(values.get('code') || '').trim();
+    const code = String(values.get('code') || '').replace(/[\s-]/g, '');
     form.reset();
     setLoginName(username);
     setConnecting(true);
@@ -476,7 +477,14 @@ export default function Xerogram() {
       setConnecting(false);
       setVerification(false);
     } catch (error) {
-      setVerification(error instanceof XerogramError && error.code === 'TWO_FACTOR' || !!code && error instanceof XerogramError && error.code === 'LOGIN_FAILED');
+      if (error instanceof XerogramError) {
+        if (error.code === 'TWO_FACTOR' || error.code === 'VERIFY_REJECTED') {
+          setVerification(true);
+          setPasswordRequired(error.passwordRequired);
+        } else if (error.code === 'VERIFY_EXPIRED') {
+          setVerification(false);
+        }
+      }
       setError(describe(error));
     } finally { setBusy(false); }
   }
@@ -536,10 +544,11 @@ export default function Xerogram() {
       </div> : (connecting || (!account && !busy)) ? <form className="xg-panel xg-login" onSubmit={login}>
         <AppIcon/><h2>Instagramに接続</h2>
         <p>Xerogramで利用するInstagramアカウントを入力してください。</p>
-        <label>ユーザー名<input key={loginName} name="username" autoComplete="username" defaultValue={loginName} maxLength={30} required/></label>
-        <label>パスワード<input name="password" type="password" autoComplete="current-password" required/></label>
-        {verification && <label>認証コード<input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6,8}" required/></label>}
-        <button type="submit" disabled={busy}>{busy ? '接続中…' : '接続'}</button>
+        <label>ユーザー名<input key={loginName} name="username" autoComplete="username" defaultValue={loginName} readOnly={verification} maxLength={30} required/></label>
+        {(!verification || passwordRequired) && <label>パスワード<input name="password" type="password" autoComplete="current-password" required/></label>}
+        {verification && <label>認証コード<input name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={16} required/></label>}
+        <button type="submit" disabled={busy}>{busy ? '接続中…' : verification ? '認証コードを確認' : '接続'}</button>
+        {verification && <button type="button" disabled={busy} onClick={() => {setVerification(false); setError('');}}>ログインからやり直す</button>}
         <Link className="xg-guest-link" to="/xerogram/guest">ログインせず公開リールを見る</Link>
         {account && <button type="button" onClick={() => { setConnecting(false); setError(''); }}>戻る</button>}
       </form> : account && (dmLayout ? <div className="xg-dm-layout" data-thread={screen.op === 'thread'}>
