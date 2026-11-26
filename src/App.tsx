@@ -9,6 +9,11 @@ import './theme.css';
 import './theme-surfaces.css';
 import './display-settings.css';
 
+function OpenXerogram() {
+  useEffect(() => { window.location.replace('https://xeroxapp047.vercel.app/'); }, []);
+  return <a href="https://xeroxapp047.vercel.app/">Xerogram を開く</a>;
+}
+
 export default function App() {
   useEffect(()=>watchTheme(),[]);
   const location = useLocation();
@@ -33,7 +38,9 @@ export default function App() {
     <>
       <PWAUpdateIndicator />
       <Routes>
-        {['instagram','tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
+        <Route path="/instagram/*" element={<OpenXerogram/>}/>
+        <Route path="/xerogram/*" element={<OpenXerogram/>}/>
+        {['tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
         <Route path="/*" element={<PrivateModeGate><AccountGate><MainApp/></AccountGate></PrivateModeGate>} />
       </Routes>
     </>
