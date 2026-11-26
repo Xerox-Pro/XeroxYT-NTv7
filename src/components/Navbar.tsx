@@ -2,7 +2,7 @@ import { useDeviceProfile } from '../lib/deviceProfile';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Menu, Search, Mic, Video, Bell, LogIn, LogOut, User, Settings, Sparkles, History, X, Play, Zap, CheckCircle2, ArrowRight, ScrollText } from 'lucide-react';
+import { ChevronUp, Menu, Search, Mic, Video, Bell, LogIn, LogOut, User, Settings, Sparkles, History, X, Play, Zap, CheckCircle2, ArrowRight, ScrollText } from 'lucide-react';
 import Avatar from './Avatar';
 import { UserInfo } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -419,6 +419,20 @@ export default function Navbar({
           <img className="app-icon-dark object-contain" src="/app-icons/youtube-dark.png" width={48} height={32} alt=""/>
           <span className="hidden leading-none tracking-tight md:inline md:text-[20px]">XeroxYT-NTv7</span>
         </button>
+        <details className="relative" onBlur={event => {
+          if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+        }} onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector('summary')?.focus();
+          }
+        }}>
+          <summary className="list-none cursor-pointer rounded-full p-2" aria-label="アプリ選択"><ChevronUp size={18}/></summary>
+          <div className="absolute left-0 top-full z-50 min-w-40 rounded-xl border p-2 shadow-lg" style={{background:'Canvas',color:'CanvasText'}}>
+            <button className="block w-full p-2 text-left" onClick={event => {event.currentTarget.closest('details')!.open=false;onHome()}}>XeroxYT-NTv7</button>
+            <a className="flex items-center gap-2 p-2" href="https://xeroxapp047.vercel.app/"><img width="24" height="24" src="/app-icons/xerogram.webp" alt=""/>Xerogram</a>
+          </div>
+        </details>
       </div>
       
       {/* 中央: 検索バー + マイク */}
