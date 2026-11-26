@@ -27,6 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           cp -R gas/web "$RUNNER_TEMP/gas-web"
+          git restore -- public/favicon.ico
           if git ls-remote --exit-code --heads origin gas-runtime >/dev/null; then
             git fetch origin gas-runtime
             git switch --force-create gas-runtime FETCH_HEAD
