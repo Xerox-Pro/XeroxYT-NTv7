@@ -1,4 +1,4 @@
-import {useEffect} from 'react';
+import {lazy, Suspense, useEffect} from 'react';
 import {Routes, Route, Navigate, useLocation} from 'react-router-dom';
 import MainApp from './MainApp';
 import AccountGate from './components/AccountGate';
@@ -8,6 +8,9 @@ import {watchTheme} from './lib/theme.mjs';
 import './theme.css';
 import './theme-surfaces.css';
 import './display-settings.css';
+import './xerogram/xerogram.css';
+
+const Xerogram = lazy(() => import('./xerogram/Xerogram'));
 
 export default function App() {
   useEffect(()=>watchTheme(),[]);
@@ -16,8 +19,10 @@ export default function App() {
     try {
       const page = location.pathname + location.search + location.hash;
       localStorage.setItem('xerox_last_page', page);
-      localStorage.setItem('xerox_last_service', 'youtube');
-      sessionStorage.setItem('xerox_service_page_youtube', page);
+      const service = /^\/xerogram(?:\/|$)/.test(location.pathname) ? 'xerogram' : 'youtube';
+      localStorage.setItem('xerox_last_service', service);
+      sessionStorage.setItem('xerox_service_page_' + service, page);
+      if (service === 'xerogram') return;
       const historyKey = 'xerox_service_history_youtube';
       const parsed = JSON.parse(sessionStorage.getItem(historyKey) || '[]');
       const history = Array.isArray(parsed) ? parsed : [];
@@ -32,10 +37,12 @@ export default function App() {
   return (
     <>
       <PWAUpdateIndicator />
-      <Routes>
-        {['instagram','tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
-        <Route path="/*" element={<PrivateModeGate><AccountGate><MainApp/></AccountGate></PrivateModeGate>} />
-      </Routes>
+      <PrivateModeGate><AccountGate><Routes>
+        <Route path="/xerogram/*" element={<Suspense fallback={<p role="status">Xerogramを読み込み中…</p>}><Xerogram /></Suspense>} />
+        <Route path="/instagram/*" element={<Navigate to="/xerogram" replace />} />
+        {['tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
+        <Route path="/*" element={<MainApp/>} />
+      </Routes></AccountGate></PrivateModeGate>
     </>
   );
 }
