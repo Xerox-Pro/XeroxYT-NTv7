@@ -1,3 +1,3 @@
-instagrapi==3.2.22
+instagrapi @ git+https://github.com/subzeroid/instagrapi.git@751823fcdd2db5166700200ee33ad85cfbd78075
 Flask==3.1.3
 cryptography==50.0.2
