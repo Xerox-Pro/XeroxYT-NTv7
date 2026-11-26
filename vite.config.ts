@@ -1,14 +1,32 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
+import {defineConfig, loadEnv, type Plugin} from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+function xerogramRoutes(): Plugin {
+  const route = (server: {middlewares: import('vite').Connect.Server}) => {
+    server.middlewares.use((request, response, next) => {
+      const url = request.url || '';
+      if (/^\/instagram(?:\/|\?|$)/.test(url)) {
+        response.writeHead(307, {Location: url.replace(/^\/instagram/, '/xerogram')}).end();
+        return;
+      }
+      if (/^\/xerogram(?:\/|\?|$)/.test(url)) request.url = '/xerogram.html';
+      next();
+    });
+  };
+  return {name: 'xerogram-routes', configureServer: route, configurePreviewServer: route};
+}
 export default defineConfig(({mode}) => {
   const localEnv = {...loadEnv(mode, process.cwd(), ''),...process.env};
   const apiBase = localEnv.API_BASE_URL || localEnv.API_BASE_URL_1;
   return {
+    build: {
+      rollupOptions: {input: {main: path.resolve(__dirname, 'index.html'), xerogram: path.resolve(__dirname, 'xerogram.html')}},
+    },
     plugins: [
+      xerogramRoutes(),
       react(), 
       tailwindcss(),
       VitePWA({
@@ -60,7 +78,7 @@ export default defineConfig(({mode}) => {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
-          navigateFallbackDenylist: [/^\/open\.html(?:\?|$)/, /^\/api/, /^\/stream/, /^\/edu/, /^\/360/, /^\/scratch-edu/],
+          navigateFallbackDenylist: [/^\/(?:xerogram|instagram)(?:\/|\?|$)/, /^\/open\.html(?:\?|$)/, /^\/api/, /^\/stream/, /^\/edu/, /^\/360/, /^\/scratch-edu/],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -104,7 +122,7 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      proxy: apiBase ? Object.fromEntries(['/api','/stream','/360','/edu','/scratch-edu'].map(prefix=>[prefix,{target:apiBase,changeOrigin:true,configure:(proxy)=>{proxy.on('proxyReq',(outgoing,request)=>{if(localEnv.API_SHARED_SECRET)outgoing.setHeader('Authorization','Bearer '+localEnv.API_SHARED_SECRET);if(!request.headers.origin)outgoing.setHeader('Origin','http://localhost:5173');});}}])) : undefined,
+      proxy: localEnv.XEROGRAM_DEV_API ? {'/api/xerogram': {target: localEnv.XEROGRAM_DEV_API}} : apiBase ? Object.fromEntries(['/api','/stream','/360','/edu','/scratch-edu'].map(prefix=>[prefix,{target:apiBase,changeOrigin:true,configure:(proxy)=>{proxy.on('proxyReq',(outgoing,request)=>{if(localEnv.API_SHARED_SECRET)outgoing.setHeader('Authorization','Bearer '+localEnv.API_SHARED_SECRET);if(!request.headers.origin)outgoing.setHeader('Origin','http://localhost:5173');});}}])) : undefined,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

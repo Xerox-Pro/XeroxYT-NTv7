@@ -1,5 +1,7 @@
 # Instagram / TikTok integration status
 
+現在の Xerogram の実装と運用は [Xerogram](./xerogram.md) を参照してください。以下は旧構成の記録です。
+
 Updated 2026-11-13. Existing React/Vite frontend and Cloudflare API repositories are retained. YouTube routing, authentication and player lifecycle are unchanged.
 
 ## UI

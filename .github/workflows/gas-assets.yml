@@ -21,7 +21,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run test:gas && npm run build:gas
+      - run: npm run test:gas && node scripts/generate-icons.mjs && npm run build:gas
       - name: Publish immutable assets, then release pointer
         shell: bash
         run: |
