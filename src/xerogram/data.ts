@@ -27,6 +27,7 @@ const errors: Record<string, string> = {
   INPUT: '入力内容を確認してください。',
   SESSION_SIZE: 'このアカウントのセッションを端末に保存できませんでした。',
   REPLY_UNAVAILABLE: '返信先のメッセージを取得できませんでした。',
+  IG_CLIENT_UPGRADE: 'InstagramがXerogramのログイン方式を拒否しました。現在の接続ライブラリでは認証を続けられません。',
   IG_LOGIN_UPSTREAM: 'Instagramの認証APIに接続できませんでした。少し時間をおいてからお試しください。',
   INTERNAL: 'Xerogramのサーバーでエラーが発生しました。',
   UPSTREAM: 'Instagramとの通信に失敗しました。時間をおいてお試しください。',

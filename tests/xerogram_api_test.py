@@ -84,3 +84,12 @@ class XerogramTest(unittest.TestCase):
             self.assertEqual(verify.call_args.args[1]["two_step_verification_context"], "example-context")
             login.assert_not_called()
             self.assertIsNotNone(factory.call_args.args[0])
+
+    def test_upgrade_rejection_is_not_reported_as_connection_failure(self):
+        instance = x.client()
+        with patch.object(x, "site_owner", return_value=("owner", "session")), patch.object(
+            x, "client", return_value=instance
+        ), patch.object(instance, "login", side_effect=x.ig.ClientNeedsUpgradeError()):
+            response = self.post("login", username="test", password="sample-password")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json, {"error": "IG_CLIENT_UPGRADE"})

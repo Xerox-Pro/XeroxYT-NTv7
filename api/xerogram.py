@@ -461,9 +461,12 @@ def xerogram():
                     accepted = cl.login(username, password, verification_code=code)
                 if not accepted:
                     raise Failure("VERIFY_REJECTED" if code else "LOGIN_FAILED", 401)
-            except ig.TwoFactorRequired as error:
-                source = vars(error)
+            except (ig.TwoFactorRequired, ig.ClientNeedsUpgradeError) as error:
+                source = (getattr(error, "caa_initial_outcome", None) or vars(error))
                 identifier = cl._extract_two_step_verification_context(source)
+                if isinstance(error, ig.ClientNeedsUpgradeError) and not (context or identifier):
+                    app.logger.warning("xerogram login rejected category=ClientNeedsUpgradeError status=%s", error.code)
+                    raise Failure("IG_CLIENT_UPGRADE", 409) from None
                 context = context or ({
                     "two_step_verification_context": identifier,
                     "sms_two_factor_on": cl._login_response_bool(source, "sms_two_factor_on"),
