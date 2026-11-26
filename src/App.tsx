@@ -10,8 +10,8 @@ import './theme-surfaces.css';
 import './display-settings.css';
 
 function OpenXerogram() {
-  useEffect(() => { window.location.replace('/xerogram/index.html'); }, []);
-  return <a href="/xerogram/index.html">Xerogram を開く</a>;
+  useEffect(() => { window.location.replace('https://xeroxapp047.vercel.app/'); }, []);
+  return <a href="https://xeroxapp047.vercel.app/">Xerogram を開く</a>;
 }
 
 export default function App() {
