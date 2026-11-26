@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Bookmark, Camera, Clapperboard, Compass, Home, MessageCircle, RefreshCw, Settings, UserRound, Send, Image, ChevronLeft } from 'lucide-react';
 import AppPicker, { AppIcon } from './AppPicker';
 import { clearCache, mergePage, readCache, reconcileThread, request, restoreThreadDelta, writeCache, XerogramError } from './data';
@@ -539,6 +540,7 @@ export default function Xerogram() {
         <label>パスワード<input name="password" type="password" autoComplete="current-password" required/></label>
         {verification && <label>認証コード<input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6,8}" required/></label>}
         <button type="submit" disabled={busy}>{busy ? '接続中…' : '接続'}</button>
+        <Link className="xg-guest-link" to="/xerogram/guest">ログインせず公開リールを見る</Link>
         {account && <button type="button" onClick={() => { setConnecting(false); setError(''); }}>戻る</button>}
       </form> : account && (dmLayout ? <div className="xg-dm-layout" data-thread={screen.op === 'thread'}>
         <Section key={account.slot + '-inbox'} account={account} screen={stack[0]} back={back} open={open} activeThread={screen.op === 'thread' ? String(screen.args?.id) : undefined}/>

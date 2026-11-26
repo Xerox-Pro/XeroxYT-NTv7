@@ -10,6 +10,7 @@ import './theme-surfaces.css';
 import './display-settings.css';
 import './xerogram/xerogram.css';
 
+const GuestReels = lazy(() => import('./xerogram/GuestReels'));
 const Xerogram = lazy(() => import('./xerogram/Xerogram'));
 
 export default function App() {
@@ -34,6 +35,9 @@ export default function App() {
     }
   }, [location.pathname, location.search, location.hash, location.key]);
 
+  if (/^\/xerogram\/guest\/?$/.test(location.pathname)) {
+    return <Suspense fallback={<p role="status">Xerogramを読み込み中…</p>}><GuestReels /></Suspense>;
+  }
   return (
     <>
       <PWAUpdateIndicator />

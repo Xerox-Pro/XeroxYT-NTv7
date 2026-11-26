@@ -129,3 +129,13 @@
 .xg-reels .xg-reel .xg-assets{border-radius:14px}
 @media(min-width:961px){.xg-rail{width:180px}.xg-section[data-view=profile],.xg-section[data-view=search]{max-width:960px}}
 @media(max-width:740px){.xg-dm-layout{display:flex}.xg-dm-placeholder,.xg-dm-layout[data-thread=true] .xg-section[data-view=inbox]{display:none}.xg-dm-layout .xg-section[data-view=inbox]{border:0}.xg-gallery{gap:3px}}
+
+.xg-guest{display:block;min-height:100dvh;height:auto;padding:20px 12px 40px;overflow:auto}
+.xg-guest-content{width:min(100%,600px);margin:0 auto}
+.xg-guest .xg-brand{display:flex;font-size:1.38rem}
+.xg-guest .xg-panel{max-width:none;width:100%;margin:10px auto 20px}
+.xg-guest a,.xg-guest-link{color:var(--xg-accent);width:fit-content}
+.xg-guest-form,.xg-guest-player{display:grid;gap:12px}
+.xg-guest-player{justify-items:center}
+.xg-guest-player iframe{display:block;width:min(100%,430px);height:min(76dvh,720px);border:1px solid var(--xg-line);border-radius:12px;background:var(--xg-panel)}
+@media(max-width:640px){.xg-guest .xg-brand{display:flex!important}}
