@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Home, Zap, PlaySquare, Folder, History, ThumbsUp, Wrench, ShieldCheck, MessageCircle, Bell, Settings } from 'lucide-react';
 import { ChannelSubscription } from '../types';
 import Avatar from './Avatar';
+import AppPicker from '../xerogram/AppPicker';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -130,7 +131,9 @@ export default function Sidebar({
       <div className="flex flex-col gap-1">
         {/* セクション 1 */}
         <div className="flex flex-col gap-0.5">
-          {section1.map(renderLink)}
+          {renderLink(section1[0])}
+          <AppPicker compact={!isOpen} />
+          {section1.slice(1).map(renderLink)}
         </div>
 
         {isOpen ? (
