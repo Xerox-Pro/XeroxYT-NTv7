@@ -1,21 +1,35 @@
 .xg-switch,.xg-picker button{display:flex;align-items:center;gap:.75rem;border-radius:.75rem;text-align:left;width:100%;padding:.62rem .75rem;color:inherit}
 .xg-switch:hover,.xg-picker button:hover{background:color-mix(in srgb,currentColor 9%,transparent)}
 .xg-switch.compact{flex-direction:column;font-size:9px;white-space:nowrap;gap:.2rem;padding:.55rem .12rem}
-.xg-picker{position:fixed;inset:0;margin:auto;border:1px solid #a8a5af55;width:min(92vw,360px);padding:0;border-radius:1.25rem;background:Canvas;color:CanvasText;box-shadow:0 16px 66px #0c071835}
+.xg-picker{position:fixed;inset:0;margin:auto;border:1px solid var(--xg-line,var(--border-subtle,#dedede));width:min(92vw,360px);padding:0;border-radius:1.25rem;background:var(--xg-panel,var(--surface-panel,Canvas));color:var(--xg-ink,var(--text-primary,CanvasText));box-shadow:0 16px 66px #0003}
 .xg-picker[open]{animation:xg-enter .18s ease-out}
-.xg-picker::backdrop{background:#130b25a1;backdrop-filter:blur(5px)}
+.xg-picker::backdrop{background:#0009;backdrop-filter:blur(5px)}
 .xg-picker>div{padding:1rem;display:grid;gap:.4rem}
 .xg-picker header{display:flex;align-items:center;justify-content:space-between;padding-left:.65rem}
 .xg-picker header h2{font-size:1rem;font-weight:700}
 .xg-picker header button{width:auto}
 .xg-picker button[aria-current]{font-weight:700;background:color-mix(in srgb,currentColor 9%,transparent)}
-.xg-shell{--xg-bg:#f5f4fa;--xg-panel:#fff;--xg-ink:#221738;--xg-muted:#6c607e;--xg-line:#ded7ea;--xg-accent:#6243ab;--xg-soft:#ece4ff;--xg-danger:#a9284d;background:var(--xg-bg);color:var(--xg-ink);color-scheme:light;display:flex;height:var(--xg-height,100dvh);overflow:hidden;font-family:system-ui,sans-serif;animation:xg-enter .22s ease-out}
-.xg-shell[data-theme=dark]{--xg-bg:#15121d;--xg-panel:#211b2c;--xg-ink:#f3eeff;--xg-muted:#b8abc9;--xg-line:#3b3248;--xg-accent:#c4aaff;--xg-soft:#34274e;--xg-danger:#ffa5bc;color-scheme:dark}
-@media(prefers-color-scheme:dark){.xg-shell[data-theme=auto]{--xg-bg:#15121d;--xg-panel:#211b2c;--xg-ink:#f3eeff;--xg-muted:#b8abc9;--xg-line:#3b3248;--xg-accent:#c4aaff;--xg-soft:#34274e;--xg-danger:#ffa5bc;color-scheme:dark}}
+.xg-shell{
+  --xg-bg:#fff;--xg-panel:#fff;--xg-ink:#0f0f0f;--xg-muted:#606060;--xg-line:#e5e5e5;
+  --xg-accent:#0f0f0f;--xg-soft:#f2f2f2;--xg-field:#f7f7f7;--xg-on-accent:#fff;--xg-danger:#a32838;
+  background:var(--xg-bg);color:var(--xg-ink);color-scheme:light;
+  display:flex;height:var(--xg-height,100dvh);overflow:hidden;font-family:system-ui,sans-serif;animation:xg-enter .22s ease-out
+}
+.xg-shell[data-theme=dark]{
+  --xg-bg:#0f0f0f;--xg-panel:#181818;--xg-ink:#f1f1f1;--xg-muted:#aaa;--xg-line:#343434;
+  --xg-accent:#f1f1f1;--xg-soft:#272727;--xg-field:#121212;--xg-on-accent:#0f0f0f;--xg-danger:#ff9d9d;
+  color-scheme:dark
+}
+@media(prefers-color-scheme:dark){.xg-shell[data-theme=auto]{
+  --xg-bg:#0f0f0f;--xg-panel:#181818;--xg-ink:#f1f1f1;--xg-muted:#aaa;--xg-line:#343434;
+  --xg-accent:#f1f1f1;--xg-soft:#272727;--xg-field:#121212;--xg-on-accent:#0f0f0f;--xg-danger:#ff9d9d;
+  color-scheme:dark
+}}
+html .xg-shell .xg-picker{background:var(--xg-panel);color:var(--xg-ink);border-color:var(--xg-line)}
 .xg-shell button{cursor:pointer;color:inherit;transition:background-color .18s ease,transform .15s ease}
 .xg-shell button:active,.xg-switch:active{transform:scale(.96)}
 .xg-shell button:disabled{opacity:.55;cursor:default}
-.xg-shell button:focus-visible,.xg-shell input:focus-visible,.xg-shell select:focus-visible,.xg-picker button:focus-visible{outline:2px solid var(--xg-accent,#6243ab);outline-offset:2px}
+.xg-shell button:focus-visible,.xg-shell input:focus-visible,.xg-shell select:focus-visible,.xg-picker button:focus-visible{outline:2px solid var(--xg-accent,currentColor);outline-offset:2px}
 .xg-rail{background:var(--xg-panel);border-right:1px solid var(--xg-line);width:215px;flex:none;display:flex;flex-direction:column;padding:1rem .8rem;gap:1.35rem}
 .xg-brand{display:flex;align-items:center;gap:.65rem;padding:.6rem;font-size:1.2rem;font-weight:780;color:var(--xg-accent)}
 .xg-rail nav{display:grid;gap:.25rem}
@@ -35,7 +49,7 @@
 .xg-text-row,.xg-profile-card{contain-intrinsic-block-size:auto 90px}
 .xg-post p,.xg-message p,.xg-text-row p,.xg-profile-card p{white-space:pre-wrap;overflow-wrap:anywhere;margin:.45rem .25rem}
 .xg-post.xg-reel{scroll-snap-align:start;height:100%;display:flex;flex-direction:column}
-.xg-reel .xg-assets{flex:1;min-height:0;overflow:hidden;background:#15121d}
+.xg-reel .xg-assets{flex:1;min-height:0;overflow:hidden;background:#080808}
 .xg-reel .xg-assets video,.xg-reel .xg-assets img{height:100%;max-height:none;object-fit:contain;width:100%}
 .xg-person{display:flex;align-items:center;gap:.55rem;text-align:left;min-height:40px;padding:.15rem .3rem}
 .xg-avatar{width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex:none}
@@ -55,17 +69,21 @@
 .xg-row span:nth-child(2){flex:1}
 .xg-row small{display:block;color:var(--xg-muted)}
 .xg-unread{width:.55rem;height:.55rem;border-radius:50%;background:var(--xg-accent)}
-.xg-message{max-width:83%;width:fit-content;margin:0 auto .65rem 0;border-radius:1rem;background:var(--xg-bg);padding:.35rem .65rem;touch-action:pan-y;content-visibility:auto;contain-intrinsic-block-size:auto 70px}
-.xg-message.mine{margin:0 0 .65rem auto;background:var(--xg-soft)}
+.xg-message{max-width:83%;width:fit-content;margin:0 auto .65rem 0;border-radius:1rem;background:var(--xg-soft);padding:.35rem .65rem;touch-action:pan-y;content-visibility:auto;contain-intrinsic-block-size:auto 70px}
+.xg-message.mine{margin:0 0 .65rem auto;background:var(--xg-accent);color:var(--xg-on-accent)}
+.xg-message.mine :is(.xg-actions button,small,blockquote){color:inherit}
+.xg-message.mine .xg-actions button:hover{background:color-mix(in srgb,currentColor 15%,transparent)}
+.xg-message.mine blockquote{border-color:currentColor}
 .xg-message small,.xg-empty{color:var(--xg-muted)}
 .xg-message blockquote{margin:.2rem 0;padding:.2rem .45rem;border-inline-start:2px solid var(--xg-accent);font-size:.8rem;color:var(--xg-muted)}
 .xg-search,.xg-compose{display:grid;gap:.3rem;padding:.55rem .75rem;background:var(--xg-panel)}
 .xg-search,.xg-composer-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.5rem}
 .xg-compose{border-top:1px solid var(--xg-line);padding-bottom:max(.6rem,env(safe-area-inset-bottom))}
 .xg-compose>div{overflow-wrap:anywhere;font-size:.83rem}
-.xg-shell input,.xg-shell select{background:var(--xg-bg);color:var(--xg-ink);border:1px solid var(--xg-line);border-radius:.6rem;padding:.6rem;min-width:0;max-width:100%;font-size:16px}
+.xg-shell[data-theme] input,.xg-shell[data-theme] select{background:var(--xg-field);color:var(--xg-ink);border:1px solid var(--xg-line);border-radius:.6rem;padding:.6rem;min-width:0;max-width:100%;font-size:16px}
 .xg-search button,.xg-compose button,.xg-panel button{background:var(--xg-soft);color:var(--xg-accent);border-radius:.6rem;padding:.6rem .85rem;font-weight:650}
 .xg-panel{max-width:420px;width:calc(100% - 1.5rem);margin:1rem auto;padding:1.15rem;border:1px solid var(--xg-line);border-radius:1rem;display:grid;gap:.8rem;background:var(--xg-panel);overflow-y:auto}
+.xg-login button[type=submit],.xg-guest-form button[type=submit]{background:var(--xg-accent);color:var(--xg-on-accent)}
 .xg-panel h2{font-weight:780;font-size:1.15rem}
 .xg-panel label{display:grid;gap:.3rem}
 .xg-error{color:var(--xg-danger);margin:.3rem .65rem;overflow-wrap:anywhere;font-size:.9rem}
@@ -91,9 +109,6 @@
 
 .xg-app-icon{width:2rem;height:2rem;object-fit:contain;flex:none}
 .xg-login>.xg-app-icon{width:3rem;height:3rem}
-.xg-shell{--xg-bg:#f6f7f9;--xg-panel:#fff;--xg-ink:#20242d;--xg-muted:#545e70;--xg-line:#e0e4eb;--xg-accent:#245bc5;--xg-soft:#e5edff}
-.xg-shell[data-theme=dark]{--xg-bg:#10141b;--xg-panel:#161b24;--xg-ink:#f1f4fa;--xg-muted:#a5afbf;--xg-line:#2b3341;--xg-accent:#91b4ff;--xg-soft:#253553}
-@media(prefers-color-scheme:dark){.xg-shell[data-theme=auto]{--xg-bg:#10141b;--xg-panel:#161b24;--xg-ink:#f1f4fa;--xg-muted:#a5afbf;--xg-line:#2b3341;--xg-accent:#91b4ff;--xg-soft:#253553}}
 .xg-section{background:var(--xg-bg);border:0}
 .xg-toolbar{border-bottom:1px solid var(--xg-line)}
 .xg-toolbar h2{text-align:left;padding-inline:5px}

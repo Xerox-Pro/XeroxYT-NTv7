@@ -12,6 +12,14 @@ function reelCode(value: string) {
   } catch { return null; }
 }
 
+function guestTheme() {
+  try {
+    const theme = localStorage.getItem('xerogram-theme');
+    if (theme === 'light' || theme === 'dark') return theme;
+  } catch { /* Theme follows the OS when storage is unavailable. */ }
+  return 'auto';
+}
+
 export default function GuestReels() {
   const [code, setCode] = useState<string>();
   const [error, setError] = useState('');
@@ -24,7 +32,7 @@ export default function GuestReels() {
     setCode(next);
   }
   const original = code ? 'https://www.instagram.com/reel/' + code + '/' : '';
-  return <main className="xg-shell xg-guest" data-theme="dark">
+  return <main className="xg-shell xg-guest" data-theme={guestTheme()}>
     <div className="xg-guest-content">
       <header className="xg-brand"><AppIcon/><h1>Xerogram</h1></header>
       <section className="xg-panel">
