@@ -3,5 +3,3 @@ export function readTransportState(){return {mode:'proxy',automatic:false};}
 export function setTransportMode(){}
 export function apiFetch(path,options={}){return fetch(path,options);}
 export function cloudflareOnlyFetch(path,options={}){return fetch(path,options);}
-export function getApiPreference(){return 'auto';}
-export function setApiPreference(){}

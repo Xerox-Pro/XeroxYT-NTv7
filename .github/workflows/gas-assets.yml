@@ -21,13 +21,12 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run test:gas && node scripts/generate-icons.mjs && npm run build:gas
+      - run: npm run test:gas && npm run build:gas
       - name: Publish immutable assets, then release pointer
         shell: bash
         run: |
           set -euo pipefail
           cp -R gas/web "$RUNNER_TEMP/gas-web"
-          git restore -- public/favicon.ico
           if git ls-remote --exit-code --heads origin gas-runtime >/dev/null; then
             git fetch origin gas-runtime
             git switch --force-create gas-runtime FETCH_HEAD

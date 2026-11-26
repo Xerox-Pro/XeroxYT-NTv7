@@ -36,7 +36,10 @@ export function useAccountRealtime(scope:Scope, enabled:boolean, identity?:strin
      signal:AbortSignal.any([controller.signal,AbortSignal.timeout(290000)]),
     });
     if(controller.signal.aborted)return;
-    if([401,403,423].includes(response.status))return;
+    if([401,403,423].includes(response.status)){
+     if(scope==='account')emit('session');
+     return;
+    }
     index=response.headers.get('X-XeroxYT-API-Index')||'';
     if(!response.ok||!response.body)throw Error('Realtime stream unavailable');
     reader=response.body.getReader();

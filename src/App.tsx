@@ -9,20 +9,15 @@ import './theme.css';
 import './theme-surfaces.css';
 import './display-settings.css';
 
-const xerogramPath = /^\/(?:instagram|xerogram)(?:\/|$)/;
-
 function OpenXerogram() {
-  const {pathname, search, hash} = useLocation();
-  const gas = Boolean((window as Window & {__XEROX_GAS_ASSETS__?: unknown}).__XEROX_GAS_ASSETS__);
-  const target = (gas ? 'https://xeroxapp044.vercel.app' : '') + pathname.replace(/^\/instagram/, '/xerogram') + search + hash;
-  return <a href={target}>Xerogram を開く</a>;
+  useEffect(() => { window.location.replace('https://xeroxapp047.vercel.app/'); }, []);
+  return <a href="https://xeroxapp047.vercel.app/">Xerogram を開く</a>;
 }
 
 export default function App() {
-  useEffect(() => watchTheme(), []);
+  useEffect(()=>watchTheme(),[]);
   const location = useLocation();
   useEffect(() => {
-    if (xerogramPath.test(location.pathname)) return;
     try {
       const page = location.pathname + location.search + location.hash;
       localStorage.setItem('xerox_last_page', page);
@@ -32,20 +27,22 @@ export default function App() {
       const parsed = JSON.parse(sessionStorage.getItem(historyKey) || '[]');
       const history = Array.isArray(parsed) ? parsed : [];
       if (!history.some(entry => entry.key === location.key)) {
-        sessionStorage.setItem(historyKey, JSON.stringify([...history, {key: location.key, path: page}].slice(-100)));
+        sessionStorage.setItem(historyKey, JSON.stringify([...history, {key:location.key, path:page}].slice(-100)));
       }
     } catch {
       // Browsing works when storage is unavailable.
     }
   }, [location.pathname, location.search, location.hash, location.key]);
 
-  return <>
-    <PWAUpdateIndicator />
-    <Routes>
-      <Route path="/instagram/*" element={<OpenXerogram/>}/>
-      <Route path="/xerogram/*" element={<OpenXerogram/>}/>
-      {['tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
-      <Route path="/*" element={<PrivateModeGate><AccountGate><MainApp/></AccountGate></PrivateModeGate>}/>
-    </Routes>
-  </>;
+  return (
+    <>
+      <PWAUpdateIndicator />
+      <Routes>
+        <Route path="/instagram/*" element={<OpenXerogram/>}/>
+        <Route path="/xerogram/*" element={<OpenXerogram/>}/>
+        {['tiktok','x'].map(service => <Route key={service} path={'/' + service + '/*'} element={<Navigate to="/" replace/>}/>)}
+        <Route path="/*" element={<PrivateModeGate><AccountGate><MainApp/></AccountGate></PrivateModeGate>} />
+      </Routes>
+    </>
+  );
 }
