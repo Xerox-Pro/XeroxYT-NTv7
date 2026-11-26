@@ -20,6 +20,7 @@ export default function App() {
   useEffect(() => {
     try {
       const page = location.pathname + location.search + location.hash;
+      if (location.pathname === '/instagram' || location.pathname.startsWith('/instagram/')) return;
       localStorage.setItem('xerox_last_page', page);
       localStorage.setItem('xerox_last_service', 'youtube');
       sessionStorage.setItem('xerox_service_page_youtube', page);
