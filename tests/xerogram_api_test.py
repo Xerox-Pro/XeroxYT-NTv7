@@ -46,11 +46,12 @@ class XerogramTest(unittest.TestCase):
     def test_login_keeps_password_and_session_settings_out_of_response(self):
         client = Mock()
         client.login.return_value = True
-        client.account_info.return_value = {"pk": "11", "username": "test"}
+        client.user_id = 11
         client.get_settings.return_value = x.client().get_settings()
         with patch.object(x, "site_owner", return_value=("owner", "session")), patch.object(x, "client", return_value=client):
             response = self.post("login", username="test", password="sample-password")
         self.assertEqual(response.json, {"slot": "a"})
+        client.account_info.assert_not_called()
         cookies = response.headers.getlist("Set-Cookie")
         self.assertTrue(all("HttpOnly" in cookie and "Secure" in cookie for cookie in cookies))
         self.assertNotIn("sample-password", "".join(cookies))

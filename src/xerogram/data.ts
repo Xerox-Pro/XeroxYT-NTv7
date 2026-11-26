@@ -5,7 +5,7 @@ export type Account = { slot: string; user: Person; cache: string };
 export type Asset = { image?: string; video?: string };
 export type Post = Asset & { id: string; pk: string; user?: Person; caption?: string; liked?: boolean; saved?: boolean; likes?: number; items?: Asset[]; expires?: string };
 export type Message = Asset & { id: string; user: string; text?: string; type?: string; revision?: string; date: string; reply?: string; shared?: Post; reactions?: unknown[] };
-export type Thread = { id: string; title: string; group?: boolean; unread?: boolean };
+export type Thread = { id: string; title: string; group?: boolean; unread?: boolean; preview?: string; person?: Person };
 export type TextRow = { id: string; text: string; user?: Person };
 export type Page = { items: unknown[]; cursor: string; title?: string; user?: Person; users?: Person[]; seen?: Record<string, string>; order?: string[] };
 export type Args = Record<string, unknown>;
@@ -25,6 +25,8 @@ const errors: Record<string, string> = {
   INPUT: '入力内容を確認してください。',
   SESSION_SIZE: 'このアカウントのセッションを端末に保存できませんでした。',
   REPLY_UNAVAILABLE: '返信先のメッセージを取得できませんでした。',
+  IG_LOGIN_UPSTREAM: 'Instagramの認証APIに接続できませんでした。少し時間をおいてからお試しください。',
+  INTERNAL: 'Xerogramのサーバーでエラーが発生しました。',
   UPSTREAM: 'Instagramとの通信に失敗しました。時間をおいてお試しください。',
 };
 

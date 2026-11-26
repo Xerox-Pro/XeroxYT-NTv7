@@ -126,10 +126,17 @@ def set_session(response, key, binding, slot, record=None, ttl=TTL):
     return response
 
 
+class XerogramClient(Client):
+    def login_flow(self):
+        # Authentication already completed. Load tray and timeline independently
+        # so a content endpoint failure cannot discard an authenticated session.
+        return True
+
+
 def client(settings=None):
     settings = settings or {"locale": "ja_JP", "country": "JP", "country_code": 81,
                             "timezone_offset": 32400, "timezone_name": "Asia/Tokyo"}
-    instance = Client(settings=settings, logger=logger, request_timeout=0, public_request_retries_count=0,
+    instance = XerogramClient(settings=settings, logger=logger, request_timeout=0, public_request_retries_count=0,
                       session_retry_total=0, with_challenge_flow=False, push_disabled=True)
     instance.private.trust_env = False
     instance.public.trust_env = False
@@ -264,6 +271,8 @@ def dispatch(cl, op, body):
         return page([person(row) for row in cl.search_users(query, count=20)])
     if op == "suggestions":
         return page([person(row) for row in cl.fbsearch_suggested_profiles(str(cl.user_id))[:30]])
+    if op == "post":
+        return page([media(cl.media_info_v1(ident(body)))])
     if op == "profile":
         user = ident(body)
         items, next_id = cl.user_medias_paginated_v1(user, amount=18, end_cursor=cursor)
@@ -309,7 +318,9 @@ def dispatch(cl, op, body):
     if op == "inbox":
         threads, next_id = cl.direct_threads_chunk(thread_message_limit=1, cursor=cursor or None)
         return page([{"id": str(row.id), "title": row.thread_title, "group": row.is_group,
-                      "date": row.last_activity_at.isoformat(), "unread": row.read_state == 1} for row in threads], next_id)
+                      "date": row.last_activity_at.isoformat(), "unread": row.read_state == 1,
+                      "person": person(row.users[0]) if len(row.users) == 1 else None,
+                      "preview": row.messages[0].text if row.messages and not row.messages[0].is_shh_mode else None} for row in threads], next_id)
     if op == "thread":
         thread_id = ident(body)
         params = {"direction": "older", "limit": "20", "visual_message_return_type": "unseen"}
@@ -445,7 +456,9 @@ def xerogram():
                 response = jsonify(error="TWO_FACTOR")
                 response.status_code = 409
                 return set_session(response, key, binding, "verify", {"username": username, "settings": cl.get_settings()}, 300)
-            user = person(cl.account_info())
+            if not cl.user_id:
+                raise Failure("LOGIN_FAILED", 401)
+            user = {"id": str(cl.user_id), "username": username}
             response = jsonify(slot=slot)
             set_session(response, key, binding, "verify")
             return set_session(response, key, binding, slot, {"settings": cl.get_settings(), "user": user})
@@ -477,7 +490,12 @@ def xerogram():
         raise Failure("IG_SESSION", 401) from None
     except (ig.ClientNotFoundError, ig.DirectThreadNotFound, ig.DirectMessageNotFound):
         raise Failure("NOT_FOUND", 404) from None
-    except (ig.ClientError, requests.RequestException):
-        raise Failure("UPSTREAM", 502) from None
-    except Exception:
-        raise Failure("UPSTREAM", 502) from None
+    except (ig.ClientError, requests.RequestException) as error:
+        upstream_status = getattr(getattr(error, "response", None), "status_code", None)
+        app.logger.warning("xerogram upstream op=%s category=%s status=%s",
+                           op, type(error).__name__, upstream_status)
+        code = "IG_LOGIN_UPSTREAM" if op == "login" else "UPSTREAM"
+        raise Failure(code, 502) from None
+    except Exception as error:
+        app.logger.error("xerogram internal op=%s category=%s", op, type(error).__name__)
+        raise Failure("INTERNAL", 500) from None

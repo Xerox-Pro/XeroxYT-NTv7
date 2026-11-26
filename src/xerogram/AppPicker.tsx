@@ -1,6 +1,11 @@
 import { useId, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, LayoutGrid, Play, X } from 'lucide-react';
+import { LayoutGrid, X } from 'lucide-react';
+
+export function AppIcon({ app = 'xerogram' }: { app?: 'xerogram' | 'youtube' }) {
+  const assets = (window as Window & { __XEROX_GAS_ASSETS__?: { base?: string } }).__XEROX_GAS_ASSETS__;
+  return <img className="xg-app-icon" alt="" src={(assets?.base || '') + '/app-icons/' + (app === 'youtube' ? 'youtube.jpeg' : 'xerogram.webp')} />;
+}
 
 export default function AppPicker({ compact = false, current = 'youtube' }: { compact?: boolean; current?: 'youtube' | 'xerogram' }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -24,10 +29,10 @@ export default function AppPicker({ compact = false, current = 'youtube' }: { co
     <dialog ref={dialog} className="xg-picker" aria-labelledby={id} onClick={event => { if (event.target === dialog.current) dialog.current.close(); }}>
       <div>
         <header><h2 id={id}>アプリ切り替え</h2><button type="button" aria-label="閉じる" onClick={() => dialog.current?.close()}><X size={21}/></button></header>
-        <button type="button" onClick={() => select('youtube')} aria-current={current === 'youtube' ? 'true' : undefined}><Play size={22}/> XeroxYT</button>
+        <button type="button" onClick={() => select('youtube')} aria-current={current === 'youtube' ? 'true' : undefined}><AppIcon app="youtube"/> XeroxYT-NT</button>
         {isGas
-          ? <a className="xg-switch" href="https://xeroxapp044.vercel.app/xerogram" target="_blank" rel="noopener noreferrer" onClick={() => dialog.current?.close()}><Camera size={22}/> Xerogram</a>
-          : <button type="button" onClick={() => select('xerogram')} aria-current={current === 'xerogram' ? 'true' : undefined}><Camera size={22}/> Xerogram</button>}
+          ? <a className="xg-switch" href="https://xeroxapp044.vercel.app/xerogram" target="_blank" rel="noopener noreferrer" onClick={() => dialog.current?.close()}><AppIcon/> Xerogram</a>
+          : <button type="button" onClick={() => select('xerogram')} aria-current={current === 'xerogram' ? 'true' : undefined}><AppIcon/> Xerogram</button>}
       </div>
     </dialog>
   </>;

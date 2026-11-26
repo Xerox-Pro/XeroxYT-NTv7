@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { Bookmark, Camera, Clapperboard, Compass, Home, MessageCircle, RefreshCw, Settings, UserRound } from 'lucide-react';
-import AppPicker from './AppPicker';
+import { Bookmark, Camera, Clapperboard, Compass, Home, MessageCircle, RefreshCw, Settings, UserRound, Send, Image, ChevronLeft } from 'lucide-react';
+import AppPicker, { AppIcon } from './AppPicker';
 import { clearCache, mergePage, readCache, reconcileThread, request, restoreThreadDelta, writeCache, XerogramError } from './data';
 import type { Account, Args, Asset, Message, Page, Person, Post, TextRow, Thread } from './data';
 
@@ -43,12 +43,22 @@ function Avatar({ person }: { person?: Person }) {
     <span className="xg-avatar xg-avatar-placeholder"><UserRound size={17} /></span>;
 }
 
-function Section({ account, screen, back, open }: { account: Account; screen: Screen; back: () => void; open: (view: Screen) => void }) {
+function Section({ account, screen, back, open, activeThread }: { account: Account; screen: Screen; back: () => void; open: (view: Screen) => void; activeThread?: string }) {
   const [page, setPage] = useState<Page | null>(null);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
+  const [filter, setFilter] = useState('');
+  const [storyPeople, setStoryPeople] = useState<Person[]>([]);
+  useEffect(() => {
+    if (screen.op !== 'feed' || !navigator.onLine) return;
+    let current = true;
+    request<Page>('stories', {slot: account.slot}, true).then(data => {
+      if (current) setStoryPeople(data.items as Person[]);
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [screen.op, account.slot]);
   const [reply, setReply] = useState<Message | null>(null);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [knownLikes, setLikes] = useState<Record<string, boolean>>({});
@@ -243,13 +253,23 @@ function Section({ account, screen, back, open }: { account: Account; screen: Sc
     </article>;
   }
 
+  function gallery(posts: Post[]) {
+    return <div className="xg-gallery">{posts.map(post => {
+      const cover = post.image || post.items?.[0]?.image;
+      return <button key={post.id} onClick={() => show('post', '投稿', post.pk)} aria-label={post.caption || '投稿を開く'}>
+        {cover ? <img src={cover} alt="" loading="lazy" referrerPolicy="no-referrer"/> : <Image size={24}/>}
+        {post.video && <Clapperboard className="xg-tile-video" size={19}/>}
+      </button>;
+    })}</div>;
+  }
+
   function content(): ReactNode {
     if (!page) return busy ? <div aria-label="読み込み中" role="status" className="xg-skeleton" /> : null;
     const rows = page.items;
-    if (screen.op === 'inbox') return rows.map(item => {
+    if (screen.op === 'inbox') return rows.filter(item => ((item as Thread).title || '').toLowerCase().includes(filter.toLowerCase())).map(item => {
       const row = item as Thread;
-      return <button className="xg-row" key={row.id} onClick={() => show('thread', row.title || 'チャット', row.id)}>
-        <MessageCircle size={20}/><span>{row.title || 'チャット'} {row.group && <small>グループ</small>}</span>{row.unread && <span aria-label="未読" className="xg-unread"/>}
+      return <button className="xg-row xg-inbox-row" key={row.id} aria-current={activeThread === row.id ? 'true' : undefined} onClick={() => show('thread', row.title || 'チャット', row.id)}>
+        <Avatar person={row.person}/><span><strong>{row.title || 'チャット'}</strong><small>{row.preview || (row.group ? 'グループ' : '会話を開く')}</small></span>{row.unread && <span aria-label="未読" className="xg-unread"/>}
       </button>;
     });
     if (thread) return [...rows].reverse().map(item => {
@@ -304,12 +324,13 @@ function Section({ account, screen, back, open }: { account: Account; screen: Sc
         <Avatar person={person}/><span><strong>@{person.username}</strong><small>{person.name}</small></span>
       </button>;
     });
+    if (screen.op === 'profile' || (screen.op === 'search' && String(args.query).startsWith('#'))) return gallery(rows as Post[]);
     return rows.map(row => postCard(row as Post));
   }
 
-  return <section className="xg-section">
+  return <section className="xg-section" data-view={screen.op}>
     <header className="xg-toolbar">
-      <button onClick={back} aria-label="前の画面">‹</button><h2>{page?.title || screen.label}</h2>
+      <button onClick={back} aria-label="前の画面"><ChevronLeft size={21}/></button><h2>{page?.title || screen.label}</h2>
       <button onClick={() => void load()} disabled={busy || !enabled} aria-label="更新"><RefreshCw size={18}/></button>
     </header>
     {error && <p className="xg-error" role="alert">{error}</p>}
@@ -331,8 +352,11 @@ function Section({ account, screen, back, open }: { account: Account; screen: Sc
       }}>選択した {members.length} 人でグループ作成</button>}
     </>}
     {['feed', 'stories'].includes(screen.op) && <button className="xg-shortcut" onClick={() => setPhotos(!photos)}>{screen.op === 'stories' ? '写真のストーリーを投稿' : '写真を投稿'}</button>}
-    {screen.op === 'inbox' && <button className="xg-shortcut" onClick={() => open({ op: 'notes', label: 'ノート' })}>ノート</button>}
+    {screen.op === 'inbox' && <div className="xg-inbox-tools"><input type="search" aria-label="会話を検索" placeholder="会話を検索" value={filter} onChange={event => setFilter(event.target.value)} /><button className="xg-shortcut" onClick={() => open({ op: 'notes', label: 'ノート' })}>ノート</button></div>}
     <div ref={scroll} className={'xg-scroll' + (screen.op === 'reels' ? ' xg-reels' : '')}>
+      {screen.op === 'feed' && storyPeople.length > 0 && <div className="xg-story-strip" aria-label="ストーリー">
+        {storyPeople.slice(0, 12).map(person => <button key={person.id} onClick={() => show('story', '@' + person.username, person.id)}><span><Avatar person={person}/></span><small>{person.username}</small></button>)}
+      </div>}
       {page?.user && <article className="xg-profile-card">
         <Avatar person={page.user}/><h3>{page.user.name || page.user.username}</h3>
         <p>@{page.user.username}</p><p>{page.user.bio}</p>
@@ -394,7 +418,7 @@ function writePreference(key: string, value: string) {
 export default function Xerogram() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [slot, setSlot] = useState(() => readPreference('slot', 'a'));
-  const [theme, setTheme] = useState(() => readPreference('theme', 'auto'));
+  const [theme, setTheme] = useState(() => readPreference('theme', 'dark'));
   const [stack, setStack] = useState([start]);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
@@ -407,6 +431,11 @@ export default function Xerogram() {
   const account = accounts.find(value => value.slot === slot) || accounts[0];
   const screen = stack.at(-1);
   const selected = stack[0]?.op;
+  const dmLayout = screen.op === 'inbox' || screen.op === 'thread' && selected === 'inbox';
+  function open(view: Screen) {
+    setStack(previous => view.op === 'thread' && previous[0].op === 'inbox' ? [previous[0], view] : [...previous, view]);
+  }
+  function back() { setStack(previous => previous.length > 1 ? previous.slice(0, -1) : [start]); }
 
   async function status(preferred?: string) {
     const data = await request<{accounts: Account[]}>('status', {}, true);
@@ -436,6 +465,7 @@ export default function Xerogram() {
     const code = String(values.get('code') || '').trim();
     form.reset();
     setLoginName(username);
+    setConnecting(true);
     setBusy(true);
     setError('');
     try {
@@ -468,7 +498,7 @@ export default function Xerogram() {
 
   return <div className="xg-shell" data-theme={theme} ref={shell}>
     <aside className="xg-rail">
-      <div className="xg-brand"><Camera size={23}/><span>Xerogram</span></div>
+      <div className="xg-brand"><AppIcon/><span>Xerogram</span></div>
       <nav aria-label="Xerogram">
         {tabs.map(([op, label, Icon], index) => <div key={op}>
           <button type="button" aria-current={selected === op && !settings ? 'page' : undefined} disabled={!account || connecting} onClick={() => {
@@ -479,7 +509,7 @@ export default function Xerogram() {
       </nav>
       <button type="button" className="xg-settings-button" onClick={() => setSettings(!settings)} aria-label="設定"><Settings size={20}/><span>設定</span></button>
     </aside>
-    <main className="xg-main">
+    <main className="xg-main" data-screen={screen.op}>
       <header className="xg-mobile">
         <strong>Xerogram</strong><AppPicker current="xerogram"/><button onClick={() => setSettings(!settings)} aria-label="設定"><Settings size={19}/></button>
       </header>
@@ -503,16 +533,19 @@ export default function Xerogram() {
           <button disabled={busy} onClick={() => void logout()}>Instagramからログアウト</button>
         </>}
       </div> : (connecting || (!account && !busy)) ? <form className="xg-panel xg-login" onSubmit={login}>
-        <Camera size={30}/><h2>Instagramに接続</h2>
+        <AppIcon/><h2>Instagramに接続</h2>
         <p>Xerogramで利用するInstagramアカウントを入力してください。</p>
         <label>ユーザー名<input key={loginName} name="username" autoComplete="username" defaultValue={loginName} maxLength={30} required/></label>
         <label>パスワード<input name="password" type="password" autoComplete="current-password" required/></label>
         {verification && <label>認証コード<input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6,8}" required/></label>}
         <button type="submit" disabled={busy}>{busy ? '接続中…' : '接続'}</button>
         {account && <button type="button" onClick={() => { setConnecting(false); setError(''); }}>戻る</button>}
-      </form> : account && screen && <Section key={account.slot + account.user.id + JSON.stringify(screen)} account={account} screen={screen}
-        back={() => setStack(previous => previous.length > 1 ? previous.slice(0, -1) : [start])}
-        open={view => setStack(previous => [...previous, view])} />}
+      </form> : account && (dmLayout ? <div className="xg-dm-layout" data-thread={screen.op === 'thread'}>
+        <Section key={account.slot + '-inbox'} account={account} screen={stack[0]} back={back} open={open} activeThread={screen.op === 'thread' ? String(screen.args?.id) : undefined}/>
+        {screen.op === 'thread'
+          ? <Section key={account.slot + String(screen.args?.id)} account={account} screen={screen} back={back} open={open}/>
+          : <div className="xg-dm-placeholder"><Send size={30}/><h2>メッセージ</h2><p>会話を選ぶとここに表示されます。</p></div>}
+      </div> : <Section key={account.slot + account.user.id + JSON.stringify(screen)} account={account} screen={screen} back={back} open={open}/>)}
     </main>
   </div>;
 }
