@@ -1,4 +1,3 @@
-import AppPicker from './AppPicker';
 import { useDeviceProfile } from '../lib/deviceProfile';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -420,7 +419,6 @@ export default function Navbar({
           <img className="app-icon-dark object-contain" src="/app-icons/youtube-dark.png" width={48} height={32} alt=""/>
           <span className="hidden leading-none tracking-tight md:inline md:text-[20px]">XeroxYT-NTv7</span>
         </button>
-        <AppPicker/>
       </div>
       
       {/* 中央: 検索バー + マイク */}

@@ -5,7 +5,6 @@
   "outputDirectory": "dist",
   "functions": {"api/account/realtime/events.ts": {"maxDuration": 300}},
   "routes": [
-    {"src":"/(?:instagram|xerogram)(?:/.*)?","status":307,"headers":{"Location":"https://xeroxapp047.vercel.app/"}},
     {
       "src": "/(?:open\\.html|open-launch\\.js|api/open-xerox\\.html)",
       "headers": { "Cache-Control": "no-store" },
