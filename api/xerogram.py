@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 
 import requests
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from PIL import Image, ImageOps, UnidentifiedImageError
 from instagrapi import Client, exceptions as ig
 from instagrapi.extractors import extract_direct_thread, extract_media_v1
@@ -76,8 +76,10 @@ def site_owner():
     try:
         result = requests.get(f"https://{url.hostname}/api/account/session", headers=headers,
                               timeout=(3, 5), allow_redirects=False)
-    except requests.RequestException:
+    except requests.RequestException as error:
+        g.xerogram_error_type = type(error).__name__
         raise Failure("SITE_UNAVAILABLE", 503) from None
+    g.xerogram_upstream_status = result.status_code
     if result.status_code in (401, 403):
         raise Failure("SITE_LOGIN", 401)
     if result.status_code != 200:
@@ -397,8 +399,23 @@ def dispatch(cl, op, body):
     raise Failure("INPUT", 400)
 
 
+def record_login_error(error):
+    if g.get("xerogram_login_stage"):
+        g.xerogram_error_type = type(error).__name__
+        g.xerogram_upstream_status = getattr(getattr(error, "response", None), "status_code", None)
+
+
 @app.after_request
 def headers(response):
+    stage = g.get("xerogram_login_stage")
+    if stage and response.status_code >= 400:
+        status = g.get("xerogram_upstream_status")
+        app.logger.warning(
+            "xerogram login stage=%s result=%s http=%s error_type=%s upstream_http=%s",
+            stage, g.get("xerogram_result", "UNKNOWN"),
+            response.status_code, g.get("xerogram_error_type", "-"),
+            status if type(status) is int and 100 <= status <= 599 else "-",
+        )
     response.headers["Cache-Control"] = "no-store, private"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
@@ -406,6 +423,7 @@ def headers(response):
 
 @app.errorhandler(Failure)
 def expected(error):
+    g.xerogram_result = error.code
     response = jsonify(error=error.code)
     if error.status == 429:
         response.headers["Retry-After"] = "60"
@@ -414,6 +432,7 @@ def expected(error):
 
 @app.errorhandler(413)
 def too_large(_error):
+    g.xerogram_result = "INPUT"
     return jsonify(error="INPUT"), 413
 
 
@@ -428,9 +447,13 @@ def xerogram():
     if not isinstance(body, dict):
         raise Failure("INPUT", 400)
     op = field(body, "op", 30, r"[a-z_]+")
+    if op == "login":
+        g.xerogram_login_stage = "configuration"
     if op not in ("upload_post", "upload_story", "send_photo") and (request.content_length or 0) > 48 * 1024:
         raise Failure("INPUT", 413)
     key = setting_key()
+    if op == "login":
+        g.xerogram_login_stage = "xeroxyt_session"
     owner, session_digest = site_owner()
     binding = json.dumps([expected_origin, owner, session_digest]).encode()
     try:
@@ -444,6 +467,8 @@ def xerogram():
                     accounts.append(account)
             return jsonify(accounts=accounts)
         if op == "login":
+            g.xerogram_login_stage = "validate_login"
+            g.xerogram_upstream_status = None
             rate(("login", owner), 5, 300)
             username = field(body, "username", 30, r"[A-Za-z0-9_.]+")
             code = field(body, "code", 8, r"(?:[0-9]{6}|[0-9]{8})", optional=True)
@@ -460,14 +485,17 @@ def xerogram():
             slot = slot or next((s for s, r in existing if r is None), None)
             if slot is None:
                 raise Failure("ACCOUNT_LIMIT", 409)
+            g.xerogram_login_stage = "instagram_code" if code else "instagram_login"
             try:
                 if context:
                     accepted = cl._login_with_bloks_two_factor(code, context, ig.TwoFactorRequired())
                 else:
                     accepted = cl.login(username, password, verification_code=code)
+                g.xerogram_upstream_status = getattr(cl.last_response, "status_code", None)
                 if not accepted:
                     raise Failure("VERIFY_REJECTED" if code else "LOGIN_FAILED", 401)
             except (ig.TwoFactorRequired, ig.ClientNeedsUpgradeError) as error:
+                record_login_error(error)
                 source = {name: value for name, value in vars(error).items()
                           if name != "caa_initial_outcome"}
                 identifier = cl._extract_two_step_verification_context(source)
@@ -475,14 +503,14 @@ def xerogram():
                     source = getattr(error, "caa_initial_outcome", None) or {}
                     identifier = cl._extract_two_step_verification_context(source)
                 if isinstance(error, ig.ClientNeedsUpgradeError) and not (context or identifier):
-                    app.logger.warning("xerogram login rejected category=ClientNeedsUpgradeError status=%s", error.code)
                     raise Failure("IG_CLIENT_UPGRADE", 409) from None
                 context = context or ({
                     "two_step_verification_context": identifier,
                     "sms_two_factor_on": cl._login_response_bool(source, "sms_two_factor_on"),
                     "totp_two_factor_on": cl._login_response_bool(source, "totp_two_factor_on"),
                 } if identifier else None)
-                response = jsonify(error="VERIFY_REJECTED" if code else "TWO_FACTOR", passwordRequired=not bool(context))
+                g.xerogram_result = "VERIFY_REJECTED" if code else "TWO_FACTOR"
+                response = jsonify(error=g.xerogram_result, passwordRequired=not bool(context))
                 response.status_code = 409
                 if pending and pending.get("context") == context:
                     return response
@@ -493,9 +521,12 @@ def xerogram():
                 except Failure as failure:
                     if failure.code != "SESSION_SIZE":
                         raise
-                    return jsonify(error="VERIFY_REJECTED" if code else "TWO_FACTOR", passwordRequired=True), 409
+                    g.xerogram_login_stage = "verification_session"
+                    g.xerogram_error_type = failure.code
+                    return jsonify(error=g.xerogram_result, passwordRequired=True), 409
             if not cl.user_id:
                 raise Failure("LOGIN_FAILED", 401)
+            g.xerogram_login_stage = "save_session"
             user = {"id": str(cl.user_id), "username": username}
             response = jsonify(slot=slot)
             set_session(response, key, binding, "verify")
@@ -518,22 +549,33 @@ def xerogram():
         return jsonify(data)
     except Failure:
         raise
-    except (ig.PleaseWaitFewMinutes, ig.RateLimitError, ig.FeedbackRequired):
+    except (ig.PleaseWaitFewMinutes, ig.RateLimitError, ig.FeedbackRequired) as error:
+        record_login_error(error)
         raise Failure("RATE_LIMIT", 429) from None
-    except (ig.ChallengeRequired, ig.CaptchaChallengeRequired):
+    except (ig.ChallengeRequired, ig.CaptchaChallengeRequired) as error:
+        record_login_error(error)
         raise Failure("CHALLENGE", 409) from None
-    except (ig.BadPassword, ig.BadCredentials, ig.TwoFactorRequired):
+    except (ig.BadPassword, ig.BadCredentials, ig.TwoFactorRequired) as error:
+        record_login_error(error)
         raise Failure("LOGIN_FAILED", 401) from None
-    except (ig.LoginRequired, ig.ClientLoginRequired):
+    except (ig.LoginRequired, ig.ClientLoginRequired) as error:
+        record_login_error(error)
         raise Failure("IG_SESSION", 401) from None
-    except (ig.ClientNotFoundError, ig.DirectThreadNotFound, ig.DirectMessageNotFound):
+    except (ig.ClientNotFoundError, ig.DirectThreadNotFound, ig.DirectMessageNotFound) as error:
+        record_login_error(error)
         raise Failure("NOT_FOUND", 404) from None
     except (ig.ClientError, requests.RequestException) as error:
-        upstream_status = getattr(getattr(error, "response", None), "status_code", None)
-        app.logger.warning("xerogram upstream op=%s category=%s status=%s",
-                           op, type(error).__name__, upstream_status)
+        if op == "login":
+            record_login_error(error)
+        else:
+            upstream_status = getattr(getattr(error, "response", None), "status_code", None)
+            app.logger.warning("xerogram upstream op=%s category=%s status=%s",
+                               op, type(error).__name__, upstream_status)
         code = "IG_LOGIN_UPSTREAM" if op == "login" else "UPSTREAM"
         raise Failure(code, 502) from None
     except Exception as error:
-        app.logger.error("xerogram internal op=%s category=%s", op, type(error).__name__)
+        if op == "login":
+            record_login_error(error)
+        else:
+            app.logger.error("xerogram internal op=%s category=%s", op, type(error).__name__)
         raise Failure("INTERNAL", 500) from None

@@ -106,6 +106,19 @@ class XerogramTest(unittest.TestCase):
             login.assert_called_once_with("test", "sample-password", verification_code="123456")
             self.assertIsNotNone(factory.call_args.args[0])
 
+    def test_login_diagnostic_omits_credentials_and_raw_instagram_errors(self):
+        instance = x.client()
+        error = x.ig.BadPassword("sensitive upstream detail", response=Mock(status_code=400))
+        with patch.object(x, "site_owner", return_value=("owner", "session")), patch.object(
+            x, "client", return_value=instance
+        ), patch.object(instance, "login", side_effect=error), self.assertLogs(x.app.logger, "WARNING") as logs:
+            response = self.post("login", username="private_user", password="private_password", code="123456")
+        self.assertEqual(response.json, {"error": "LOGIN_FAILED"})
+        entry, = logs.output
+        self.assertIn("stage=instagram_code result=LOGIN_FAILED http=401 error_type=BadPassword upstream_http=400", entry)
+        for value in ("private_user", "private_password", "123456", "sensitive upstream detail"):
+            self.assertNotIn(value, entry)
+
     def test_upgrade_rejection_is_not_reported_as_connection_failure(self):
         instance = x.client()
         with patch.object(x, "site_owner", return_value=("owner", "session")), patch.object(
