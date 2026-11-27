@@ -549,7 +549,7 @@ export default function Xerogram() {
         {verification && <label>認証コード<input name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={16} required/></label>}
         <button type="submit" disabled={busy}>{busy ? '接続中…' : verification ? '認証コードを確認' : '接続'}</button>
         {verification && <button type="button" disabled={busy} onClick={() => {setVerification(false); setError('');}}>ログインからやり直す</button>}
-        <Link className="xg-guest-link" to="/xerogram/guest">ログインせず公開リールを見る</Link>
+        <Link className="xg-guest-link" to="/xerogram/guest">ログインせず公開投稿・リールを見る</Link>
         {account && <button type="button" onClick={() => { setConnecting(false); setError(''); }}>戻る</button>}
       </form> : account && (dmLayout ? <div className="xg-dm-layout" data-thread={screen.op === 'thread'}>
         <Section key={account.slot + '-inbox'} account={account} screen={stack[0]} back={back} open={open} activeThread={screen.op === 'thread' ? String(screen.args?.id) : undefined}/>
