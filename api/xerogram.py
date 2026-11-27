@@ -133,11 +133,17 @@ class XerogramClient(Client):
         return True
 
 
+def require_login_code(_username, _choice):
+    # A web request cannot read a verification code from the server console.
+    raise ig.TwoFactorRequired("Instagram requested a profile verification code")
+
+
 def client(settings=None):
     settings = settings or {"locale": "ja_JP", "country": "JP", "country_code": 81,
                             "timezone_offset": 32400, "timezone_name": "Asia/Tokyo"}
     instance = XerogramClient(settings=settings, logger=logger, request_timeout=0, public_request_retries_count=0,
                       session_retry_total=0, with_challenge_flow=False, push_disabled=True)
+    instance.challenge_code_handler = require_login_code
     instance.private.trust_env = False
     instance.public.trust_env = False
     return instance
@@ -462,8 +468,12 @@ def xerogram():
                 if not accepted:
                     raise Failure("VERIFY_REJECTED" if code else "LOGIN_FAILED", 401)
             except (ig.TwoFactorRequired, ig.ClientNeedsUpgradeError) as error:
-                source = (getattr(error, "caa_initial_outcome", None) or vars(error))
+                source = {name: value for name, value in vars(error).items()
+                          if name != "caa_initial_outcome"}
                 identifier = cl._extract_two_step_verification_context(source)
+                if not identifier:
+                    source = getattr(error, "caa_initial_outcome", None) or {}
+                    identifier = cl._extract_two_step_verification_context(source)
                 if isinstance(error, ig.ClientNeedsUpgradeError) and not (context or identifier):
                     app.logger.warning("xerogram login rejected category=ClientNeedsUpgradeError status=%s", error.code)
                     raise Failure("IG_CLIENT_UPGRADE", 409) from None

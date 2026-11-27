@@ -16,6 +16,8 @@ class XerogramTest(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
         self.browser = x.app.test_client()
+        with x.limit_lock:
+            x.limits.clear()
 
     def post(self, op, **args):
         return self.browser.post("/api/xerogram", headers={"Origin": self.origin}, json={"op": op, **args})
@@ -83,6 +85,25 @@ class XerogramTest(unittest.TestCase):
             self.assertEqual(response.json, {"slot": "a"})
             self.assertEqual(verify.call_args.args[1]["two_step_verification_context"], "example-context")
             login.assert_not_called()
+            self.assertIsNotNone(factory.call_args.args[0])
+
+    def test_profile_verification_requests_code_and_submits_it_through_login(self):
+        initial, restored = x.client(), x.client()
+        with patch.object(x, "site_owner", return_value=("owner", "session")), patch.object(
+            x, "client", side_effect=[initial, restored]
+        ) as factory, patch.object(
+            initial, "bloks_caa_login",
+            side_effect=lambda **_: initial.challenge_code_handler("test", None),
+        ):
+            response = self.post("login", username="test", password="sample-password")
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json, {"error": "TWO_FACTOR", "passwordRequired": True})
+            with patch.object(restored, "login", return_value=True) as login, patch.object(
+                type(restored), "user_id", new_callable=PropertyMock, return_value=11,
+            ):
+                response = self.post("login", username="test", password="sample-password", code="123456")
+            self.assertEqual(response.json, {"slot": "a"})
+            login.assert_called_once_with("test", "sample-password", verification_code="123456")
             self.assertIsNotNone(factory.call_args.args[0])
 
     def test_upgrade_rejection_is_not_reported_as_connection_failure(self):
