@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 
 import requests
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from flask import Flask, g, jsonify, request
+from flask import Flask, g, has_request_context, jsonify, request
 from PIL import Image, ImageOps, UnidentifiedImageError
 from instagrapi import Client, exceptions as ig
 from instagrapi.extractors import extract_direct_thread, extract_media_v1
@@ -128,7 +128,42 @@ def set_session(response, key, binding, slot, record=None, ttl=TTL):
     return response
 
 
+LOGIN_ENDPOINTS = {
+    "com.bloks.www.bloks.caa.login.process_client_data_and_redirect": "caa_prepare",
+    "com.bloks.www.caa.login.oauth.token.fetch.async": "caa_oauth",
+    "com.bloks.www.bloks.caa.login.async.send_login_request": "caa_credentials",
+    "com.bloks.www.ap.two_step_verification.entrypoint_async": "profile_entry",
+    "com.bloks.www.ap.two_step_verification.code_entry": "profile_code_entry",
+    "com.bloks.www.ap.two_step_verification.code_entry_async": "profile_code_submit",
+    "com.bloks.www.two_step_verification.entrypoint": "two_factor_entry",
+    "com.bloks.www.two_step_verification.method_picker": "two_factor_methods",
+    "com.bloks.www.two_step_verification.method_picker.navigation.async": "two_factor_select",
+    "com.bloks.www.two_step_verification.verify_code.async": "two_factor_submit",
+    "accounts/login": "legacy_credentials",
+    "accounts/two_factor_login": "legacy_code_submit",
+}
+
+
+def http_status(response):
+    status = getattr(response, "status_code", None)
+    return status if type(status) is int and 100 <= status <= 599 else "-"
+
+
 class XerogramClient(Client):
+    def private_request(self, endpoint, *args, **kwargs):
+        trail = g.get("xerogram_login_trail") if has_request_context() else None
+        path = endpoint.strip("/")
+        label = LOGIN_ENDPOINTS.get(path.rsplit("/", 1)[-1] if path.startswith("bloks/") else path)
+        if trail is None or label is None:
+            return super().private_request(endpoint, *args, **kwargs)
+        previous = self.last_response
+        try:
+            return super().private_request(endpoint, *args, **kwargs)
+        finally:
+            if len(trail) < 24:
+                response = self.last_response if self.last_response is not previous else None
+                trail.append(f"{label}:{http_status(response)}")
+
     def login_flow(self):
         # Authentication already completed. Load tray and timeline independently
         # so a content endpoint failure cannot discard an authenticated session.
@@ -137,6 +172,8 @@ class XerogramClient(Client):
 
 def require_login_code(_username, _choice):
     # A web request cannot read a verification code from the server console.
+    if has_request_context() and g.get("xerogram_login_trail") is not None:
+        g.xerogram_profile_code_requested = True
     raise ig.TwoFactorRequired("Instagram requested a profile verification code")
 
 
@@ -403,6 +440,9 @@ def record_login_error(error):
     if g.get("xerogram_login_stage"):
         g.xerogram_error_type = type(error).__name__
         g.xerogram_upstream_status = getattr(getattr(error, "response", None), "status_code", None)
+        if isinstance(getattr(error, "caa_initial_outcome", None), dict):
+            g.xerogram_caa_fallback = True
+            g.xerogram_caa_initial_http = http_status(getattr(error, "caa_initial_response", None))
 
 
 @app.after_request
@@ -411,10 +451,14 @@ def headers(response):
     if stage and response.status_code >= 400:
         status = g.get("xerogram_upstream_status")
         app.logger.warning(
-            "xerogram login stage=%s result=%s http=%s error_type=%s upstream_http=%s",
+            "xerogram login stage=%s result=%s http=%s error_type=%s upstream_http=%s "
+            "caa_fallback=%s caa_initial_http=%s profile_code_requested=%s steps=%s",
             stage, g.get("xerogram_result", "UNKNOWN"),
             response.status_code, g.get("xerogram_error_type", "-"),
             status if type(status) is int and 100 <= status <= 599 else "-",
+            g.get("xerogram_caa_fallback", False), g.get("xerogram_caa_initial_http", "-"),
+            g.get("xerogram_profile_code_requested", False),
+            ",".join(g.get("xerogram_login_trail", ())) or "-",
         )
     response.headers["Cache-Control"] = "no-store, private"
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -486,6 +530,7 @@ def xerogram():
             if slot is None:
                 raise Failure("ACCOUNT_LIMIT", 409)
             g.xerogram_login_stage = "instagram_code" if code else "instagram_login"
+            g.xerogram_login_trail = []
             try:
                 if context:
                     accepted = cl._login_with_bloks_two_factor(code, context, ig.TwoFactorRequired())

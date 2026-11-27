@@ -119,6 +119,34 @@ class XerogramTest(unittest.TestCase):
         for value in ("private_user", "private_password", "123456", "sensitive upstream detail"):
             self.assertNotIn(value, entry)
 
+    def test_caa_fallback_logs_status_and_allowlisted_stages_only(self):
+        instance = x.client()
+        error = x.ig.ClientNeedsUpgradeError(response=Mock(status_code=400))
+        error.caa_initial_outcome = {"result": "private Instagram payload"}
+        error.caa_initial_response = Mock(status_code=200)
+
+        def instagram_request(_client, endpoint, *args, **kwargs):
+            instance.last_response = Mock(status_code=200 if endpoint.startswith("bloks/") else 400)
+            if endpoint == "accounts/login/":
+                raise error
+
+        def login(*args, **kwargs):
+            instance.private_request("bloks/async_action/com.bloks.www.bloks.caa.login.async.send_login_request/")
+            instance.private_request("unknown/private/path/")
+            instance.private_request("accounts/login/")
+
+        with patch.object(x, "site_owner", return_value=("owner", "session")), patch.object(
+            x, "client", return_value=instance
+        ), patch.object(instance, "login", side_effect=login), patch.object(
+            x.Client, "private_request", autospec=True, side_effect=instagram_request
+        ), self.assertLogs(x.app.logger, "WARNING") as logs:
+            response = self.post("login", username="test", password="example-password")
+        self.assertEqual(response.json, {"error": "IG_CLIENT_UPGRADE"})
+        entry, = logs.output
+        self.assertIn("caa_fallback=True caa_initial_http=200", entry)
+        self.assertIn("steps=caa_credentials:200,legacy_credentials:400", entry)
+        self.assertNotIn("private", entry)
+
     def test_upgrade_rejection_is_not_reported_as_connection_failure(self):
         instance = x.client()
         with patch.object(x, "site_owner", return_value=("owner", "session")), patch.object(
