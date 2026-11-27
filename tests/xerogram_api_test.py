@@ -147,6 +147,20 @@ class XerogramTest(unittest.TestCase):
         self.assertIn("steps=caa_credentials:200,legacy_credentials:400", entry)
         self.assertNotIn("private", entry)
 
+    def test_preserved_caa_context_offers_verification_after_upgrade_error(self):
+        instance = x.client()
+        error = x.ig.ClientNeedsUpgradeError(response=Mock(status_code=400))
+        outcome = {"result": {"layout": {"bloks_payload": {"action": "private action"}}}}
+        error.caa_initial_outcome = outcome
+        with patch.object(x, "site_owner", return_value=("owner", "session")), patch.object(
+            x, "client", return_value=instance
+        ), patch.object(instance, "login", side_effect=error), patch.object(
+            instance, "bloks_extract_two_step_verification_context", return_value="private-context"
+        ):
+            response = self.post("login", username="test", password="example-password")
+        self.assertEqual(response.json, {"error": "TWO_FACTOR", "passwordRequired": False})
+        self.assertNotIn("private-context", response.get_data(as_text=True))
+
     def test_upgrade_rejection_is_not_reported_as_connection_failure(self):
         instance = x.client()
         with patch.object(x, "site_owner", return_value=("owner", "session")), patch.object(

@@ -164,6 +164,13 @@ class XerogramClient(Client):
                 response = self.last_response if self.last_response is not previous else None
                 trail.append(f"{label}:{http_status(response)}")
 
+    def bloks_caa_login(self, *args, **kwargs):
+        outcome = super().bloks_caa_login(*args, **kwargs)
+        outcomes = g.get("xerogram_caa_outcomes") if has_request_context() else None
+        if outcomes is not None and len(outcomes) < 3:
+            outcomes.append(outcome)
+        return outcome
+
     def login_flow(self):
         # Authentication already completed. Load tray and timeline independently
         # so a content endpoint failure cannot discard an authenticated session.
@@ -436,6 +443,31 @@ def dispatch(cl, op, body):
     raise Failure("INPUT", 400)
 
 
+def caa_verification_context(client, outcome):
+    identifier = client._extract_two_step_verification_context(outcome)
+    result = outcome.get("result")
+    if not identifier and isinstance(result, dict):
+        layout = result.get("layout")
+        if isinstance(layout, dict) and isinstance(layout.get("bloks_payload"), dict):
+            identifier = client.bloks_extract_two_step_verification_context(result)
+    return identifier
+
+
+def caa_outcome_label(client, outcome):
+    if not isinstance(outcome, dict):
+        return "unrecognized_response"
+    if outcome.get("logged_in"):
+        return "session"
+    if caa_verification_context(client, outcome):
+        return "two_factor_context"
+    result = outcome.get("result")
+    if isinstance(result, dict) and client.bloks_caa_login_needs_two_step(result):
+        return "profile_code_route"
+    if any(marker.startswith("CAA_LOGIN_FALLBACK:") for marker in client._caa_result_action_markers(outcome)):
+        return "legacy_fallback"
+    return "no_supported_continuation"
+
+
 def record_login_error(error):
     if g.get("xerogram_login_stage"):
         g.xerogram_error_type = type(error).__name__
@@ -452,13 +484,14 @@ def headers(response):
         status = g.get("xerogram_upstream_status")
         app.logger.warning(
             "xerogram login stage=%s result=%s http=%s error_type=%s upstream_http=%s "
-            "caa_fallback=%s caa_initial_http=%s profile_code_requested=%s steps=%s",
+            "caa_fallback=%s caa_initial_http=%s profile_code_requested=%s steps=%s caa_outcomes=%s",
             stage, g.get("xerogram_result", "UNKNOWN"),
             response.status_code, g.get("xerogram_error_type", "-"),
             status if type(status) is int and 100 <= status <= 599 else "-",
             g.get("xerogram_caa_fallback", False), g.get("xerogram_caa_initial_http", "-"),
             g.get("xerogram_profile_code_requested", False),
             ",".join(g.get("xerogram_login_trail", ())) or "-",
+            ",".join(g.get("xerogram_caa_labels", ())) or "-",
         )
     response.headers["Cache-Control"] = "no-store, private"
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -531,6 +564,7 @@ def xerogram():
                 raise Failure("ACCOUNT_LIMIT", 409)
             g.xerogram_login_stage = "instagram_code" if code else "instagram_login"
             g.xerogram_login_trail = []
+            g.xerogram_caa_outcomes = []
             try:
                 if context:
                     accepted = cl._login_with_bloks_two_factor(code, context, ig.TwoFactorRequired())
@@ -545,8 +579,15 @@ def xerogram():
                           if name != "caa_initial_outcome"}
                 identifier = cl._extract_two_step_verification_context(source)
                 if not identifier:
-                    source = getattr(error, "caa_initial_outcome", None) or {}
-                    identifier = cl._extract_two_step_verification_context(source)
+                    outcomes = list(reversed(g.xerogram_caa_outcomes))
+                    initial = getattr(error, "caa_initial_outcome", None)
+                    if isinstance(initial, dict):
+                        outcomes.append(initial)
+                    for outcome in outcomes:
+                        identifier = caa_verification_context(cl, outcome)
+                        if identifier:
+                            source = outcome
+                            break
                 if isinstance(error, ig.ClientNeedsUpgradeError) and not (context or identifier):
                     raise Failure("IG_CLIENT_UPGRADE", 409) from None
                 context = context or ({
@@ -569,6 +610,12 @@ def xerogram():
                     g.xerogram_login_stage = "verification_session"
                     g.xerogram_error_type = failure.code
                     return jsonify(error=g.xerogram_result, passwordRequired=True), 409
+            finally:
+                outcomes = g.pop("xerogram_caa_outcomes")
+                try:
+                    g.xerogram_caa_labels = [caa_outcome_label(cl, outcome) for outcome in outcomes]
+                except (AttributeError, TypeError, ValueError):
+                    g.xerogram_caa_labels = ["unrecognized_response"]
             if not cl.user_id:
                 raise Failure("LOGIN_FAILED", 401)
             g.xerogram_login_stage = "save_session"
